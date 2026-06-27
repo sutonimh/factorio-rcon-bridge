@@ -35,38 +35,98 @@ def heading(px, py, tx, ty):
     return idx
 
 
-def walk(tx, ty, tol=1.5, timeout=150):
-    # Walk toward (tx,ty), sidestepping obstacles (buildings/drills) when stuck.
-    # Naive straight-line heading runs into structures; this detects no-progress
-    # and steps ~90 degrees to go around, alternating sides if still blocked.
+def _blocked_tiles(minx, miny, maxx, maxy):
+    """Query obstacle tiles (player builds, cliffs, water) in a bbox -> set of (x,y)."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local o={};"
+        "for _,e in pairs(s.find_entities_filtered{area={{" + str(minx) + "," + str(miny) + "},{" + str(maxx) + "," + str(maxy) + "}}}) do"
+        "  if e.name~='character' and e.name~='character-corpse' and e.type~='resource' and e.type~='item-entity' and e.type~='transport-belt' then"
+        "    local b=e.bounding_box; for tx=math.floor(b.left_top.x),math.ceil(b.right_bottom.x)-1 do for ty=math.floor(b.left_top.y),math.ceil(b.right_bottom.y)-1 do o[#o+1]=tx..','..ty end end end end;"
+        "for tx=" + str(minx) + "," + str(maxx) + " do for ty=" + str(miny) + "," + str(maxy) + " do if string.find(s.get_tile(tx,ty).name,'water') then o[#o+1]=tx..','..ty end end end;"
+        "rcon.print(table.concat(o,';'))"
+    )
+    out = _print(lua).strip()
+    blocked = set()
+    for tok in out.split(";"):
+        if "," in tok:
+            try:
+                x, y = tok.split(","); blocked.add((int(x), int(y)))
+            except ValueError:
+                pass
+    return blocked
+
+
+def route(sx, sy, gx, gy, pad=10):
+    """A* a path from (sx,sy) to (gx,gy) around obstacles; return simplified waypoints.
+    Falls back to a straight line if no path is found."""
+    sx, sy, gx, gy = round(sx), round(sy), round(gx), round(gy)
+    minx, maxx = min(sx, gx) - pad, max(sx, gx) + pad
+    miny, maxy = min(sy, gy) - pad, max(sy, gy) + pad
+    blocked = _blocked_tiles(minx, miny, maxx, maxy)
+    blocked.discard((sx, sy)); blocked.discard((gx, gy))
+    import heapq
+    start, goal = (sx, sy), (gx, gy)
+    nbrs = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)]
+    openq = [(0, start)]; came = {start: None}; g = {start: 0}
+    found = False
+    while openq:
+        _, cur = heapq.heappop(openq)
+        if cur == goal:
+            found = True; break
+        for dx, dy in nbrs:
+            nx, ny = cur[0] + dx, cur[1] + dy
+            if not (minx <= nx <= maxx and miny <= ny <= maxy) or (nx, ny) in blocked:
+                continue
+            if (dx and dy) and ((cur[0] + dx, cur[1]) in blocked or (cur[0], cur[1] + dy) in blocked):
+                continue  # don't cut corners
+            ng = g[cur] + (1.414 if dx and dy else 1.0)
+            if (nx, ny) not in g or ng < g[(nx, ny)]:
+                g[(nx, ny)] = ng
+                came[(nx, ny)] = cur
+                heapq.heappush(openq, (ng + math.hypot(gx - nx, gy - ny), (nx, ny)))
+    if not found:
+        return [(gx, gy)]
+    path = []
+    n = goal
+    while n is not None:
+        path.append(n); n = came[n]
+    path.reverse()
+    # simplify: keep only turn points
+    wps = [path[0]]
+    for i in range(1, len(path) - 1):
+        dx1, dy1 = path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1]
+        dx2, dy2 = path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]
+        if (dx1, dy1) != (dx2, dy2):
+            wps.append(path[i])
+    wps.append(path[-1])
+    return wps[1:]  # drop the start tile
+
+
+def walk(tx, ty, tol=2.0, timeout=150):
+    """Pre-route around obstacles (A* on a fresh obstacle scan), then walk each leg
+    smoothly: set a heading once per leg and only re-send when the direction actually
+    changes (no per-step stutter), never stopping between legs."""
     start = time.time()
-    last = None
-    stuck = 0
-    side = 1
-    while True:
-        px, py = pos()
-        dist = math.hypot(tx - px, ty - py)
-        if dist <= tol:
-            _print("/sc game.players[1].walking_state={walking=false}")
-            return px, py, True
-        if time.time() - start > timeout:
-            _print("/sc game.players[1].walking_state={walking=false}")
-            return px, py, False
-        moved = math.hypot(px - last[0], py - last[1]) if last else 1.0
-        last = (px, py)
-        d = heading(px, py, tx, ty)
-        if moved < 0.25:  # blocked by an obstacle
-            stuck += 1
-            d = (d + 4 * side) % 16  # sidestep ~90 degrees
-            if stuck >= 4:
-                side *= -1  # try the other way around
-                stuck = 0
-            _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
-            time.sleep(0.4)
-        else:
-            stuck = 0
-            _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
-            time.sleep(0.3 if dist < 8 else 0.5)
+    px, py = pos()
+    wps = route(px, py, tx, ty)
+    last_dir = None
+    for i, (wx, wy) in enumerate(wps):
+        final = (i == len(wps) - 1)
+        wtol = tol if final else 1.2
+        while True:
+            px, py = pos()
+            if math.hypot(wx - px, wy - py) <= wtol:
+                break
+            if time.time() - start > timeout:
+                _print("/sc game.players[1].walking_state={walking=false}")
+                return px, py, False
+            d = heading(px, py, wx, wy)
+            if d != last_dir:  # only re-send on a real direction change -> smooth
+                _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
+                last_dir = d
+            time.sleep(0.3)
+    _print("/sc game.players[1].walking_state={walking=false}")
+    return px, py, True
 
 
 def mine(name, count):
