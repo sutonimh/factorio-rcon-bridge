@@ -349,16 +349,20 @@ def feed_smelter():
     the mine would make it fully self-running; this is the software feed until then.)"""
     lua = (
         "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
-        "local mc=s.find_entities_filtered{position={17.5,0.5},radius=2,name='iron-chest'}[1];"
-        "if not mc then rcon.print('no mining chest') return end; local mci=mc.get_inventory(defines.inventory.chest);"
-        "local put=0;"
-        "for _,b in pairs(s.find_entities_filtered{area={{-3,-28},{23,-27}},name='transport-belt'}) do"
-        "  for _,tl in ipairs({1,2}) do local line=b.get_transport_line(tl);"
-        "    if line.get_item_count()<2 and mci.get_item_count('iron-ore')>0 then if line.insert_at_back({name='iron-ore',count=1}) then mci.remove{name='iron-ore',count=1}; put=put+1 end end end end;"
-        # top up coal on furnaces + burner inserters in the plant (from inventory)
-        "local fueled=0;"
-        "for _,e in pairs(s.find_entities_filtered{area={{-3,-33},{23,-28}},name={'stone-furnace','burner-inserter'}}) do local fi=e.get_fuel_inventory(); if fi and fi.get_item_count('coal')<3 then local c=math.min(5,inv.get_item_count('coal')); if c>0 then e.insert{name='coal',count=c}; inv.remove{name='coal',count=c}; fueled=fueled+1 end end end;"
-        "rcon.print('feed_smelter: +'..put..' ore to belt, fueled '..fueled..' (mining chest ore='..mci.get_item_count('iron-ore')..')')"
+        # feed both stacks: (ore, chest_pos, ore-belt area, plant area)
+        "local stacks={"
+        "  {'iron-ore',{17.5,0.5},{{-3,-28},{23,-27}},{{-3,-33},{23,-28}}},"
+        "  {'copper-ore',{1.5,6.5},{{-3,-40},{23,-39}},{{-3,-45},{23,-40}}}"
+        "};"
+        "local put=0; local fueled=0;"
+        "for _,st in ipairs(stacks) do local ore=st[1];"
+        "  local mc=s.find_entities_filtered{position=st[2],radius=2,name={'iron-chest','wooden-chest','steel-chest'}}[1];"
+        "  if mc then local mci=mc.get_inventory(defines.inventory.chest);"
+        "    for _,b in pairs(s.find_entities_filtered{area=st[3],name='transport-belt'}) do"
+        "      for _,tl in ipairs({1,2}) do local line=b.get_transport_line(tl);"
+        "        if line.get_item_count()<2 and mci.get_item_count(ore)>0 then if line.insert_at_back({name=ore,count=1}) then mci.remove{name=ore,count=1}; put=put+1 end end end end end;"
+        "  for _,e in pairs(s.find_entities_filtered{area=st[4],name={'stone-furnace','burner-inserter'}}) do local fi=e.get_fuel_inventory(); if fi and fi.get_item_count('coal')<3 then local c=math.min(5,inv.get_item_count('coal')); if c>0 then e.insert{name='coal',count=c}; inv.remove{name='coal',count=c}; fueled=fueled+1 end end end end;"
+        "rcon.print('feed_smelter: +'..put..' ore to belts, fueled '..fueled..' burners (both stacks)')"
     )
     return _print(lua)
 
