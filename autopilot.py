@@ -133,6 +133,58 @@ def place(name, tile_x, tile_y, direction=0):
     return _print(lua)
 
 
+def stamp_blueprint(entities):
+    """STEP 1 of a build: stamp the blueprint as entity-ghosts (nothing real yet),
+    so the player can review the plan before construction. `entities`: list of
+    {name, x(center), y(center), dir?}. Follow with build_ghosts() once approved."""
+    specs = ";".join("{'%s',%s,%s,%s}" % (e["name"], e["x"], e["y"], e.get("dir", 0)) for e in entities)
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local f=game.forces.player; local L={" + specs + "}; local n=0;"
+        "for _,d in ipairs(L) do local g=s.create_entity{name='entity-ghost', inner_name=d[1], position={d[2],d[3]}, direction=d[4], force=f}; if g then n=n+1 end end;"
+        "rcon.print('blueprint stamped: '..n..' ghosts (awaiting approval)')"
+    )
+    return _print(lua)
+
+
+def build_ghosts(cadence=0.35, batch=2):
+    """STEP 2: after the player approves the stamped blueprint, build the ghosts in
+    a realistic player-like cadence (a couple at a time with a short delay),
+    consuming items from inventory and fueling burners."""
+    revive = (
+        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory(); local built=0;"
+        "for _,g in pairs(s.find_entities_filtered{name='entity-ghost', force='player'}) do if built>=" + str(batch) + " then break end;"
+        "  local gp=g.ghost_prototype; local item=(gp.items_to_place_this and gp.items_to_place_this[1] and gp.items_to_place_this[1].name) or g.ghost_name;"
+        "  if inv.get_item_count(item)>0 then local col,e=g.revive{}; if e then inv.remove{name=item,count=1}; built=built+1;"
+        "    if e.type=='furnace' or e.name=='burner-mining-drill' or e.name=='burner-inserter' then local c=math.min(5,inv.get_item_count('coal')); if c>0 then e.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end end;"
+        "rcon.print(built..'|'..#s.find_entities_filtered{name='entity-ghost',force='player'})"
+    )
+    n = 0
+    for _ in range(500):
+        r = _print(revive).strip()
+        try:
+            built, remaining = r.split("|")
+            n += int(built)
+            if remaining == "0":
+                break
+            if built == "0":
+                return f"built {n}; STALLED (out of materials), {remaining} ghosts remain"
+        except ValueError:
+            break
+        time.sleep(cadence)
+    return f"built {n} entities in cadence"
+
+
+def notepad(lines):
+    """Persistent on-screen 'notepad' in-game (rendering API) showing the task queue.
+    Stays on screen (unlike game.print which scrolls away). Pass a list of lines."""
+    body = "\\n".join(["[ AUTOPILOT QUEUE ]"] + list(lines))
+    lua = (
+        "/sc rendering.clear();"
+        "rendering.draw_text{text='" + body.replace("'", "") + "', surface='nauvis', target={2,-40}, color={1,0.9,0.4}, scale=2.5, alignment='left'}"
+    )
+    return _print(lua)
+
+
 def snapshot(path=None):
     """Dump every player-built entity to a JSON file (the persistent build store),
     so infrastructure can be rebuilt if destroyed/deleted. Read-only on the game."""
@@ -275,12 +327,12 @@ def feed_smelter():
         "local mc=s.find_entities_filtered{position={17.5,0.5},radius=2,name='iron-chest'}[1];"
         "if not mc then rcon.print('no mining chest') return end; local mci=mc.get_inventory(defines.inventory.chest);"
         "local put=0;"
-        "for _,b in pairs(s.find_entities_filtered{area={{-13,14},{14,15}},name='transport-belt'}) do"
+        "for _,b in pairs(s.find_entities_filtered{area={{-3,-28},{23,-27}},name='transport-belt'}) do"
         "  for _,tl in ipairs({1,2}) do local line=b.get_transport_line(tl);"
         "    if line.get_item_count()<2 and mci.get_item_count('iron-ore')>0 then if line.insert_at_back({name='iron-ore',count=1}) then mci.remove{name='iron-ore',count=1}; put=put+1 end end end end;"
         # top up coal on furnaces + burner inserters in the plant (from inventory)
         "local fueled=0;"
-        "for _,e in pairs(s.find_entities_filtered{area={{-14,9},{15,15}},name={'stone-furnace','burner-inserter'}}) do local fi=e.get_fuel_inventory(); if fi and fi.get_item_count('coal')<3 then local c=math.min(5,inv.get_item_count('coal')); if c>0 then e.insert{name='coal',count=c}; inv.remove{name='coal',count=c}; fueled=fueled+1 end end end;"
+        "for _,e in pairs(s.find_entities_filtered{area={{-3,-33},{23,-28}},name={'stone-furnace','burner-inserter'}}) do local fi=e.get_fuel_inventory(); if fi and fi.get_item_count('coal')<3 then local c=math.min(5,inv.get_item_count('coal')); if c>0 then e.insert{name='coal',count=c}; inv.remove{name='coal',count=c}; fueled=fueled+1 end end end;"
         "rcon.print('feed_smelter: +'..put..' ore to belt, fueled '..fueled..' (mining chest ore='..mci.get_item_count('iron-ore')..')')"
     )
     return _print(lua)
@@ -294,11 +346,11 @@ def produce_ammo():
     lua = (
         "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local got=0;"
-        "for _,fur in pairs(s.find_entities_filtered{area={{-14,9},{15,15}},name='stone-furnace'}) do"
+        "for _,fur in pairs(s.find_entities_filtered{area={{-3,-33},{23,-28}},name='stone-furnace'}) do"
         "  local o=fur.get_output_inventory(); local c=o.get_item_count('iron-plate'); if c>0 then got=got+c; inv.insert{name='iron-plate',count=c}; o.remove{name='iron-plate',count=c} end end;"
         "local mc=s.find_entities_filtered{position={17.5,0.5},radius=2,name='iron-chest'}[1];"
         "if mc then local mci=mc.get_inventory(defines.inventory.chest);"
-        "  for _,fur in pairs(s.find_entities_filtered{area={{-14,9},{15,15}},name='stone-furnace'}) do"
+        "  for _,fur in pairs(s.find_entities_filtered{area={{-3,-33},{23,-28}},name='stone-furnace'}) do"
         "    if fur.get_fuel_inventory().get_item_count('coal')<4 then local cc=math.min(8,inv.get_item_count('coal')); if cc>0 then fur.insert{name='coal',count=cc}; inv.remove{name='coal',count=cc} end end;"
         "    local take=math.min(20,mci.get_item_count('iron-ore')); if take>0 then local ins=fur.insert{name='iron-ore',count=take}; mci.remove{name='iron-ore',count=ins} end end end;"
         "local iron=inv.get_item_count('iron-plate'); local make=math.floor((iron-8)/4); if make>0 then p.begin_crafting{recipe='firearm-magazine',count=make} end;"
@@ -454,6 +506,10 @@ if __name__ == "__main__":
         print(rebuild())
     elif cmd == "defend-check":
         print(defend_check())
+    elif cmd == "notepad":
+        print(notepad(sys.argv[2:]))
+    elif cmd == "build-ghosts":
+        print(build_ghosts())
     elif cmd == "announce":
         print(announce(" ".join(sys.argv[2:])))
     elif cmd == "pickup":
