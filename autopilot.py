@@ -180,7 +180,7 @@ def notepad(lines):
     body = "\\n".join(["[ AUTOPILOT QUEUE ]"] + list(lines))
     lua = (
         "/sc rendering.clear();"
-        "rendering.draw_text{text='" + body.replace("'", "") + "', surface='nauvis', target={2,-40}, color={1,0.9,0.4}, scale=2.5, alignment='left'}"
+        "rendering.draw_text{text='" + body.replace("'", "") + "', surface='nauvis', target={-22,-52}, color={1,0.9,0.4}, scale=1.4, alignment='left', vertical_alignment='top'}"
     )
     return _print(lua)
 
