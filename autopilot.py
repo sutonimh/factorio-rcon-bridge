@@ -193,6 +193,27 @@ def rebuild(path=None):
     return _print(lua)
 
 
+def defend_check(base_x=10, base_y=-12, radius=70):
+    """Attack-detection + post-attack repair. Counts enemies near the base.
+    While enemies are present -> 'UNDER ATTACK' (turrets handle it, don't repair
+    mid-fight). When clear -> rebuild() any destroyed infrastructure and report."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis'];"
+        "local enemies=s.count_entities_filtered{position={" + str(base_x) + "," + str(base_y) + "},radius=" + str(radius) + ",force='enemy'};"
+        "rcon.print(enemies)"
+    )
+    n = _print(lua).strip()
+    try:
+        n = int(n)
+    except ValueError:
+        return f"defend_check error: {n}"
+    if n > 0:
+        return f"UNDER ATTACK: {n} enemies within {radius} of base ({base_x},{base_y})"
+    # clear -> repair from the persistent store
+    rep = rebuild()
+    return f"clear (0 enemies); {rep}"
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__); sys.exit(2)
@@ -216,6 +237,8 @@ if __name__ == "__main__":
         print(snapshot())
     elif cmd == "rebuild":
         print(rebuild())
+    elif cmd == "defend-check":
+        print(defend_check())
     elif cmd == "goto-mine":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine
