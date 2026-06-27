@@ -1,5 +1,5 @@
 {
-"count": 383,
+"count": 389,
 "entities": [
 {
 "name": "offshore-pump",
@@ -80,50 +80,50 @@
 },
 {
 "name": "transport-belt",
-"x": -10.5,
-"y": 9.5,
+"x": -0.5,
+"y": -32.5,
 "direction": 4,
 "recipe": ""
 },
 {
 "name": "transport-belt",
-"x": -11.5,
-"y": 9.5,
+"x": -1.5,
+"y": -32.5,
 "direction": 4,
 "recipe": ""
 },
 {
 "name": "burner-inserter",
-"x": -11.5,
-"y": 10.5,
+"x": -1.5,
+"y": -31.5,
 "direction": 8,
 "recipe": ""
 },
 {
 "name": "stone-furnace",
-"x": -11.0,
-"y": 12.0,
+"x": -1.0,
+"y": -30.0,
 "direction": 0,
 "recipe": ""
 },
 {
 "name": "burner-inserter",
-"x": -11.5,
-"y": 13.5,
+"x": -1.5,
+"y": -28.5,
 "direction": 8,
 "recipe": ""
 },
 {
 "name": "transport-belt",
-"x": -10.5,
-"y": 14.5,
+"x": -0.5,
+"y": -27.5,
 "direction": 4,
 "recipe": ""
 },
 {
 "name": "transport-belt",
-"x": -11.5,
-"y": 14.5,
+"x": -1.5,
+"y": -27.5,
 "direction": 4,
 "recipe": ""
 },
@@ -171,9 +171,9 @@
 },
 {
 "name": "transport-belt",
-"x": -9.5,
+"x": -8.5,
 "y": 9.5,
-"direction": 4,
+"direction": 8,
 "recipe": ""
 },
 {
@@ -186,49 +186,7 @@
 {
 "name": "transport-belt",
 "x": -8.5,
-"y": 9.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": -9.5,
 "y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -8.5,
-"y": 10.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": -9.0,
-"y": 12.0,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": -9.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -8.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -9.5,
-"y": 14.5,
 "direction": 4,
 "recipe": ""
 },
@@ -277,14 +235,7 @@
 {
 "name": "transport-belt",
 "x": -6.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -7.5,
-"y": 9.5,
+"y": 10.5,
 "direction": 4,
 "recipe": ""
 },
@@ -292,41 +243,6 @@
 "name": "transport-belt",
 "x": -7.5,
 "y": 10.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -6.5,
-"y": 10.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": -7.0,
-"y": 12.0,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": -7.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -6.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -7.5,
-"y": 14.5,
 "direction": 4,
 "recipe": ""
 },
@@ -380,24 +296,10 @@
 "recipe": ""
 },
 {
-"name": "transport-belt",
-"x": -4.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
 "name": "burner-inserter",
 "x": -5.5,
 "y": 9.5,
 "direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -5.5,
-"y": 10.5,
-"direction": 4,
 "recipe": ""
 },
 {
@@ -408,30 +310,9 @@
 "recipe": ""
 },
 {
-"name": "stone-furnace",
-"x": -5.0,
-"y": 12.0,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": -5.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -4.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
 "name": "transport-belt",
 "x": -5.5,
-"y": 14.5,
+"y": 10.5,
 "direction": 4,
 "recipe": ""
 },
@@ -460,13 +341,6 @@
 "name": "transport-belt",
 "x": -2.5,
 "y": 6.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -2.5,
-"y": 9.5,
 "direction": 4,
 "recipe": ""
 },
@@ -485,34 +359,6 @@
 "recipe": ""
 },
 {
-"name": "stone-furnace",
-"x": -3.0,
-"y": 12.0,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": -3.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -2.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": -3.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
 "name": "transport-belt",
 "x": -1.5,
 "y": 2.5,
@@ -542,50 +388,232 @@
 },
 {
 "name": "transport-belt",
-"x": -0.5,
-"y": 9.5,
+"x": 1.5,
+"y": -32.5,
 "direction": 4,
 "recipe": ""
 },
 {
 "name": "transport-belt",
-"x": -1.5,
-"y": 9.5,
+"x": 0.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 3.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 2.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 5.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 4.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 7.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 6.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 9.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 8.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 11.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 10.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 13.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 12.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 15.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 14.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 17.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 16.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 19.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 18.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 21.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 20.5,
+"y": -32.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 22.5,
+"y": -32.5,
 "direction": 4,
 "recipe": ""
 },
 {
 "name": "burner-inserter",
-"x": -1.5,
-"y": 10.5,
+"x": 0.5,
+"y": -31.5,
 "direction": 8,
 "recipe": ""
 },
 {
 "name": "stone-furnace",
-"x": -1.0,
-"y": 12.0,
+"x": 1.0,
+"y": -30.0,
 "direction": 0,
 "recipe": ""
 },
 {
 "name": "burner-inserter",
-"x": -1.5,
-"y": 13.5,
+"x": 0.5,
+"y": -28.5,
 "direction": 8,
 "recipe": ""
 },
 {
 "name": "transport-belt",
-"x": -0.5,
-"y": 14.5,
+"x": 1.5,
+"y": -27.5,
 "direction": 4,
 "recipe": ""
 },
 {
 "name": "transport-belt",
-"x": -1.5,
-"y": 14.5,
+"x": 0.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 2.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 3.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 2.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 3.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 2.5,
+"y": -27.5,
 "direction": 4,
 "recipe": ""
 },
@@ -625,6 +653,41 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": 4.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 5.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 4.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 5.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 4.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 4.5,
 "y": -4.5,
@@ -636,6 +699,41 @@
 "x": 5.5,
 "y": -4.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 6.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 7.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 6.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 7.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 6.5,
+"y": -27.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -678,6 +776,41 @@
 "x": 7.5,
 "y": -0.5,
 "direction": 8,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 8.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 9.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 8.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 9.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 8.5,
+"y": -27.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -744,6 +877,41 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": 10.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 11.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 10.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 11.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 10.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 11.0,
 "y": -22.0,
@@ -793,6 +961,41 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": 12.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 13.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 12.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 13.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 12.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "iron-chest",
 "x": 13.5,
 "y": -21.5,
@@ -828,6 +1031,41 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": 14.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 15.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 14.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 15.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 14.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 15.5,
 "y": -3.5,
@@ -839,6 +1077,41 @@
 "x": 14.5,
 "y": -3.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 16.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 17.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 16.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 17.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 16.5,
+"y": -27.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -884,6 +1157,41 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": 18.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 19.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 18.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 19.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 18.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 18.5,
 "y": -3.5,
@@ -895,6 +1203,41 @@
 "x": 19.5,
 "y": -3.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 20.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "stone-furnace",
+"x": 21.0,
+"y": -30.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 20.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 21.5,
+"y": -27.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 20.5,
+"y": -27.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -916,6 +1259,13 @@
 "x": 20.5,
 "y": -3.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 22.5,
+"y": -27.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -1039,55 +1389,6 @@
 },
 {
 "name": "transport-belt",
-"x": 1.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 0.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 0.5,
-"y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": 1.0,
-"y": 12.0,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 0.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 1.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 0.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
 "x": 3.5,
 "y": 1.5,
 "direction": 8,
@@ -1112,104 +1413,6 @@
 "x": 3.5,
 "y": 2.5,
 "direction": 12,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 3.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 2.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 2.5,
-"y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": 3.0,
-"y": 12.0,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 2.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 3.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 2.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 5.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 4.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 4.5,
-"y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": 5.0,
-"y": 12.0,
-"direction": 0,
-"recipe": "iron-plate"
-},
-{
-"name": "burner-inserter",
-"x": 4.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 5.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 4.5,
-"y": 14.5,
-"direction": 4,
 "recipe": ""
 },
 {
@@ -1248,55 +1451,6 @@
 "recipe": ""
 },
 {
-"name": "transport-belt",
-"x": 7.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 6.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 6.5,
-"y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": 7.0,
-"y": 12.0,
-"direction": 0,
-"recipe": "iron-plate"
-},
-{
-"name": "burner-inserter",
-"x": 6.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 7.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 6.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
 "name": "burner-mining-drill",
 "x": 10.0,
 "y": 2.0,
@@ -1321,55 +1475,6 @@
 "name": "transport-belt",
 "x": 9.5,
 "y": 4.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 9.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 8.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 8.5,
-"y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": 9.0,
-"y": 12.0,
-"direction": 0,
-"recipe": "iron-plate"
-},
-{
-"name": "burner-inserter",
-"x": 8.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 9.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 8.5,
-"y": 14.5,
 "direction": 4,
 "recipe": ""
 },
@@ -1417,55 +1522,6 @@
 },
 {
 "name": "transport-belt",
-"x": 11.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 10.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "burner-inserter",
-"x": 10.5,
-"y": 10.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "stone-furnace",
-"x": 11.0,
-"y": 12.0,
-"direction": 0,
-"recipe": "iron-plate"
-},
-{
-"name": "burner-inserter",
-"x": 10.5,
-"y": 13.5,
-"direction": 8,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 11.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 10.5,
-"y": 14.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
 "x": 13.5,
 "y": 0.5,
 "direction": 4,
@@ -1489,20 +1545,6 @@
 "name": "transport-belt",
 "x": 12.5,
 "y": 4.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 12.5,
-"y": 9.5,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "transport-belt",
-"x": 12.5,
-"y": 14.5,
 "direction": 4,
 "recipe": ""
 },
