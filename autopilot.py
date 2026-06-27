@@ -104,6 +104,33 @@ def craft(recipe, count, timeout=90):
     return f"crafted {recipe} (started {started})"
 
 
+# --- Placement geometry (learned from Seth's hand-built layout) -----------------
+# An entity's CENTER = top-left footprint tile + (tile_width/2, tile_height/2):
+#   1x1 (belt/inserter/chest): tile (x,y) -> center (x+0.5, y+0.5)
+#   2x2 (drill/furnace):       tile (x,y) -> center (x+1,   y+1)
+# Passing the wrong center is why 1x1 belts/inserters used to land a tile off.
+# Directions (2.0/2.1): N=0, E=4, S=8, W=12.
+# Inserter `direction` is its PICKUP side (dir=12/west picks from the west tile,
+# drops east). `drill.drop_position` / `inserter.pickup_position`/`drop_position`
+# are readable - use them to verify, unlike fluidbox.
+
+def place(name, tile_x, tile_y, direction=0):
+    """Place an entity by its TOP-LEFT footprint tile, auto-centering by size.
+    Conservative: removes one from the real inventory. Returns a status string
+    with the actual snapped position."""
+    lua = (
+        "/sc local p=game.players[1]; local s=p.surface; local inv=p.get_main_inventory();"
+        "local item='" + name + "'; local tx=" + str(tile_x) + "; local ty=" + str(tile_y) + "; local dir=" + str(int(direction)) + ";"
+        "local proto=prototypes.item[item]; local ename=(proto and proto.place_result and proto.place_result.name) or item;"
+        "local ep=prototypes.entity[ename]; local cx=tx+ep.tile_width/2; local cy=ty+ep.tile_height/2;"
+        "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
+        "if not s.can_place_entity{name=ename,position={cx,cy},direction=dir,force=p.force} then rcon.print('CANT_PLACE '..ename..' @tile('..tx..','..ty..')') return end;"
+        "local e=s.create_entity{name=ename,position={cx,cy},direction=dir,force=p.force,player=p};"
+        "if e then inv.remove{name=item,count=1}; rcon.print('BUILT '..ename..' @('..e.position.x..','..e.position.y..')') else rcon.print('CREATE_FAILED '..item) end"
+    )
+    return _print(lua)
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__); sys.exit(2)
@@ -120,6 +147,9 @@ if __name__ == "__main__":
         print(build(sys.argv[2], float(sys.argv[3]), float(sys.argv[4]), d))
     elif cmd == "craft":
         print(craft(sys.argv[2], int(sys.argv[3])))
+    elif cmd == "place":
+        d = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+        print(place(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), d))
     elif cmd == "goto-mine":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine

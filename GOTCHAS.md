@@ -84,12 +84,25 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
 - Inserter `direction` here behaves as the PICKUP side: dir=8 (south) picks from
   the SOUTH tile and drops NORTH (opposite the "faces its drop" intuition). Always
   confirm with pickup_position/drop_position rather than assuming.
-- create_entity for 1x1 inserters can land a tile off the requested integer
-  position (snapping). Read the actual position back and adjust; don't trust the
-  requested coords. This is the same snapping that bites multi-tile fluid builds.
+- CENTERING (this was the real bug, not "snapping"): an entity's position is its
+  CENTER = top-left footprint tile + (tile_width/2, tile_height/2). So a 1x1
+  (belt/inserter/chest) on tile (x,y) goes at (x+0.5, y+0.5); a 2x2 (drill/furnace)
+  on top-left tile (x,y) goes at (x+1, y+1). Passing integer coords for 1x1 entities
+  put them a tile off. `autopilot.place(name, tile_x, tile_y, dir)` does this right.
 - A transport belt lane must be CONTINUOUS (no gaps) or items stop. Lay belt on
   every tile of the lane, then have inserters drop onto it.
 - Burner drill status 36 = no drop target (needs a furnace/belt at its drop_position).
+
+## Captured layout: double-sided mining belt -> chest (Seth's design, verified)
+- Belt lane runs EAST (dir=4) along one tile row Y; centers at (x+0.5, Y+0.5).
+- TOP drills at y=Y-1 facing SOUTH (dir=8) drop ore onto the belt from above.
+- BOTTOM drills at y=Y+2 facing NORTH (dir=0) drop onto the belt from below.
+  (A south drill at center (x,Y-1) drops to belt tile x; a north drill at (x,Y+2)
+  drops to belt tile x-1 - they interleave to fill the lane densely.)
+- East end: a burner inserter facing WEST (dir=12, so it picks from the belt to
+  its west) drops into an iron-chest one tile further east.
+- All burners (drills + burner inserter) need coal. Verified ore flow:
+  drills -> belt -> inserter -> chest.
 
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
