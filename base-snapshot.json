@@ -1,5 +1,5 @@
 {
-"count": 240,
+"count": 245,
 "entities": [
 {
 "name": "offshore-pump",
@@ -1678,6 +1678,41 @@
 "name": "transport-belt",
 "x": 76.5,
 "y": -76.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 80.0,
+"y": -83.0,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 80.0,
+"y": -79.0,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 80.0,
+"y": -75.0,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 80.0,
+"y": -71.0,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 80.0,
+"y": -67.0,
 "direction": 4,
 "recipe": ""
 }
