@@ -165,6 +165,19 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
   use an inserter where you must cross OFF a belt into a machine/chest (belt->chest
   load still needs an inserter).
 
+## Smelter ore feed: two storage chests (Seth's layout)
+- Seth set up ONE storage chest per smelter stack, each with a loader inserter that
+  drops onto that stack's distribution belt (iron belt y=-28 runs E; copper belt
+  y=-40 runs E); 12 ore-loader inserters pull off the belt into the 12 furnaces.
+  - iron storage chest @(-1.5,-25.5) -> iron stack ; copper storage chest @(-1.5,-37.5) -> copper stack.
+  - mine chests (drill output): iron @(17.5,0.5), copper @(1.5,6.5). Drills sit at
+    status 36 (waiting_for_space_in_destination) once their mine chest fills (1600).
+- `fill_ore_chests()` tops the two storage chests from the mine chests on the maintain
+  loop; draining the mine chests also un-sticks the drills. NOT offline-proof (needs a
+  physical mine->storage belt for that); it's the software feed while I'm active.
+- Single loader inserter per stack caps throughput (~6/12 furnaces run in steady
+  state). More furnaces working needs a 2nd/faster loader, not more chest fill.
+
 ## Inventory contents API (2.1)
 - `inventory.get_contents()` returns a LIST of {name,count,quality} entries, NOT a
   name->count map. Iterating `for n,c in pairs(...)` gives c as a TABLE and crashes

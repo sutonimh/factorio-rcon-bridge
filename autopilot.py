@@ -434,6 +434,28 @@ def feed_smelter():
     return _print(lua)
 
 
+def fill_ore_chests(target=1200):
+    """Keep Seth's two smelter-feed storage chests topped up from the mining chests.
+    Iron: mine chest (17.5,0.5) -> iron storage chest (-1.5,-25.5). Copper: mine
+    chest (1.5,6.5) -> copper storage chest (-1.5,-37.5). Each storage chest has a
+    loader inserter dropping onto its stack's distribution belt. Draining the mine
+    chests also unblocks the drills (they sit at status 36 once their chest fills).
+    Run on the maintain loop. A physical belt mine->storage would make it offline-proof."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local T=" + str(int(target)) + ";"
+        "local pairs_={{'iron-ore',{17.5,0.5},{-1.5,-25.5}},{'copper-ore',{1.5,6.5},{-1.5,-37.5}}};"
+        "local moved={};"
+        "for _,pp in ipairs(pairs_) do local ore=pp[1];"
+        "  local mc=s.find_entities_filtered{position=pp[2],radius=1,type='container'}[1];"
+        "  local sc=s.find_entities_filtered{position=pp[3],radius=1,type='container'}[1];"
+        "  if mc and sc then local have=sc.get_inventory(1).get_item_count(ore);"
+        "    local want=T-have; if want>0 then local avail=mc.get_inventory(1).get_item_count(ore);"
+        "      local n=math.min(want,avail); if n>0 then local ins=sc.insert{name=ore,count=n}; mc.remove_item({name=ore,count=ins}); moved[#moved+1]=ore..' +'..ins end end end end;"
+        "rcon.print('fill_ore_chests: '..(#moved>0 and table.concat(moved,', ') or 'both chests full'))"
+    )
+    return _print(lua)
+
+
 def produce_ammo():
     """One ammo-production cycle: collect smelted iron from the furnace row, reload
     the furnaces from the mining chest, craft magazines from available iron, and
@@ -477,7 +499,7 @@ def maintain():
     """Unified periodic maintenance loop body. Runs the whole resilience system:
     pickup ground items, refill turrets, and if any turret is <50% drive ammo
     production; then defend_check (rebuild/repair after an attack)."""
-    log = [pickup().strip(), feed_smelter().strip()]
+    log = [pickup().strip(), fill_ore_chests().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:
