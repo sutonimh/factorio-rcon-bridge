@@ -103,6 +103,21 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
   its west) drops into an iron-chest one tile further east.
 - All burners (drills + burner inserter) need coal. Verified ore flow:
   drills -> belt -> inserter -> chest.
+- Inserter direction = pickup side, CONFIRMED across 3 examples: d0 picks N, d4 E,
+  d8 S, d12 W; drops the opposite tile.
+
+## Captured layout: coal auto-fueling loop (Seth's design)
+- A coal belt is routed PARALLEL to the drill rows so a per-drill inserter can pull
+  coal off it into each burner drill. Layout around the mining block:
+  - top coal belt one row above the top drills (here row Y-4), bottom coal belt one
+    row below the bottom drills (row Y+4), joined by a vertical belt on the west side
+    that turns the incoming coal feed down both sides.
+  - each TOP drill: a burner inserter between coal belt and drill, dir=N (picks coal
+    from the belt to its north, drops into the drill to its south).
+  - each BOTTOM drill: inserter dir=S (picks from the south coal belt, drops north
+    into the drill).
+- So a self-fueling mining block = ore belt (middle) + coal belt loop (outside) +
+  one fuel inserter per drill. Coal feed comes in from the coal patch end.
 
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
