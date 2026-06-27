@@ -1,5 +1,5 @@
 {
-"count": 307,
+"count": 315,
 "entities": [
 {
 "name": "offshore-pump",
@@ -485,6 +485,13 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 9.0,
+"y": -6.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 8.5,
 "y": -4.5,
@@ -625,6 +632,13 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 17.0,
+"y": -15.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "burner-inserter",
 "x": 16.5,
 "y": -2.5,
@@ -691,27 +705,6 @@
 "name": "transport-belt",
 "x": 20.5,
 "y": -3.5,
-"direction": 12,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 24.0,
-"y": -10.0,
-"direction": 12,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 24.0,
-"y": -6.0,
-"direction": 12,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 24.0,
-"y": -2.0,
 "direction": 12,
 "recipe": ""
 },
@@ -1067,22 +1060,15 @@
 },
 {
 "name": "gun-turret",
-"x": 24.0,
-"y": 2.0,
-"direction": 12,
+"x": 17.0,
+"y": 7.0,
+"direction": 0,
 "recipe": ""
 },
 {
 "name": "gun-turret",
-"x": 24.0,
-"y": 6.0,
-"direction": 12,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 58.0,
-"y": -82.0,
+"x": 31.0,
+"y": 7.0,
 "direction": 0,
 "recipe": ""
 },
@@ -1238,6 +1224,13 @@
 "x": 61.5,
 "y": -80.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 63.0,
+"y": -87.0,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -1490,6 +1483,13 @@
 "x": 32.5,
 "y": -3.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 36.0,
+"y": -5.0,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -1871,6 +1871,13 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 68.0,
+"y": -92.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 66.5,
 "y": -80.5,
@@ -1885,6 +1892,13 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 67.0,
+"y": -70.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 69.5,
 "y": -80.5,
@@ -1896,6 +1910,13 @@
 "x": 68.5,
 "y": -80.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 72.0,
+"y": -94.0,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -2033,15 +2054,15 @@
 },
 {
 "name": "gun-turret",
-"x": 74.0,
-"y": -70.0,
+"x": 73.0,
+"y": -68.0,
 "direction": 0,
 "recipe": ""
 },
 {
 "name": "gun-turret",
-"x": 76.0,
-"y": -90.0,
+"x": 75.0,
+"y": -94.0,
 "direction": 0,
 "recipe": ""
 },
@@ -2145,8 +2166,43 @@
 },
 {
 "name": "gun-turret",
-"x": 89.0,
+"x": 78.0,
+"y": -68.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 79.0,
+"y": -93.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 82.0,
+"y": -92.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 83.0,
+"y": -71.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 88.0,
 "y": -81.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 87.0,
+"y": -75.0,
 "direction": 0,
 "recipe": ""
 }
