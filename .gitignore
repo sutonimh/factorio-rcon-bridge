@@ -1,0 +1,6 @@
+# secrets + runtime artifacts - never commit
+rcon.pass
+server.log
+*.log
+__pycache__/
+*.pyc
