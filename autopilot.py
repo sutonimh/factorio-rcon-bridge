@@ -35,8 +35,14 @@ def heading(px, py, tx, ty):
     return idx
 
 
-def walk(tx, ty, tol=1.5, timeout=90):
+def walk(tx, ty, tol=1.5, timeout=150):
+    # Walk toward (tx,ty), sidestepping obstacles (buildings/drills) when stuck.
+    # Naive straight-line heading runs into structures; this detects no-progress
+    # and steps ~90 degrees to go around, alternating sides if still blocked.
     start = time.time()
+    last = None
+    stuck = 0
+    side = 1
     while True:
         px, py = pos()
         dist = math.hypot(tx - px, ty - py)
@@ -46,10 +52,21 @@ def walk(tx, ty, tol=1.5, timeout=90):
         if time.time() - start > timeout:
             _print("/sc game.players[1].walking_state={walking=false}")
             return px, py, False
+        moved = math.hypot(px - last[0], py - last[1]) if last else 1.0
+        last = (px, py)
         d = heading(px, py, tx, ty)
-        _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
-        # shorter polls when close so we don't overshoot
-        time.sleep(0.25 if dist < 8 else 0.5)
+        if moved < 0.25:  # blocked by an obstacle
+            stuck += 1
+            d = (d + 4 * side) % 16  # sidestep ~90 degrees
+            if stuck >= 4:
+                side *= -1  # try the other way around
+                stuck = 0
+            _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
+            time.sleep(0.4)
+        else:
+            stuck = 0
+            _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
+            time.sleep(0.3 if dist < 8 else 0.5)
 
 
 def mine(name, count):
@@ -175,12 +192,20 @@ def build_ghosts(cadence=0.35, batch=2):
 
 
 def notepad(lines):
-    """Persistent on-screen 'notepad' in-game (rendering API) showing the task queue.
-    Stays on screen (unlike game.print which scrolls away). Pass a list of lines."""
-    body = "\\n".join(["[ AUTOPILOT QUEUE ]"] + list(lines))
+    """Persistent on-screen 'notepad' GUI anchored to the SCREEN top-left corner
+    (not world-space, so it never moves or clips). Each queue entry word-wraps."""
+    rendering_clear = "rendering.clear();"  # remove any old world-space notepad
+    items = ["AUTOPILOT QUEUE"] + list(lines)
+    lua_list = "{" + ",".join("'" + s.replace("'", "").replace("\\", "") + "'" for s in items) + "}"
     lua = (
-        "/sc rendering.clear();"
-        "rendering.draw_text{text='" + body.replace("'", "") + "', surface='nauvis', target={-22,-52}, color={1,0.9,0.4}, scale=1.4, alignment='left', vertical_alignment='top'}"
+        "/sc " + rendering_clear +
+        "local p=game.players[1]; local g=p.gui.screen;"
+        "if g.autopilot_notepad then g.autopilot_notepad.destroy() end;"
+        "local f=g.add{type='frame', name='autopilot_notepad', direction='vertical'};"
+        "f.location={4,44};"
+        "local L=" + lua_list + ";"
+        "for i,t in ipairs(L) do local lbl=f.add{type='label', caption=t}; lbl.style.single_line=false; lbl.style.maximal_width=300; if i==1 then lbl.style.font='default-bold' end end;"
+        "rcon.print('notepad GUI updated (top-left, wrapping)')"
     )
     return _print(lua)
 
