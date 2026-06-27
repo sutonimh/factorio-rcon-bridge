@@ -193,10 +193,88 @@ def rebuild(path=None):
     return _print(lua)
 
 
+def pickup(radius=12):
+    """Pick up items lying on the ground (e.g. spilled coal) near the character
+    into the real inventory. Conservative: items move from ground to inventory."""
+    lua = (
+        "/sc local p=game.players[1]; local s=p.surface; local inv=p.get_main_inventory();"
+        "local picked={};"
+        "for _,e in pairs(s.find_entities_filtered{position=p.position, radius=" + str(radius) + ", name='item-on-ground'}) do"
+        "  if e.valid and e.stack and e.stack.valid_for_read then local n=e.stack.name; local c=e.stack.count;"
+        "    local ins=inv.insert{name=n,count=c};"
+        "    if ins>0 then picked[n]=(picked[n] or 0)+ins; if ins>=c then e.destroy() else e.stack.count=c-ins end end end end;"
+        "local o={}; for n,c in pairs(picked) do o[#o+1]=n..'x'..c end;"
+        "rcon.print(#o>0 and ('picked up: '..table.concat(o,', ')) or 'nothing on ground within " + str(radius) + "')"
+    )
+    return _print(lua)
+
+
+def refill_turrets(chest_x=20.5, chest_y=-2.5, threshold=50, target=100):
+    """Keep gun turrets topped up to a FULL stack (100 magazines), refilling any
+    turret that drops below 50%. Moves magazines from the ammo buffer chest.
+    Designed to run on the defend loop; caps at available buffer ammo."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis'];"
+        "local chest=s.find_entities_filtered{position={" + str(chest_x) + "," + str(chest_y) + "},radius=2,name={'wooden-chest','iron-chest','steel-chest'}}[1];"
+        "if not chest then rcon.print('no ammo chest') return end;"
+        "local ci=chest.get_inventory(defines.inventory.chest);"
+        "local refilled=0; local low=0;"
+        "for _,t in pairs(s.find_entities_filtered{name='gun-turret'}) do"
+        "  local ai=t.get_inventory(defines.inventory.turret_ammo);"
+        "  if ai then local have=ai.get_item_count('firearm-magazine');"
+        "    if have<" + str(threshold) + " then low=low+1;"
+        "      local move=math.min(" + str(target) + "-have, ci.get_item_count('firearm-magazine'));"
+        "      if move>0 then ai.insert{name='firearm-magazine',count=move}; ci.remove{name='firearm-magazine',count=move}; refilled=refilled+move end end end end;"
+        "rcon.print('refill: '..low..' turrets low, +'..refilled..' mags ('..ci.get_item_count('firearm-magazine')..' left in buffer)')"
+    )
+    return _print(lua)
+
+
+def store_overflow(ox=30, oy=-36, keep_coal=100):
+    """Drain bulk items from the player inventory into an auto-scaling chest array
+    at (ox,oy). Keeps `keep_coal` coal in inventory for fueling. Places a new chest
+    (from inventory wooden/iron chests) whenever the array is full."""
+    lua = (
+        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "local OX=" + str(ox) + "; local OY=" + str(oy) + "; local COLS=12;"
+        "local function chests() return s.find_entities_filtered{area={{OX,OY},{OX+COLS,OY+10}}, name={'wooden-chest','iron-chest','steel-chest'}} end;"
+        "local function add_chest() for gy=OY,OY+9 do for gx=OX,OX+COLS-1 do"
+        "  if s.can_place_entity{name='wooden-chest',position={gx+0.5,gy+0.5},force=p.force} then"
+        "    local item=(inv.get_item_count('iron-chest')>0 and 'iron-chest') or (inv.get_item_count('wooden-chest')>0 and 'wooden-chest') or nil;"
+        "    if item then local c=s.create_entity{name=item,position={gx+0.5,gy+0.5},force=p.force}; if c then inv.remove{name=item,count=1}; return c end end;"
+        "    return nil end end end return nil end;"
+        # bulk items to overflow (raw/intermediate); keep tools/ammo/equipment in inventory
+        "local bulk={'iron-ore','copper-ore','stone','iron-plate','copper-plate','iron-gear-wheel','copper-cable','electronic-circuit','wood'};"
+        "local moved={}; local cs=chests(); if #cs==0 then local c=add_chest(); if c then cs={c} end end;"
+        "local function put(name,count) for _,c in pairs(cs) do local n=c.get_inventory(defines.inventory.chest).insert{name=name,count=count}; count=count-n; moved[name]=(moved[name] or 0)+n; if count<=0 then return 0 end end; return count end;"
+        "for _,name in ipairs(bulk) do local have=inv.get_item_count(name); local keep=(name=='coal') and " + str(keep_coal) + " or 0; local over=have-keep;"
+        "  if over>0 then local left=put(name,over); if left>0 then local c=add_chest(); if c then cs=chests(); left=put(name,left) end end;"
+        "    local actually=over-left; if actually>0 then inv.remove{name=name,count=actually} end end end;"
+        "local o={}; for n,c in pairs(moved) do o[#o+1]=n..'x'..c end;"
+        "rcon.print('overflow: stored '..(#o>0 and table.concat(o,', ') or 'nothing')..' | chests in array='..#chests())"
+    )
+    return _print(lua)
+
+
+def auto_repair():
+    """Repair damaged (not destroyed) player structures using repair-packs from the
+    inventory. Part of the post-attack sequence. No-op if no repair-packs yet."""
+    lua = (
+        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "local packs=inv.get_item_count('repair-pack'); local damaged=0; local repaired=0;"
+        "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
+        "  if e.name~='character' and e.health and e.max_health and e.health<e.max_health then damaged=damaged+1;"
+        "    if packs>0 then local use=math.min(math.ceil((e.max_health-e.health)/200),packs);"
+        "      e.health=e.max_health; inv.remove{name='repair-pack',count=use}; packs=packs-use; repaired=repaired+1 end end end;"
+        "rcon.print('repair: '..damaged..' damaged, '..repaired..' repaired ('..packs..' packs left)')"
+    )
+    return _print(lua)
+
+
 def defend_check(base_x=10, base_y=-12, radius=70):
-    """Attack-detection + post-attack repair. Counts enemies near the base.
-    While enemies are present -> 'UNDER ATTACK' (turrets handle it, don't repair
-    mid-fight). When clear -> rebuild() any destroyed infrastructure and report."""
+    """Attack-detection + full post-attack maintenance. Counts enemies near the base.
+    While enemies are present -> 'UNDER ATTACK' (turrets handle it; don't repair
+    mid-fight). When clear -> rebuild destroyed, repair damaged, refill turrets."""
     lua = (
         "/sc local s=game.surfaces['nauvis'];"
         "local enemies=s.count_entities_filtered{position={" + str(base_x) + "," + str(base_y) + "},radius=" + str(radius) + ",force='enemy'};"
@@ -208,10 +286,12 @@ def defend_check(base_x=10, base_y=-12, radius=70):
     except ValueError:
         return f"defend_check error: {n}"
     if n > 0:
+        # keep turrets fed during the fight, but hold repairs until it's over
+        refill_turrets()
         return f"UNDER ATTACK: {n} enemies within {radius} of base ({base_x},{base_y})"
-    # clear -> repair from the persistent store
-    rep = rebuild()
-    return f"clear (0 enemies); {rep}"
+    # clear -> full post-attack sequence
+    parts = [rebuild(), auto_repair(), refill_turrets()]
+    return "clear (0 enemies) | " + " | ".join(p.strip() for p in parts)
 
 
 if __name__ == "__main__":
@@ -239,6 +319,14 @@ if __name__ == "__main__":
         print(rebuild())
     elif cmd == "defend-check":
         print(defend_check())
+    elif cmd == "pickup":
+        print(pickup(int(sys.argv[2]) if len(sys.argv) > 2 else 12))
+    elif cmd == "refill-turrets":
+        print(refill_turrets())
+    elif cmd == "auto-repair":
+        print(auto_repair())
+    elif cmd == "store-overflow":
+        print(store_overflow())
     elif cmd == "goto-mine":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine
