@@ -52,6 +52,30 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
   geometry from `prototypes.entity[name]` collision_box + fluidbox_prototypes
   connection offsets, rotated by direction.
 
+## Fluid verification (the unlock)
+- `entity.get_fluid_count([name])` is a METHOD and WORKS even though `.fluidbox`
+  and `.neighbours` are blocked. This is THE tool for verifying fluid hookups:
+  place a pipe, wait a few ticks, check `pipe.get_fluid_count('water')`. Probe
+  connections tile by tile instead of guessing geometry.
+- An offshore pump reads `get_fluid_count('water')==100` once drawing. A read in
+  the SAME tick as placement shows 0 (buffer fills next tick) — settle ~2-3s
+  before trusting a 0.
+
+## Steam plant geometry (cost ~15 iterations, then solved by eye + get_fluid_count)
+- Boiler water connections are on its two ENDS, perpendicular to the steam output.
+  Face the boiler NORTH/SOUTH so water comes from its EAST/WEST ends and steam
+  exits N/S. Facing it E/W puts the water inputs on the N/S ends (wrong if the
+  pump is to the side).
+- The pump's output sits on ONE specific tile-row east of its body. The pipe line
+  AND the boiler's water-input row must match that exact row — a ONE-tile vertical
+  mismatch = zero flow. Keep the pipe run a straight single line on that row.
+- Steam engines chain steam through both ends: boiler steam-out -> engine -> engine.
+  Place them in a line off the boiler's steam side.
+- A small power pole within wire reach (7.5) of a steam engine injects its power
+  into the grid; verify the chain by reading a consumer's `status` (`lab.status==1`
+  = working/powered, not 58=no_power).
+- Ratio: ~1 boiler : 2 engines; 1 pump feeds ~20 boilers.
+
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
   so the read hangs. Read one response packet, then drain with a short timeout.
