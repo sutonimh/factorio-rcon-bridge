@@ -138,6 +138,39 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
 - So a self-fueling mining block = ore belt (middle) + coal belt loop (outside) +
   one fuel inserter per drill. Coal feed comes in from the coal patch end.
 
+## Power is the first thing to check when MANY electric inserters read 58
+- status 58 = no_power. When a whole region of inserters (taps, feeders) reads 58
+  AND assemblers/labs read 0/idle while BURNER furnaces still have fuel, the steam
+  plant is DOWN, not a per-inserter problem. Diagnose top-down: steam-engine
+  `energy` (0 across all = dead plant) -> boiler `get_fuel_inventory().get_item_count('coal')`
+  (0 = starved) -> refuel + reheat ~40s. Don't chase individual inserters first.
+- A newly placed pole that reads buffer 0 may just be an ISLAND (no powered pole
+  within the 7.5 wire reach). Confirm by comparing `electric_network_id` against a
+  known-working consumer (a `lab` with status==1); bridge islands with intermediate
+  poles <=7.5 apart. Small-pole SUPPLY area is only ~2.5 (powers a 5x5), separate
+  from the 7.5 wire reach (connects poles).
+
+## Belt FLOW DIRECTION must point at the consumer (cost a "wrong way" report)
+- An output belt (e.g. smelter plate belt) must carry items TOWARD the base/consumer.
+  A plate belt laid all-East (dir=4) carried plates AWAY from the westside science
+  cluster: the west tap starved while plates piled at the dead east end. Always
+  verify the belt row's direction histogram points the right way before wiring a
+  tap. Reverse with `belt.direction = 12` (W) per tile.
+
+## Don't tap a collinear belt with an inserter - just connect the belts
+- If the source belt and the destination belt are on the SAME row flowing the same
+  way with only a gap between them, DO NOT drop an inserter to lift-and-redrop. One
+  inserter throttles the whole feed to ~0.8 items/s (the original science bottleneck)
+  and is pointless. Place a belt in the gap tile so it's one continuous lane. Only
+  use an inserter where you must cross OFF a belt into a machine/chest (belt->chest
+  load still needs an inserter).
+
+## Inventory contents API (2.1)
+- `inventory.get_contents()` returns a LIST of {name,count,quality} entries, NOT a
+  name->count map. Iterating `for n,c in pairs(...)` gives c as a TABLE and crashes
+  on concat. Use `inv.get_item_count('name')` for specific items, or index the
+  entry fields.
+
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
   so the read hangs. Read one response packet, then drain with a short timeout.

@@ -1,5 +1,5 @@
 {
-"count": 508,
+"count": 565,
 "entities": [
 {
 "name": "offshore-pump",
@@ -164,16 +164,198 @@
 },
 {
 "name": "transport-belt",
+"x": -14.5,
+"y": -32.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -13.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -12.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -11.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -10.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -9.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -8.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -7.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -6.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -44.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -42.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -43.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -40.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -41.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -38.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -39.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -36.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -37.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -34.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -35.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -3.5,
+"y": -44.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -2.5,
+"y": -44.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -2.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -3.5,
+"y": -32.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -1.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": -0.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -215,14 +397,14 @@
 "name": "transport-belt",
 "x": -0.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": -1.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -240,10 +422,129 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": -14.5,
+"y": -30.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -29.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -26.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -27.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -24.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -25.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -22.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -23.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -20.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -21.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -18.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -19.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -14.5,
+"y": -17.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "small-electric-pole",
 "x": -15.5,
 "y": -15.5,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -13.5,
+"y": -19.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -13.5,
+"y": -17.5,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -289,13 +590,6 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
-"x": -7.5,
-"y": -20.5,
-"direction": 0,
-"recipe": ""
-},
-{
 "name": "assembling-machine-1",
 "x": -5.5,
 "y": -17.5,
@@ -307,6 +601,90 @@
 "x": -7.5,
 "y": -17.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -30.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -29.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -26.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -27.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -24.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -25.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -22.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -23.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -20.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": -21.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -4.5,
+"y": -19.5,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -333,7 +711,28 @@
 {
 "name": "small-electric-pole",
 "x": -3.5,
+"y": -31.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -3.5,
+"y": -27.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -3.5,
 "y": -23.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -3.5,
+"y": -19.5,
 "direction": 0,
 "recipe": ""
 },
@@ -656,14 +1055,14 @@
 "name": "transport-belt",
 "x": 0.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 1.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -705,28 +1104,28 @@
 "name": "transport-belt",
 "x": 1.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 0.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 2.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 3.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -768,28 +1167,28 @@
 "name": "transport-belt",
 "x": 3.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 2.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 4.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 5.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -831,28 +1230,28 @@
 "name": "transport-belt",
 "x": 5.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 4.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 6.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 7.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -894,28 +1293,28 @@
 "name": "transport-belt",
 "x": 7.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 6.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 8.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 9.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -957,28 +1356,28 @@
 "name": "transport-belt",
 "x": 9.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 8.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 10.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 11.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1020,28 +1419,28 @@
 "name": "transport-belt",
 "x": 11.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 10.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 12.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 13.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1083,28 +1482,28 @@
 "name": "transport-belt",
 "x": 13.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 12.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 14.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 15.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1146,28 +1545,28 @@
 "name": "transport-belt",
 "x": 15.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 14.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 16.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 17.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1209,28 +1608,28 @@
 "name": "transport-belt",
 "x": 17.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 16.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 18.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 19.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1272,21 +1671,21 @@
 "name": "transport-belt",
 "x": 19.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 18.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 20.5,
 "y": -44.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1335,14 +1734,14 @@
 "name": "transport-belt",
 "x": 21.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
 "name": "transport-belt",
 "x": 20.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
@@ -1363,7 +1762,7 @@
 "name": "transport-belt",
 "x": 22.5,
 "y": -32.5,
-"direction": 4,
+"direction": 12,
 "recipe": ""
 },
 {
