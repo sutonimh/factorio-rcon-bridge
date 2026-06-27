@@ -10,8 +10,10 @@ Usage:
     python3 autopilot.py goto-mine <name> <n>    walk to nearest <name>, mine n
     python3 autopilot.py pos                      print current position
 """
-import sys, time, math, json
+import sys, time, math, json, pathlib
 import rcon  # reuse the client in this dir
+
+HERE = pathlib.Path(__file__).resolve().parent
 
 DIRS16 = 16  # Factorio 2.0 uses a 16-direction system; cardinals are multiples of 4
 
@@ -131,6 +133,66 @@ def place(name, tile_x, tile_y, direction=0):
     return _print(lua)
 
 
+def snapshot(path=None):
+    """Dump every player-built entity to a JSON file (the persistent build store),
+    so infrastructure can be rebuilt if destroyed/deleted. Read-only on the game."""
+    path = path or str(HERE / "base-snapshot.json")
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local out={};"
+        "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
+        "  if e.name~='character' and e.name~='character-corpse' then"
+        "    local rec='';"
+        "    if e.type=='assembling-machine' or e.type=='furnace' then pcall(function() local r=e.get_recipe(); if r then rec=r.name end end) end;"
+        "    out[#out+1]=e.name..'\\t'..string.format('%.2f',e.position.x)..'\\t'..string.format('%.2f',e.position.y)..'\\t'..e.direction..'\\t'..rec"
+        "  end end;"
+        "rcon.print(#out..'\\n'..table.concat(out,'\\n'))"
+    )
+    raw = _print(lua)
+    lines = raw.split("\n")
+    count = int(lines[0]) if lines and lines[0].strip().isdigit() else 0
+    ents = []
+    for ln in lines[1:]:
+        if not ln.strip():
+            continue
+        parts = ln.split("\t")
+        if len(parts) < 4:
+            continue
+        ents.append({
+            "name": parts[0], "x": float(parts[1]), "y": float(parts[2]),
+            "direction": int(parts[3]), "recipe": parts[4] if len(parts) > 4 else "",
+        })
+    with open(path, "w") as f:
+        json.dump({"count": len(ents), "entities": ents}, f, indent=0)
+    return f"snapshot: {len(ents)} entities -> {path} (reported {count})"
+
+
+def rebuild(path=None):
+    """Restore any entity in the snapshot that is missing from the world (e.g.
+    destroyed by biters or deleted). Re-creates missing entities at their saved
+    position/direction and re-applies assembler recipes."""
+    path = path or str(HERE / "base-snapshot.json")
+    with open(path) as f:
+        snap = json.load(f)
+    # send the entity list to the game; it re-creates only what is missing
+    rows = ";".join(
+        f"{{'{e['name']}',{e['x']},{e['y']},{e['direction']},'{e['recipe']}'}}"
+        for e in snap["entities"]
+    )
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local f=game.forces.player; local want={" + rows + "};"
+        "local rebuilt=0; local ok=0;"
+        "for _,d in ipairs(want) do local name,x,y,dir,rec=d[1],d[2],d[3],d[4],d[5];"
+        "  local found=s.find_entities_filtered{position={x,y},radius=0.6,name=name}[1];"
+        "  if found then ok=ok+1 else"
+        "    if s.can_place_entity{name=name,position={x,y},direction=dir,force=f} then"
+        "      local e=s.create_entity{name=name,position={x,y},direction=dir,force=f};"
+        "      if e then rebuilt=rebuilt+1; if rec~='' then pcall(function() e.set_recipe(rec) end) end end"
+        "    end end end;"
+        "rcon.print('rebuild: '..ok..' intact, '..rebuilt..' restored')"
+    )
+    return _print(lua)
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__); sys.exit(2)
@@ -150,6 +212,10 @@ if __name__ == "__main__":
     elif cmd == "place":
         d = int(sys.argv[5]) if len(sys.argv) > 5 else 0
         print(place(sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), d))
+    elif cmd == "snapshot":
+        print(snapshot())
+    elif cmd == "rebuild":
+        print(rebuild())
     elif cmd == "goto-mine":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine
