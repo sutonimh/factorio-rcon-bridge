@@ -338,16 +338,18 @@ def retrieve(item, count, ox=-20, oy=-36):
     return _print(lua)
 
 
-def fortify(cx, cy, count=10, radius=13, detect_range=90, ammo_each=10):
-    """Adaptive turret ring around (cx,cy). Detects the nearest biter nest within
-    detect_range: if found, weights ~half the turrets into the arc facing the nest
-    (the rest spread behind); if NO nest in range, places them EVENLY around the
-    ring. Salvages and re-places existing turrets in the area, so it can be re-run
-    on the maintain loop to reconfigure as nests spawn/die. Caps at turrets on hand."""
+def fortify(cx, cy, count=16, radius=13, detect_range=90, ammo_each=10, base=4, per_nest=3):
+    """Adaptive, nest-scaled turret ring around (cx,cy). Counts biter nests within
+    detect_range and sizes the ring to the threat: target = base + per_nest*nests,
+    capped at `count`. With nests present it weights ~half the turrets into the arc
+    facing the NEAREST nest (rest spread behind); with NO nest in range it places a
+    light EVEN ring (`base`). Salvages+replaces existing turrets, so it re-runs on
+    the maintain loop to reconfigure as nests spawn/grow/die. Caps at turrets on hand."""
     lua = (
         "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
-        "local cx=" + str(cx) + "; local cy=" + str(cy) + "; local count=" + str(int(count)) + "; local R=" + str(radius) + "; local det=" + str(detect_range) + "; local pi=math.pi;"
-        "local nest=nil; local bd=det*det; for _,e in pairs(s.find_entities_filtered{type='unit-spawner',force='enemy'}) do local d=(e.position.x-cx)^2+(e.position.y-cy)^2; if d<bd then bd=d; nest=e end end;"
+        "local cx=" + str(cx) + "; local cy=" + str(cy) + "; local cmax=" + str(int(count)) + "; local R=" + str(radius) + "; local det=" + str(detect_range) + "; local pi=math.pi;"
+        "local nest=nil; local bd=det*det; local nnests=0; for _,e in pairs(s.find_entities_filtered{type='unit-spawner',force='enemy'}) do local d=(e.position.x-cx)^2+(e.position.y-cy)^2; if d<det*det then nnests=nnests+1 end; if d<bd then bd=d; nest=e end end;"
+        "local count=math.max(" + str(base) + ", math.min(cmax, " + str(base) + "+" + str(per_nest) + "*nnests));"
         # salvage existing turrets in the area back to inventory
         "for _,t in pairs(s.find_entities_filtered{position={cx,cy},radius=R+10,name='gun-turret'}) do local ai=t.get_inventory(defines.inventory.turret_ammo); if ai then local m=ai.get_item_count('firearm-magazine'); if m>0 then inv.insert{name='firearm-magazine',count=m} end end; inv.insert{name='gun-turret',count=1}; t.destroy() end;"
         "local pos={};"
@@ -356,7 +358,7 @@ def fortify(cx, cy, count=10, radius=13, detect_range=90, ammo_each=10):
         "  for i=0,rear-1 do local a=a0+pi+(-1.3+2.6*(rear>1 and i/(rear-1) or 0)); pos[#pos+1]={cx+R*math.cos(a), cy+R*math.sin(a)} end;"
         "else for i=0,count-1 do local a=2*pi*i/count; pos[#pos+1]={cx+R*math.cos(a), cy+R*math.sin(a)} end end;"
         "local placed=0; for _,pp in ipairs(pos) do if inv.get_item_count('gun-turret')>0 then local np=s.find_non_colliding_position('gun-turret', pp, 6, 1); if np then local t=s.create_entity{name='gun-turret',position=np,force=p.force,player=p}; if t then inv.remove{name='gun-turret',count=1}; placed=placed+1; local mag=math.min(" + str(ammo_each) + ", inv.get_item_count('firearm-magazine')); if mag>0 then t.insert{name='firearm-magazine',count=mag}; inv.remove{name='firearm-magazine',count=mag} end end end end end;"
-        "rcon.print('fortify ('..cx..','..cy..'): '..placed..'/'..count..' turrets; '..(nest and ('nest@('..math.floor(nest.position.x)..','..math.floor(nest.position.y)..') -> WEIGHTED') or 'no nest in '..det..' -> EVEN')..'; turrets in hand='..inv.get_item_count('gun-turret'))"
+        "rcon.print('fortify ('..cx..','..cy..'): '..placed..'/'..count..' turrets ('..nnests..' nests in range); '..(nest and ('nearest@('..math.floor(nest.position.x)..','..math.floor(nest.position.y)..') -> WEIGHTED') or 'no nest -> EVEN')..'; turrets in hand='..inv.get_item_count('gun-turret'))"
     )
     return _print(lua)
 
