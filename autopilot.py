@@ -73,23 +73,20 @@ def mine(name, count):
 
 
 def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0):
-    # Visible placement: walk the character into build reach, then build_from_cursor
-    # so the character actually performs the build (animation + sound). Conservative:
-    # the item leaves the real inventory; leftovers on the cursor are returned.
+    # Walk the character to the build site (visible travel), then place the entity.
+    # The cursor/hand-build API is client-authoritative for a connected player and
+    # can't be driven over RCON, so placement itself is server-side create_entity.
+    # Conservative: the item is removed from the real inventory (world += 1, inv -= 1).
     if walk_first:
         walk(x, y, tol=reach_tol)
     lua = (
-        "/sc local p=game.players[1]; local inv=p.get_main_inventory();"
+        "/sc local p=game.players[1]; local s=p.surface; local inv=p.get_main_inventory();"
         "local item='" + name + "'; local pos={" + str(x) + "," + str(y) + "}; local dir=" + str(int(direction)) + ";"
-        "local have=inv.get_item_count(item);"
-        "if have<1 then rcon.print('NO_ITEM '..item) return end;"
-        "inv.remove{name=item,count=have};"
-        "p.cursor_stack.set_stack{name=item,count=have};"
-        "local ok=false;"
-        "if p.can_build_from_cursor{position=pos,direction=dir} then p.build_from_cursor{position=pos,direction=dir}; ok=true end;"
-        "if p.cursor_stack.valid_for_read then inv.insert{name=item,count=p.cursor_stack.count} end;"
-        "p.cursor_stack.clear();"
-        "rcon.print((ok and 'BUILT ' or 'CANT_BUILD ')..item..' at '..pos[1]..','..pos[2])"
+        "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
+        "local proto=prototypes.item[item]; local ename=proto and proto.place_result and proto.place_result.name or item;"
+        "if not s.can_place_entity{name=ename,position=pos,direction=dir,force=p.force} then rcon.print('CANT_PLACE '..item..' at '..pos[1]..','..pos[2]) return end;"
+        "local e=s.create_entity{name=ename,position=pos,direction=dir,force=p.force,player=p};"
+        "if e then inv.remove{name=item,count=1}; rcon.print('BUILT '..ename..' at '..math.floor(e.position.x)..','..math.floor(e.position.y)) else rcon.print('CREATE_FAILED '..item) end"
     )
     return _print(lua)
 
