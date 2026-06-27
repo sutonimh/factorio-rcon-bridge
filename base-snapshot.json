@@ -646,6 +646,13 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 58.0,
+"y": -82.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 56.5,
 "y": -80.5,
@@ -1409,6 +1416,13 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 66.0,
+"y": -90.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 64.5,
 "y": -80.5,
@@ -1584,6 +1598,20 @@
 "recipe": ""
 },
 {
+"name": "gun-turret",
+"x": 74.0,
+"y": -70.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "gun-turret",
+"x": 76.0,
+"y": -90.0,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": 75.5,
 "y": -84.5,
@@ -1683,37 +1711,9 @@
 },
 {
 "name": "gun-turret",
-"x": 80.0,
-"y": -83.0,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 80.0,
-"y": -79.0,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 80.0,
-"y": -75.0,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 80.0,
-"y": -71.0,
-"direction": 4,
-"recipe": ""
-},
-{
-"name": "gun-turret",
-"x": 80.0,
-"y": -67.0,
-"direction": 4,
+"x": 89.0,
+"y": -81.0,
+"direction": 0,
 "recipe": ""
 }
 ]
