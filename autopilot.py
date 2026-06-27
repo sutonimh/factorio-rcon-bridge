@@ -72,6 +72,41 @@ def mine(name, count):
     return _print(lua)
 
 
+def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0):
+    # Visible placement: walk the character into build reach, then build_from_cursor
+    # so the character actually performs the build (animation + sound). Conservative:
+    # the item leaves the real inventory; leftovers on the cursor are returned.
+    if walk_first:
+        walk(x, y, tol=reach_tol)
+    lua = (
+        "/sc local p=game.players[1]; local inv=p.get_main_inventory();"
+        "local item='" + name + "'; local pos={" + str(x) + "," + str(y) + "}; local dir=" + str(int(direction)) + ";"
+        "local have=inv.get_item_count(item);"
+        "if have<1 then rcon.print('NO_ITEM '..item) return end;"
+        "inv.remove{name=item,count=have};"
+        "p.cursor_stack.set_stack{name=item,count=have};"
+        "local ok=false;"
+        "if p.can_build_from_cursor{position=pos,direction=dir} then p.build_from_cursor{position=pos,direction=dir}; ok=true end;"
+        "if p.cursor_stack.valid_for_read then inv.insert{name=item,count=p.cursor_stack.count} end;"
+        "p.cursor_stack.clear();"
+        "rcon.print((ok and 'BUILT ' or 'CANT_BUILD ')..item..' at '..pos[1]..','..pos[2])"
+    )
+    return _print(lua)
+
+
+def craft(recipe, count, timeout=90):
+    started = _print(
+        "/sc rcon.print(game.players[1].begin_crafting{recipe='" + recipe + "',count=" + str(int(count)) + "})"
+    ).strip()
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        q = _print("/sc rcon.print(game.players[1].crafting_queue_size)").strip()
+        if q == "0":
+            break
+        time.sleep(1.5)
+    return f"crafted {recipe} (started {started})"
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__); sys.exit(2)
@@ -83,6 +118,11 @@ if __name__ == "__main__":
         print(walk(x, y))
     elif cmd == "mine":
         print(mine(sys.argv[2], int(sys.argv[3])))
+    elif cmd == "build":
+        d = int(sys.argv[5]) if len(sys.argv) > 5 else 0
+        print(build(sys.argv[2], float(sys.argv[3]), float(sys.argv[4]), d))
+    elif cmd == "craft":
+        print(craft(sys.argv[2], int(sys.argv[3])))
     elif cmd == "goto-mine":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine
