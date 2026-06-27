@@ -2,6 +2,25 @@
 
 Every mistake below cost a real iteration. Read before changing autopilot behavior.
 
+## BUILD CONVENTIONS (standing rules from Seth — follow on EVERY build)
+- **Placement zoning:** ONLY mining infrastructure and defenses (turrets) go on/at
+  ore patches. EVERYTHING else (smelting, assembly, labs, science, storage) goes at
+  the BASE location (~10,-30). Never put a smelter/assembler on an ore patch.
+- **Walk, never teleport:** always `walk()` to the build site (or anywhere) so Seth
+  can watch. Never `player.teleport`.
+- **Blueprint-first, then cadence:** to build anything, (1) `stamp_blueprint()` the
+  ghosts, (2) ASK Seth to check/approve, (3) only then `build_ghosts()` which builds
+  in a realistic player-like cadence (a couple at a time with delay).
+- **Snapshot after every placement:** run `snapshot()` + commit after any build op,
+  so `rebuild()` can restore it.
+- **Storage:** the overflow chest array lives in its own CLEAR zone (-20,-36), never
+  adjacent to other builds.
+- **Defenses:** turrets start full (100 mags) on deploy when ammo allows, refill at
+  <50%, and `produce_ammo` ramps when low. `fortify` auto-scales the ring to nearby
+  nest count and weights toward the nearest nest (even ring if none).
+- **In-game notepad:** keep the task queue on-screen via `notepad()` (rendering API),
+  not just `game.print` (which scrolls away).
+
 ## Achievements
 - Hosting a save as multiplayer (required for RCON) disables Steam achievements.
   Running ANY `/c` or `/sc` console command also disables them. The bridge IS
