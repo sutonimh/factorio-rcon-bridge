@@ -1,5 +1,5 @@
 {
-"count": 315,
+"count": 383,
 "entities": [
 {
 "name": "offshore-pump",
@@ -79,10 +79,52 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": -10.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -11.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": -11.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": -11.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": -11.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -10.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -11.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -129,6 +171,13 @@
 },
 {
 "name": "transport-belt",
+"x": -9.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -8.5,
 "y": 8.5,
 "direction": 8,
@@ -138,6 +187,13 @@
 "name": "transport-belt",
 "x": -8.5,
 "y": 9.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": -9.5,
+"y": 10.5,
 "direction": 8,
 "recipe": ""
 },
@@ -153,6 +209,27 @@
 "x": -9.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": -9.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -8.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -9.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -195,6 +272,20 @@
 "x": -6.0,
 "y": 8.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -6.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -7.5,
+"y": 9.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -219,6 +310,27 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": -7.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -6.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -7.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": -5.5,
 "y": 2.5,
@@ -265,6 +377,13 @@
 "x": -4.0,
 "y": 8.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": 9.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -296,6 +415,27 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": -5.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -4.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": -3.5,
 "y": 2.5,
@@ -320,6 +460,13 @@
 "name": "transport-belt",
 "x": -2.5,
 "y": 6.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -2.5,
+"y": 9.5,
 "direction": 4,
 "recipe": ""
 },
@@ -345,6 +492,27 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": -3.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -2.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -3.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": -1.5,
 "y": 2.5,
@@ -370,6 +538,27 @@
 "x": -0.5,
 "y": 6.5,
 "direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -0.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -1.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": -1.5,
+"y": 10.5,
+"direction": 8,
 "recipe": ""
 },
 {
@@ -377,6 +566,27 @@
 "x": -1.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": -1.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -0.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -1.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -828,10 +1038,52 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": 1.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 0.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 0.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 1.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 0.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 1.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 0.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -863,6 +1115,27 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": 3.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 2.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 2.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 3.0,
 "y": 12.0,
@@ -870,10 +1143,73 @@
 "recipe": ""
 },
 {
+"name": "burner-inserter",
+"x": 2.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 3.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 2.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 5.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 4.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 4.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 5.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 4.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 5.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 4.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -912,10 +1248,52 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": 7.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 6.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 6.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 7.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 6.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 7.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 6.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -947,10 +1325,52 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": 9.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 8.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 8.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 9.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 8.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 9.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 8.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -996,10 +1416,52 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": 11.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 10.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 10.5,
+"y": 10.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": 11.0,
 "y": 12.0,
 "direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 10.5,
+"y": 13.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 11.5,
+"y": 14.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 10.5,
+"y": 14.5,
+"direction": 4,
 "recipe": ""
 },
 {
@@ -1027,6 +1489,20 @@
 "name": "transport-belt",
 "x": 12.5,
 "y": 4.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 12.5,
+"y": 9.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 12.5,
+"y": 14.5,
 "direction": 4,
 "recipe": ""
 },
