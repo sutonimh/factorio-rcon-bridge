@@ -193,6 +193,13 @@ def rebuild(path=None):
     return _print(lua)
 
 
+def announce(msg):
+    """Post a status line to the IN-GAME console log (top-left, persists, scrollable)
+    so the player can see what the autopilot is working on / its queue."""
+    safe = msg.replace("'", "").replace("\\", "")
+    return _print("/sc game.print('[autopilot] " + safe + "')")
+
+
 def pickup(radius=12):
     """Pick up items lying on the ground (e.g. spilled coal) near the character
     into the real inventory. Conservative: items move from ground to inventory."""
@@ -426,6 +433,8 @@ if __name__ == "__main__":
         print(rebuild())
     elif cmd == "defend-check":
         print(defend_check())
+    elif cmd == "announce":
+        print(announce(" ".join(sys.argv[2:])))
     elif cmd == "pickup":
         print(pickup(int(sys.argv[2]) if len(sys.argv) > 2 else 12))
     elif cmd == "refill-turrets":
