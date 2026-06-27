@@ -1,5 +1,5 @@
 {
-"count": 214,
+"count": 240,
 "entities": [
 {
 "name": "offshore-pump",
@@ -72,6 +72,13 @@
 "recipe": ""
 },
 {
+"name": "wooden-chest",
+"x": -19.5,
+"y": -35.5,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "stone-furnace",
 "x": -11.0,
 "y": 12.0,
@@ -114,13 +121,6 @@
 "recipe": ""
 },
 {
-"name": "wooden-chest",
-"x": 30.5,
-"y": -35.5,
-"direction": 0,
-"recipe": ""
-},
-{
 "name": "transport-belt",
 "x": 7.5,
 "y": -2.5,
@@ -159,6 +159,13 @@
 "name": "iron-chest",
 "x": 8.5,
 "y": -21.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 9.5,
+"y": -2.5,
 "direction": 0,
 "recipe": ""
 },
@@ -440,7 +447,7 @@
 "x": 5.0,
 "y": 12.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "transport-belt",
@@ -482,7 +489,7 @@
 "x": 7.0,
 "y": 12.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-mining-drill",
@@ -517,7 +524,7 @@
 "x": 9.0,
 "y": 12.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-mining-drill",
@@ -566,7 +573,7 @@
 "x": 11.0,
 "y": 12.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "transport-belt",
@@ -1417,9 +1424,86 @@
 },
 {
 "name": "transport-belt",
+"x": 66.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 67.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 69.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": 68.5,
 "y": -80.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 71.5,
+"y": -84.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 71.5,
+"y": -83.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 71.5,
+"y": -82.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 71.5,
+"y": -81.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 70.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 71.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 71.5,
+"y": -79.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 71.5,
+"y": -78.5,
+"direction": 8,
 "recipe": ""
 },
 {
@@ -1439,8 +1523,50 @@
 {
 "name": "transport-belt",
 "x": 73.5,
+"y": -84.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 72.5,
+"y": -84.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 73.5,
+"y": -83.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-mining-drill",
+"x": 74.0,
+"y": -82.0,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 72.5,
 "y": -80.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 73.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "burner-mining-drill",
+"x": 74.0,
+"y": -79.0,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -1459,9 +1585,51 @@
 },
 {
 "name": "transport-belt",
+"x": 75.5,
+"y": -84.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 74.5,
+"y": -84.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "burner-inserter",
+"x": 75.5,
+"y": -83.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "burner-mining-drill",
+"x": 76.0,
+"y": -82.0,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 75.5,
+"y": -80.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": 74.5,
 "y": -80.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "burner-mining-drill",
+"x": 76.0,
+"y": -79.0,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -1483,6 +1651,20 @@
 "x": 74.5,
 "y": -76.5,
 "direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 76.5,
+"y": -84.5,
+"direction": 4,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": 76.5,
+"y": -80.5,
+"direction": 12,
 "recipe": ""
 },
 {
