@@ -1,5 +1,5 @@
 {
-"count": 475,
+"count": 508,
 "entities": [
 {
 "name": "offshore-pump",
@@ -12,6 +12,20 @@
 "name": "pipe",
 "x": -48.5,
 "y": -1.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -47.5,
+"y": -11.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -47.5,
+"y": -6.5,
 "direction": 0,
 "recipe": ""
 },
@@ -51,6 +65,34 @@
 "recipe": ""
 },
 {
+"name": "steam-engine",
+"x": -41.5,
+"y": -10.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "boiler",
+"x": -41.5,
+"y": -2.0,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-lamp",
+"x": -40.5,
+"y": -7.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -41.5,
+"y": -7.5,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "small-electric-pole",
 "x": -41.5,
 "y": -5.5,
@@ -65,9 +107,51 @@
 "recipe": ""
 },
 {
+"name": "steam-engine",
+"x": -38.5,
+"y": -10.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "steam-engine",
+"x": -38.5,
+"y": -5.5,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "lab",
 "x": -38.5,
 "y": -0.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -36.5,
+"y": -11.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -36.5,
+"y": -6.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -37.5,
+"y": -2.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -33.5,
+"y": -3.5,
 "direction": 0,
 "recipe": ""
 },
@@ -142,6 +226,132 @@
 "recipe": ""
 },
 {
+"name": "small-electric-pole",
+"x": -27.5,
+"y": -7.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -21.5,
+"y": -11.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -15.5,
+"y": -15.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -12.5,
+"y": -17.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "assembling-machine-1",
+"x": -9.5,
+"y": -17.5,
+"direction": 0,
+"recipe": "iron-gear-wheel"
+},
+{
+"name": "inserter",
+"x": -11.5,
+"y": -17.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -10.5,
+"y": -17.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -9.5,
+"y": -19.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -9.5,
+"y": -17.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -7.5,
+"y": -20.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "assembling-machine-1",
+"x": -5.5,
+"y": -17.5,
+"direction": 0,
+"recipe": "automation-science-pack"
+},
+{
+"name": "inserter",
+"x": -7.5,
+"y": -17.5,
+"direction": 12,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -4.5,
+"y": -15.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -5.5,
+"y": -15.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -5.5,
+"y": -14.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -3.5,
+"y": -23.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "lab",
+"x": -1.5,
+"y": -17.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -3.5,
+"y": -17.5,
+"direction": 12,
+"recipe": ""
+},
+{
 "name": "burner-inserter",
 "x": -1.5,
 "y": -31.5,
@@ -174,6 +384,13 @@
 "x": -1.5,
 "y": -27.5,
 "direction": 4,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -0.5,
+"y": -15.5,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -769,7 +986,7 @@
 "x": 11.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -832,7 +1049,7 @@
 "x": 13.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -895,7 +1112,7 @@
 "x": 15.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -958,7 +1175,7 @@
 "x": 17.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1021,7 +1238,7 @@
 "x": 19.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1084,7 +1301,7 @@
 "x": 21.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1147,6 +1364,20 @@
 "x": 22.5,
 "y": -32.5,
 "direction": 4,
+"recipe": ""
+},
+{
+"name": "steel-chest",
+"x": 26.5,
+"y": -35.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "steel-chest",
+"x": 30.5,
+"y": -35.5,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -1490,7 +1721,7 @@
 "x": 11.0,
 "y": -30.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1574,7 +1805,7 @@
 "x": 13.0,
 "y": -30.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1644,7 +1875,7 @@
 "x": 15.0,
 "y": -30.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1693,7 +1924,7 @@
 "x": 17.0,
 "y": -30.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1770,7 +2001,7 @@
 "x": 19.0,
 "y": -30.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -1819,7 +2050,7 @@
 "x": 21.0,
 "y": -30.0,
 "direction": 0,
-"recipe": "iron-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
