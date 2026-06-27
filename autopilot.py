@@ -103,30 +103,37 @@ def route(sx, sy, gx, gy, pad=10):
 
 
 def walk(tx, ty, tol=2.0, timeout=150):
-    """Pre-route around obstacles (A* on a fresh obstacle scan), then walk each leg
-    smoothly: set a heading once per leg and only re-send when the direction actually
-    changes (no per-step stutter), never stopping between legs."""
+    """Smooth, reliable walk: head toward (tx,ty) and only re-send the walking
+    command when the direction actually changes (no per-step stutter). If progress
+    stalls on an obstacle, sidestep ~90 degrees to go around (alternating sides)."""
     start = time.time()
-    px, py = pos()
-    wps = route(px, py, tx, ty)
+    last = None
     last_dir = None
-    for i, (wx, wy) in enumerate(wps):
-        final = (i == len(wps) - 1)
-        wtol = tol if final else 1.2
-        while True:
-            px, py = pos()
-            if math.hypot(wx - px, wy - py) <= wtol:
-                break
-            if time.time() - start > timeout:
-                _print("/sc game.players[1].walking_state={walking=false}")
-                return px, py, False
-            d = heading(px, py, wx, wy)
-            if d != last_dir:  # only re-send on a real direction change -> smooth
-                _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
-                last_dir = d
-            time.sleep(0.3)
-    _print("/sc game.players[1].walking_state={walking=false}")
-    return px, py, True
+    stuck = 0
+    side = 1
+    while True:
+        px, py = pos()
+        if math.hypot(tx - px, ty - py) <= tol:
+            _print("/sc game.players[1].walking_state={walking=false}")
+            return px, py, True
+        if time.time() - start > timeout:
+            _print("/sc game.players[1].walking_state={walking=false}")
+            return px, py, False
+        moved = math.hypot(px - last[0], py - last[1]) if last else 1.0
+        last = (px, py)
+        d = heading(px, py, tx, ty)
+        if moved < 0.25:  # blocked -> sidestep
+            stuck += 1
+            d = (d + 4 * side) % 16
+            if stuck >= 4:
+                side *= -1
+                stuck = 0
+        else:
+            stuck = 0
+        if d != last_dir:  # only re-send on a real direction change -> smooth
+            _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
+            last_dir = d
+        time.sleep(0.35)
 
 
 def mine(name, count):
