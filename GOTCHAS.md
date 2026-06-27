@@ -76,6 +76,21 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
   = working/powered, not 58=no_power).
 - Ratio: ~1 boiler : 2 engines; 1 pump feeds ~20 boilers.
 
+## Belts / inserters / drills (positions ARE readable — use them)
+- `drill.drop_position`, `inserter.pickup_position`, `inserter.drop_position` are
+  readable (unlike fluidbox). Place a drill, read `drop_position`, put the furnace
+  exactly there. Verified pattern: burner drill facing south at (x,-8) drops to
+  ~(x,-7); a stone furnace centered at (x,-6) catches it -> smelts -> plates.
+- Inserter `direction` here behaves as the PICKUP side: dir=8 (south) picks from
+  the SOUTH tile and drops NORTH (opposite the "faces its drop" intuition). Always
+  confirm with pickup_position/drop_position rather than assuming.
+- create_entity for 1x1 inserters can land a tile off the requested integer
+  position (snapping). Read the actual position back and adjust; don't trust the
+  requested coords. This is the same snapping that bites multi-tile fluid builds.
+- A transport belt lane must be CONTINUOUS (no gaps) or items stop. Lay belt on
+  every tile of the lane, then have inserters drop onto it.
+- Burner drill status 36 = no drop target (needs a furnace/belt at its drop_position).
+
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
   so the read hangs. Read one response packet, then drain with a short timeout.
