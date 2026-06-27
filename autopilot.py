@@ -338,7 +338,7 @@ def retrieve(item, count, ox=-20, oy=-36):
     return _print(lua)
 
 
-def fortify(cx, cy, count=16, radius=13, detect_range=90, ammo_each=10, base=4, per_nest=3):
+def fortify(cx, cy, count=16, radius=13, detect_range=90, ammo_each=10, base=6, per_nest=4):
     """Adaptive, nest-scaled turret ring around (cx,cy). Counts biter nests within
     detect_range and sizes the ring to the threat: target = base + per_nest*nests,
     capped at `count`. With nests present it weights ~half the turrets into the arc
