@@ -230,7 +230,7 @@ def refill_turrets(chest_x=20.5, chest_y=-2.5, threshold=50, target=100):
     return _print(lua)
 
 
-def store_overflow(ox=30, oy=-36, keep_coal=100):
+def store_overflow(ox=-20, oy=-36, keep_coal=100):
     """Drain bulk items from the player inventory into an auto-scaling chest array
     at (ox,oy). Keeps `keep_coal` coal in inventory for fueling. Places a new chest
     (from inventory wooden/iron chests) whenever the array is full."""
@@ -238,8 +238,10 @@ def store_overflow(ox=30, oy=-36, keep_coal=100):
         "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local OX=" + str(ox) + "; local OY=" + str(oy) + "; local COLS=12;"
         "local function chests() return s.find_entities_filtered{area={{OX,OY},{OX+COLS,OY+10}}, name={'wooden-chest','iron-chest','steel-chest'}} end;"
+        # clearance guard: only place in the dedicated zone, never adjacent to a non-chest build
+        "local function clear_of_builds(gx,gy) for _,e in pairs(s.find_entities_filtered{area={{gx-1,gy-1},{gx+2,gy+2}},force='player'}) do if not string.find(e.name,'chest') then return false end end return true end;"
         "local function add_chest() for gy=OY,OY+9 do for gx=OX,OX+COLS-1 do"
-        "  if s.can_place_entity{name='wooden-chest',position={gx+0.5,gy+0.5},force=p.force} then"
+        "  if clear_of_builds(gx,gy) and s.can_place_entity{name='wooden-chest',position={gx+0.5,gy+0.5},force=p.force} then"
         "    local item=(inv.get_item_count('iron-chest')>0 and 'iron-chest') or (inv.get_item_count('wooden-chest')>0 and 'wooden-chest') or nil;"
         "    if item then local c=s.create_entity{name=item,position={gx+0.5,gy+0.5},force=p.force}; if c then inv.remove{name=item,count=1}; return c end end;"
         "    return nil end end end return nil end;"
@@ -252,6 +254,86 @@ def store_overflow(ox=30, oy=-36, keep_coal=100):
         "    local actually=over-left; if actually>0 then inv.remove{name=name,count=actually} end end end;"
         "local o={}; for n,c in pairs(moved) do o[#o+1]=n..'x'..c end;"
         "rcon.print('overflow: stored '..(#o>0 and table.concat(o,', ') or 'nothing')..' | chests in array='..#chests())"
+    )
+    return _print(lua)
+
+
+def produce_ammo():
+    """One ammo-production cycle: collect smelted iron from the furnace row, reload
+    the furnaces from the mining chest, craft magazines from available iron, and
+    stock the ammo buffer chest. Run repeatedly (e.g. on the maintain loop) to
+    drive turret ammo back to full after it drops below 50%."""
+    lua = (
+        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "local got=0;"
+        "for _,fur in pairs(s.find_entities_filtered{area={{-14,9},{15,15}},name='stone-furnace'}) do"
+        "  local o=fur.get_output_inventory(); local c=o.get_item_count('iron-plate'); if c>0 then got=got+c; inv.insert{name='iron-plate',count=c}; o.remove{name='iron-plate',count=c} end end;"
+        "local mc=s.find_entities_filtered{position={17.5,0.5},radius=2,name='iron-chest'}[1];"
+        "if mc then local mci=mc.get_inventory(defines.inventory.chest);"
+        "  for _,fur in pairs(s.find_entities_filtered{area={{-14,9},{15,15}},name='stone-furnace'}) do"
+        "    if fur.get_fuel_inventory().get_item_count('coal')<4 then local cc=math.min(8,inv.get_item_count('coal')); if cc>0 then fur.insert{name='coal',count=cc}; inv.remove{name='coal',count=cc} end end;"
+        "    local take=math.min(20,mci.get_item_count('iron-ore')); if take>0 then local ins=fur.insert{name='iron-ore',count=take}; mci.remove{name='iron-ore',count=ins} end end end;"
+        "local iron=inv.get_item_count('iron-plate'); local make=math.floor((iron-8)/4); if make>0 then p.begin_crafting{recipe='firearm-magazine',count=make} end;"
+        "local buf=s.find_entities_filtered{position={20.5,-2.5},radius=2,name='wooden-chest'}[1];"
+        "local mags=inv.get_item_count('firearm-magazine'); if buf and mags>0 then buf.get_inventory(defines.inventory.chest).insert{name='firearm-magazine',count=mags}; inv.remove{name='firearm-magazine',count=mags} end;"
+        "rcon.print('ammo cycle: +'..got..' iron collected, crafting '..(make>0 and make or 0)..' mags, '..mags..' to buffer')"
+    )
+    return _print(lua)
+
+
+def turrets_low():
+    """Return True if any gun turret is below 50% ammo (50/100 magazines)."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local low=0; local n=0;"
+        "for _,t in pairs(s.find_entities_filtered{name='gun-turret'}) do n=n+1;"
+        "  local ai=t.get_inventory(defines.inventory.turret_ammo); if ai and ai.get_item_count('firearm-magazine')<50 then low=low+1 end end;"
+        "rcon.print(low..'/'..n)"
+    )
+    out = _print(lua).strip()
+    try:
+        low = int(out.split("/")[0])
+        return low > 0, out
+    except Exception:
+        return False, out
+
+
+def maintain():
+    """Unified periodic maintenance loop body. Runs the whole resilience system:
+    pickup ground items, refill turrets, and if any turret is <50% drive ammo
+    production; then defend_check (rebuild/repair after an attack)."""
+    log = [pickup().strip()]
+    low, ratio = turrets_low()
+    log.append(refill_turrets().strip())
+    if low:
+        log.append(f"turrets low ({ratio}) -> " + produce_ammo().strip())
+    log.append(defend_check().strip())
+    return "\n".join(log)
+
+
+def storage_inventory(ox=-20, oy=-36):
+    """Report the consolidated contents of the overflow chest array - so stored
+    materials can be found and reused. The chests themselves are the memory."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis'];"
+        "local cs=s.find_entities_filtered{area={{" + str(ox) + "," + str(oy) + "},{" + str(ox+12) + "," + str(oy+10) + "}}, name={'wooden-chest','iron-chest','steel-chest'}};"
+        "local tot={};"
+        "for _,c in pairs(cs) do for _,it in pairs(c.get_inventory(defines.inventory.chest).get_contents()) do tot[it.name]=(tot[it.name] or 0)+it.count end end;"
+        "local o={}; for n,c in pairs(tot) do o[#o+1]=n..'='..c end; table.sort(o);"
+        "rcon.print('storage ('..#cs..' chests): '..(#o>0 and table.concat(o,' ') or 'empty'))"
+    )
+    return _print(lua)
+
+
+def retrieve(item, count, ox=-20, oy=-36):
+    """Pull up to `count` of `item` from the overflow chest array into the player
+    inventory. Use when a craft/build needs materials that were stored."""
+    lua = (
+        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "local need=" + str(int(count)) + "; local got=0;"
+        "for _,c in pairs(s.find_entities_filtered{area={{" + str(ox) + "," + str(oy) + "},{" + str(ox+12) + "," + str(oy+10) + "}}, name={'wooden-chest','iron-chest','steel-chest'}}) do"
+        "  if got>=need then break end; local ci=c.get_inventory(defines.inventory.chest); local avail=ci.get_item_count('" + item + "');"
+        "  local take=math.min(avail, need-got); if take>0 then local ins=inv.insert{name='" + item + "',count=take}; ci.remove{name='" + item + "',count=ins}; got=got+ins end end;"
+        "rcon.print('retrieved '..got..' " + item + " (have '..inv.get_item_count('" + item + "')..' in inventory now)')"
     )
     return _print(lua)
 
@@ -327,6 +409,10 @@ if __name__ == "__main__":
         print(auto_repair())
     elif cmd == "store-overflow":
         print(store_overflow())
+    elif cmd == "storage-inventory":
+        print(storage_inventory())
+    elif cmd == "retrieve":
+        print(retrieve(sys.argv[2], int(sys.argv[3])))
     elif cmd == "goto-mine":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine
