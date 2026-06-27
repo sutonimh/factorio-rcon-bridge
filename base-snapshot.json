@@ -769,7 +769,7 @@
 "x": 11.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -832,7 +832,7 @@
 "x": 13.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -895,7 +895,7 @@
 "x": 15.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -958,7 +958,7 @@
 "x": 17.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1021,7 +1021,7 @@
 "x": 19.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1084,7 +1084,7 @@
 "x": 21.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1490,7 +1490,7 @@
 "x": 11.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -1574,7 +1574,7 @@
 "x": 13.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -1644,7 +1644,7 @@
 "x": 15.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -1693,7 +1693,7 @@
 "x": 17.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -1770,7 +1770,7 @@
 "x": 19.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -1819,7 +1819,7 @@
 "x": 21.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
