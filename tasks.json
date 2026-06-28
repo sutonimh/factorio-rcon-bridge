@@ -1,5 +1,9 @@
 [
   {
+    "desc": "NEXT (fresh session): bus-fed 8-lab array - see LAB-ARRAY-BUILD.md",
+    "status": "queued"
+  },
+  {
     "desc": "Coal mine -> smelter belt (direct coal feed + per-furnace inserters)",
     "status": "queued"
   },
