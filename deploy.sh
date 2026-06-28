@@ -8,8 +8,10 @@ CHARON_DIR=/mnt/user/appdata/factorio-autopilot
 echo "==> git: checkout main + pull merged changes"
 git checkout main
 git pull --ff-only
-echo "==> scp runnable code to charon:$CHARON_DIR"
-scp ./*.py ./*.json charon:"$CHARON_DIR"/
+echo "==> scp code + static tech DB to charon:$CHARON_DIR (NOT runtime json)"
+# Only ship code (*.py) + the static tech DB. status.json / state-db.json / base-snapshot.json
+# are LIVE runtime state written on Charon: never overwrite them with stale local copies.
+scp ./*.py ./tech-tree.json charon:"$CHARON_DIR"/
 echo "==> restart the autopilot container"
 ssh charon "sudo docker restart factorio-autopilot"
 echo "==> deployed. status: ssh charon cat $CHARON_DIR/status.json"
