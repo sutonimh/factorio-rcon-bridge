@@ -575,6 +575,61 @@ def build_belt_supply():
         lay_belt_path([(int(cs[0]) + 10, int(cs[1])), (ox - 2, int(cs[1])), (ox - 2, oy + 6)])
 
 
+STEEL_STACK = (14, 6)   # (ox,oy) of the steel-processing stack: output belt oy, input belt oy+5
+
+
+def build_steel_stack(n=4):
+    """Build the STEEL-PROCESSING stack (Seth's design): a belt-fed array fed IRON PLATES (any
+    furnace smelts iron-plate -> steel-plate automatically), tapped off the iron array's plate belt
+    by a SPLITTER so the existing plate routing is unchanged. Same geometry as build_smelter_array
+    (output belt oy / furnaces oy+2..3 / input belt oy+5), flank poles, a steel-plate drain chest.
+    Starts with stone furnaces (upgrade_furnaces_to_steel converts them once steel plates flow).
+    Idempotent: skips if furnaces already exist at the zone. fuel_arrays fuels it; harvest_array_
+    plates pulls its steel output."""
+    ox, oy = STEEL_STACK
+    if A._print(f"/sc rcon.print(#game.surfaces[1].find_entities_filtered{{name={{'stone-furnace','steel-furnace'}},area={{{{{ox},{oy+2}}},{{{ox+n*2+2},{oy+3}}}}}}})").strip() not in ("0", ""):
+        return
+    A.now(f"Steel: building steel-processing stack ({n} furnaces, iron-plate -> steel-plate)")
+    A._print(
+        f"/sc local s=game.surfaces[1]; local f=game.forces.player; local ox={ox}; local oy={oy}; local n={n};"
+        "for _,e in pairs(s.find_entities_filtered{area={{ox-2,oy-2},{ox+n*2+4,oy+7}},type={'tree','simple-entity'}}) do e.destroy() end;"
+        "for x=ox-1,ox+n*2 do s.create_entity{name='transport-belt',position={x+0.5,oy+0.5},direction=4,force=f}; s.create_entity{name='transport-belt',position={x+0.5,oy+5.5},direction=4,force=f} end;"
+        "for k=0,n-1 do local fx=ox+k*2; s.create_entity{name='stone-furnace',position={fx+1,oy+3},force=f};"
+        "  local pi=s.create_entity{name='inserter',position={fx+0.5,oy+1.5},direction=8,force=f}; pi.pickup_position={fx+0.5,oy+2.5}; pi.drop_position={fx+0.5,oy+0.5};"
+        "  local oi=s.create_entity{name='inserter',position={fx+0.5,oy+4.5},direction=8,force=f}; oi.pickup_position={fx+0.5,oy+5.5}; oi.drop_position={fx+0.5,oy+3.5} end;"
+        "for x=ox-1,ox+n*2,3 do s.create_entity{name='small-electric-pole',position={x+0.5,oy-0.5},force=f}; s.create_entity{name='small-electric-pole',position={x+0.5,oy+6.5},force=f} end;"
+        "local ex=ox+n*2; s.create_entity{name='iron-chest',position={ex+2.5,oy+0.5},force=f}; local di=s.create_entity{name='inserter',position={ex+1.5,oy+0.5},direction=12,force=f}; di.pickup_position={ex+0.5,oy+0.5}; di.drop_position={ex+2.5,oy+0.5};"
+        "rcon.print('steel stack built')")
+    # splitter on the iron plate belt (y3, east end) -> one output continues, the other branches here
+    ipy = SMELT_ZONE["iron-ore"][0]   # iron plate belt row is SMELT_ZONE iron oy = 3
+    A._print(
+        "/sc local s=game.surfaces[1]; local f=game.forces.player;"
+        "for _,e in pairs(s.find_entities_filtered{area={{10,3},{12,5}},name='transport-belt'}) do e.destroy() end;"
+        "if s.can_place_entity{name='splitter',position={10.5,4.0},direction=4,force=f} then s.create_entity{name='splitter',position={10.5,4.0},direction=4,force=f};"
+        "  for x=11,13 do s.create_entity{name='transport-belt',position={x+0.5,3.5},direction=4,force=f} end;"
+        "  s.create_entity{name='iron-chest',position={14.5,3.5},force=f}; local di=s.create_entity{name='inserter',position={13.5,2.5},direction=0,force=f}; di.pickup_position={13.5,3.5}; di.drop_position={14.5,3.5} end")
+    lay_belt_path([(11, 4), (11, oy + 5), (ox - 1, oy + 5)])   # splitter branch -> steel input belt
+    ensure_grid_connected()
+
+
+def upgrade_furnaces_to_steel():
+    """Convert the belt-fed array + steel-stack STONE furnaces to STEEL furnaces IN-PLACE (2x speed,
+    2x fuel efficiency; identical 2x2 burner footprint, so belts/inserters/coal are unchanged).
+    Captures each furnace's fuel + output, destroys it, creates a steel-furnace at the exact
+    position, restores the items. Consumes steel-furnace items from derpface's inventory (craft from
+    steel plates the steel stack produces), so it converts gradually as steel furnaces become
+    available - call every maintenance lap; it no-ops when derpface has none."""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
+        "for _,z in ipairs({{{-8,4},{12,7}},{{-8,13},{12,16}},{{13,7},{24,10}}}) do"
+        "  for _,fc in pairs(s.find_entities_filtered{name='stone-furnace',area=z}) do"
+        "    if inv.get_item_count('steel-furnace')>0 then local pos=fc.position; local keep={};"
+        "      local fi=fc.get_fuel_inventory(); if fi then for _,it in ipairs({'coal'}) do local c=fi.get_item_count(it); if c>0 then keep[it]=(keep[it] or 0)+c end end end;"
+        "      local oi=fc.get_output_inventory(); if oi then for it,c in pairs(oi.get_contents()) do local nm=(type(it)=='table' and it.name or it); keep[nm]=(keep[nm] or 0)+(type(c)=='table' and c.count or c) end end;"
+        "      fc.destroy(); local nf=s.create_entity{name='steel-furnace',position=pos,force=f};"
+        "      if nf then for it,c in pairs(keep) do pcall(function() nf.insert{name=it,count=c} end) end; inv.remove{name='steel-furnace',count=1} end end end end")
+
+
 def build_mine_outpost(ore, n=8):
     """Seth's supply architecture: a SCALED row of `n` burner drills all dropping onto ONE belt
     that runs east to a single OUTPUT CHEST loaded by a burner inserter. NO furnaces here -
