@@ -6,8 +6,13 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
 - **Placement zoning:** ONLY mining infrastructure and defenses (turrets) go on/at
   ore patches. EVERYTHING else (smelting, assembly, labs, science, storage) goes at
   the BASE location (~10,-30). Never put a smelter/assembler on an ore patch.
-- **Walk, never teleport:** always `walk()` to the build site (or anywhere) so Seth
-  can watch. Never `player.teleport`.
+- **Walk to the work site, ALWAYS (Seth's standing rule):** before doing work at a
+  location (building, fueling, placing ghosts, mining), `walk()` the character there
+  so Seth can SEE it happen. Never `player.teleport`. Don't operate remotely while the
+  character stands somewhere else. He wants to watch everything, in real time.
+- **Keep it legit (no cheats):** build/fuel/move via the character + `create_entity`/
+  inventory ops like a player would; never force-spawn finished items, instant-research,
+  or hand-set progress. Progress the tech tree legitimately.
 - **Blueprint-first, then cadence:** to build anything, (1) `stamp_blueprint()` the
   ghosts, (2) ASK Seth to check/approve, (3) only then `build_ghosts()` which builds
   in a realistic player-like cadence (a couple at a time with delay).

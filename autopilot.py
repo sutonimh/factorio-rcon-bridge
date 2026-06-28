@@ -490,6 +490,40 @@ def science_factory():
     return _print(lua)
 
 
+def keep_fueled():
+    """Keep every coal consumer topped up from Seth's coal stock chest (20.5,-1.5,
+    near the miners): all stone furnaces (->5), boilers (->50), and burner mining
+    drills (->5). Falls back to the iron-mine coal if the stock chest is empty. Run
+    on the maintain loop so nothing starves while research/builds proceed."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis'];"
+        "local src=s.find_entities_filtered{position={20.5,-1.5},radius=1.5,type='container'}[1];"
+        "if not src then rcon.print('keep_fueled: no coal stock chest at (20.5,-1.5)') return end;"
+        "local sci=src.get_inventory(1);"
+        "local function fuel(ents,target) local n=0; for _,e in pairs(ents) do local fi=e.get_fuel_inventory(); if fi then local need=target-fi.get_item_count('coal'); if need>0 then local k=math.min(need,sci.get_item_count('coal')); if k>0 then e.insert{name='coal',count=k}; sci.remove{name='coal',count=k}; n=n+1 end end end end return n end;"
+        "local f=fuel(s.find_entities_filtered{type='furnace'},5);"
+        "local b=fuel(s.find_entities_filtered{name='boiler'},50);"
+        "local d=fuel(s.find_entities_filtered{type='mining-drill'},5);"
+        "rcon.print('keep_fueled: topped furnaces='..f..' boilers='..b..' drills='..d..' coal_left='..sci.get_item_count('coal'))"
+    )
+    return _print(lua)
+
+
+def feed_labs():
+    """Distribute red+green science packs from player inventory into ALL labs
+    (the 4-lab array), so the research queue completes fast. Returns research %."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "local r=inv.get_item_count('automation-science-pack'); local g=inv.get_item_count('logistic-science-pack'); local ri=0; local gi=0;"
+        "for _,l in pairs(s.find_entities_filtered{name='lab'}) do local li=l.get_inventory(defines.inventory.lab_input);"
+        "  if r>0 then local k=li.insert{name='automation-science-pack',count=math.min(2,r)}; inv.remove{name='automation-science-pack',count=k}; r=r-k; ri=ri+k end;"
+        "  if g>0 then local k=li.insert{name='logistic-science-pack',count=math.min(2,g)}; inv.remove{name='logistic-science-pack',count=k}; g=g-k; gi=gi+k end end;"
+        "local f=game.forces.player;"
+        "rcon.print('feed_labs: red+='..ri..' green+='..gi..' | '..(f.current_research and f.current_research.name or 'NONE')..' '..string.format('%.1f',f.research_progress*100)..'%')"
+    )
+    return _print(lua)
+
+
 def produce_ammo():
     """One ammo-production cycle: collect smelted iron from the furnace row, reload
     the furnaces from the mining chest, craft magazines from available iron, and
@@ -533,7 +567,7 @@ def maintain():
     """Unified periodic maintenance loop body. Runs the whole resilience system:
     pickup ground items, refill turrets, and if any turret is <50% drive ammo
     production; then defend_check (rebuild/repair after an attack)."""
-    log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip()]
+    log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip(), keep_fueled().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:
