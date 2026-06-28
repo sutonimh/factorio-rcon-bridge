@@ -504,7 +504,9 @@ def keep_fueled():
         "local f=fuel(s.find_entities_filtered{type='furnace'},5);"
         "local b=fuel(s.find_entities_filtered{name='boiler'},50);"
         "local d=fuel(s.find_entities_filtered{type='mining-drill'},5);"
-        "rcon.print('keep_fueled: topped furnaces='..f..' boilers='..b..' drills='..d..' coal_left='..sci.get_item_count('coal'))"
+        # burner inserters on the smelter stack (and anywhere) have a fuel inventory; fuel() skips electric ones (get_fuel_inventory nil)
+        "local bi=fuel(s.find_entities_filtered{type='inserter'},3);"
+        "rcon.print('keep_fueled: topped furnaces='..f..' boilers='..b..' drills='..d..' burner-inserters='..bi..' coal_left='..sci.get_item_count('coal'))"
     )
     return _print(lua)
 
