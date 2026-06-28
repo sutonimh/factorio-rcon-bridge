@@ -2,6 +2,33 @@
 
 Every mistake below cost a real iteration. Read before changing autopilot behavior.
 
+## STANDING PRACTICE: always be learning
+Seth's directive: capture EVERY new lesson here and keep improving. After any mistake,
+surprise, or hard-won fix, add a rule below before moving on. This file is the project
+memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
+
+## TOP LESSONS (the expensive ones, read first)
+- **Don't swap powered-by-fuel for powered-by-electricity without VERIFIED power.**
+  Replacing 73 burner inserters with electric ones cascaded: the smelter/mining/boiler
+  areas have NO power grid (they were burner BY DESIGN), so the new electric inserters
+  went dark, the boiler coal-feed inserters starved the steam plant, the whole network
+  lost power, and the base stalled (furnaces 1/25). ALWAYS verify a powered pole covers
+  an inserter before converting it; swap in small batches with power-checks; and KEEP
+  the steam-plant/boiler coal inserters BURNER (electric there = power-deadlock: if power
+  dips they can't restart the plant).
+- **Source materials from where they ACCUMULATE, not a fixed spot.** Research stalled
+  because the green factory + crafters pulled iron from empty furnace OUTPUTS while
+  3,091 iron plates sat overflowing in the science feed chest (the feed belt outran the
+  cluster's consumption). Feed/restock logic must drain the chests that actually fill up.
+- **Hand-crafting can't sustain multiple labs.** ~10 science packs per 95s by hand; 4
+  labs drain far faster, so they sit half-fed (red XOR green) and research = 0%. Labs
+  need AUTOMATED assembler production (the green sub-factory + a red line, scaled), not
+  crafting. Crafting is only a one-shot bootstrap.
+- **Small poles (2.5 supply) can't power a dense hand-built smelter.** Need medium/big
+  poles (research electric-energy-distribution-1) to cover the stacks from the perimeter.
+- **A pole you place may be an unpowered ISLAND.** Always confirm new poles share a
+  working consumer's electric_network_id before relying on them.
+
 ## BUILD CONVENTIONS (standing rules from Seth — follow on EVERY build)
 - **Placement zoning:** ONLY mining infrastructure and defenses (turrets) go on/at
   ore patches. EVERYTHING else (smelting, assembly, labs, science, storage) goes at
