@@ -731,8 +731,10 @@ def defend_check(base_x=10, base_y=-12, radius=70):
         # keep turrets fed during the fight, but hold repairs until it's over
         refill_turrets()
         return f"UNDER ATTACK: {n} enemies within {radius} of base ({base_x},{base_y})"
-    # clear -> full post-attack sequence
-    parts = [rebuild(), auto_repair(), refill_turrets()]
+    # clear -> repair damage + keep turrets stocked. Do NOT rebuild() every cycle: that
+    # restores the whole snapshot and reverts any intentional change (e.g. an optimized
+    # pole layout). rebuild() is a manual op, run explicitly after real destruction.
+    parts = [auto_repair(), refill_turrets()]
     return "clear (0 enemies) | " + " | ".join(p.strip() for p in parts)
 
 
