@@ -801,6 +801,8 @@ def manage_inventory():
     material buffer. Runs on the maintain loop."""
     lua = (
         "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        # only offload when free space is actually low, so we don't strip materials a build needs
+        "if inv.count_empty_stacks()>=12 then rcon.print('manage_inventory: '..inv.count_empty_stacks()..' free (ok, no offload)') return end;"
         "local function dump(item,keep,chest) if not chest then return end; local n=inv.get_item_count(item)-keep; if n>0 then local k=chest.insert{name=item,count=n}; if k>0 then inv.remove{name=item,count=k} end end end;"
         "local ammo=s.find_entities_filtered{position={20.5,-2.5},radius=3,type='container'}[1];"
         "local mc=s.find_entities_filtered{position={17.5,0.5},radius=2,type='container'}[1];"
@@ -809,8 +811,8 @@ def manage_inventory():
         "  for cx=-22,-12,2 do for cy=-38,-28,2 do if stored<excess then local c=s.find_entities_filtered{position={cx+0.5,cy+0.5},radius=0.6,type='container'}[1];"
         "    if (not c) and inv.get_item_count('iron-chest')>0 and s.can_place_entity{name='iron-chest',position={cx+0.5,cy+0.5},force=p.force} then c=s.create_entity{name='iron-chest',position={cx+0.5,cy+0.5},force=p.force}; inv.remove{name='iron-chest',count=1} end;"
         "    if c then local want=excess-stored; if want>0 then local k=c.insert{name=item,count=want}; if k>0 then inv.remove{name=item,count=k}; stored=stored+k end end end end end end end;"
-        "store('copper-plate',300); store('iron-plate',300);"
-        "rcon.print('manage_inventory: '..inv.count_empty_stacks()..' free slots')"
+        "store('copper-plate',600); store('iron-plate',600);"
+        "rcon.print('manage_inventory: offloaded -> '..inv.count_empty_stacks()..' free slots')"
     )
     return _print(lua)
 

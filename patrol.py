@@ -21,9 +21,11 @@ def restock_and_craft():
         "if inv.get_item_count('iron-plate')<150 then local need=250-inv.get_item_count('iron-plate');"
         " for _,f in pairs(s.find_entities_filtered{area={{-3,-33},{24,-28}},type='furnace'}) do local o=f.get_output_inventory();"
         "  local c=math.min(o.get_item_count('iron-plate'),need); if c>0 then o.remove{name='iron-plate',count=c}; inv.insert{name='iron-plate',count=c}; need=need-c end if need<=0 then break end end end;"
-        "if inv.get_item_count('transport-belt')<40 then p.begin_crafting{recipe='transport-belt',count=40} end;"
-        "if inv.get_item_count('logistic-science-pack')<20 then p.begin_crafting{recipe='logistic-science-pack',count=30} end;"
-        "if inv.get_item_count('automation-science-pack')<20 then p.begin_crafting{recipe='automation-science-pack',count=30} end"
+        # only craft what's actually craftable (guard with get_craftable_count) so we never
+        # spam "not enough ingredients" errors when copper/iron is short
+        "if inv.get_item_count('transport-belt')<40 then local n=math.min(40,p.get_craftable_count('transport-belt')); if n>0 then p.begin_crafting{recipe='transport-belt',count=n} end end;"
+        "if inv.get_item_count('logistic-science-pack')<20 then local n=math.min(30,p.get_craftable_count('logistic-science-pack')); if n>0 then p.begin_crafting{recipe='logistic-science-pack',count=n} end end;"
+        "if inv.get_item_count('automation-science-pack')<20 then local n=math.min(30,p.get_craftable_count('automation-science-pack')); if n>0 then p.begin_crafting{recipe='automation-science-pack',count=n} end end"
     )
 
 
