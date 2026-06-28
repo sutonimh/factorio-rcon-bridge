@@ -9,25 +9,27 @@ PERIMETER = [(26, -10), (26, -32), (-14, -32), (-14, -12)]
 
 
 def restock_and_craft():
-    # pull copper from the copper furnace outputs, craft a science buffer to keep labs fed
+    # pull copper + iron from furnace outputs, craft a science buffer to keep ALL labs fed
     a._print(
         "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
         "local cu=0; for _,f in pairs(s.find_entities_filtered{area={{-3,-46},{24,-40}},type='furnace'}) do"
         " local o=f.get_output_inventory(); local c=o.get_item_count('copper-plate'); if c>0 then"
-        " local n=math.min(c,250-cu); o.remove{name='copper-plate',count=n}; inv.insert{name='copper-plate',count=n}; cu=cu+n end"
-        " if cu>=250 then break end end;"
-        "p.begin_crafting{recipe='logistic-science-pack',count=20};"
-        "p.begin_crafting{recipe='automation-science-pack',count=15}"
+        " local n=math.min(c,400-cu); o.remove{name='copper-plate',count=n}; inv.insert{name='copper-plate',count=n}; cu=cu+n end"
+        " if cu>=400 then break end end;"
+        "local fe=0; for _,f in pairs(s.find_entities_filtered{area={{-3,-33},{24,-28}},type='furnace'}) do"
+        " local o=f.get_output_inventory(); local c=o.get_item_count('iron-plate'); if c>0 then"
+        " inv.insert{name='iron-plate',count=c}; o.remove{name='iron-plate',count=c}; fe=fe+c end if fe>=400 then break end end;"
+        "if inv.get_item_count('logistic-science-pack')<30 then p.begin_crafting{recipe='logistic-science-pack',count=40} end;"
+        "if inv.get_item_count('automation-science-pack')<30 then p.begin_crafting{recipe='automation-science-pack',count=40} end"
     )
 
 
-CYCLES = 16
+CYCLES = 20
 for cyc in range(CYCLES):
     wx, wy = PERIMETER[cyc % len(PERIMETER)]
     a.walk(wx, wy, tol=3, timeout=70)
-    a.maintain()
-    if cyc % 3 == 0:
-        restock_and_craft()
+    restock_and_craft()      # keep a science buffer crafting every lap
+    a.maintain()             # pickup, ore chests, green factory, components, fuel ALL burners, feed ALL labs
     out = a.feed_labs().strip()
     print(f"[patrol {cyc+1}/{CYCLES}] at ({wx},{wy}) | {out}", flush=True)
 

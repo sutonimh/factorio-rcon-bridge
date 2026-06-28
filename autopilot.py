@@ -511,37 +511,63 @@ def science_factory():
 
 
 def keep_fueled():
-    """Keep every coal consumer topped up from Seth's coal stock chest (20.5,-1.5,
-    near the miners): all stone furnaces (->5), boilers (->50), and burner mining
-    drills (->5). Falls back to the iron-mine coal if the stock chest is empty. Run
-    on the maintain loop so nothing starves while research/builds proceed."""
+    """Comprehensive fueling for the maintenance patrol. (1) Keeps the coal STOCK chest
+    (20.5,-1.5) itself supplied by pulling coal from any other coal-bearing chest (the
+    coal mine) when it dips, so the fuel source never runs dry. (2) Tops up EVERY burner
+    that needs coal: all stone furnaces (smelter stacks) to 10, boilers to 50, mining
+    drills to 5, burner inserters to 3. Nothing that burns coal is left to starve."""
     lua = (
         "/sc local s=game.surfaces['nauvis'];"
-        "local src=s.find_entities_filtered{position={20.5,-1.5},radius=1.5,type='container'}[1];"
-        "if not src then rcon.print('keep_fueled: no coal stock chest at (20.5,-1.5)') return end;"
-        "local sci=src.get_inventory(1);"
-        "local function fuel(ents,target) local n=0; for _,e in pairs(ents) do local fi=e.get_fuel_inventory(); if fi then local need=target-fi.get_item_count('coal'); if need>0 then local k=math.min(need,sci.get_item_count('coal')); if k>0 then e.insert{name='coal',count=k}; sci.remove{name='coal',count=k}; n=n+1 end end end end return n end;"
-        "local f=fuel(s.find_entities_filtered{type='furnace'},5);"
+        "local stock=s.find_entities_filtered{position={20.5,-1.5},radius=1.5,type='container'}[1];"
+        "if not stock then rcon.print('keep_fueled: no coal stock chest at (20.5,-1.5)') return end;"
+        "local si=stock.get_inventory(1);"
+        # refill the stock chest from any other coal-bearing chest (e.g. the coal mine) when low
+        "local pulled=0; if si.get_item_count('coal')<500 then"
+        "  for _,c in pairs(s.find_entities_filtered{type='container'}) do if c~=stock then"
+        "    local ci=c.get_inventory(1); local av=ci.get_item_count('coal');"
+        "    if av>0 then local need=900-si.get_item_count('coal'); local k=math.min(av,need);"
+        "      if k>0 then ci.remove{name='coal',count=k}; si.insert{name='coal',count=k}; pulled=pulled+k end end end;"
+        "    if si.get_item_count('coal')>=900 then break end end end;"
+        "local function fuel(ents,target) local n=0; for _,e in pairs(ents) do local fi=e.get_fuel_inventory(); if fi then local need=target-fi.get_item_count('coal'); if need>0 then local k=math.min(need,si.get_item_count('coal')); if k>0 then e.insert{name='coal',count=k}; si.remove{name='coal',count=k}; n=n+1 end end end end return n end;"
+        "local f=fuel(s.find_entities_filtered{type='furnace'},10);"
         "local b=fuel(s.find_entities_filtered{name='boiler'},50);"
         "local d=fuel(s.find_entities_filtered{type='mining-drill'},5);"
-        # burner inserters on the smelter stack (and anywhere) have a fuel inventory; fuel() skips electric ones (get_fuel_inventory nil)
         "local bi=fuel(s.find_entities_filtered{type='inserter'},3);"
-        "rcon.print('keep_fueled: topped furnaces='..f..' boilers='..b..' drills='..d..' burner-inserters='..bi..' coal_left='..sci.get_item_count('coal'))"
+        "rcon.print('keep_fueled: stock+='..pulled..' fueled furnaces='..f..' boilers='..b..' drills='..d..' burner-ins='..bi..' stock_coal='..si.get_item_count('coal'))"
     )
     return _print(lua)
 
 
-def feed_labs():
-    """Distribute red+green science packs from player inventory into ALL labs
-    (the 4-lab array), so the research queue completes fast. Returns research %."""
+def service_components():
+    """Ensure assembler/structure COMPONENTS (not just fuel) stay stocked on the patrol:
+    top up the cluster's copper input chest (-5.5,-14.5) and the iron chest (-12.5,-17.5)
+    from the smelter furnace outputs, so the gear/red-science assemblers never starve.
+    The green sub-factory's own inputs are handled by science_factory()."""
     lua = (
-        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
-        "local r=inv.get_item_count('automation-science-pack'); local g=inv.get_item_count('logistic-science-pack'); local ri=0; local gi=0;"
-        "for _,l in pairs(s.find_entities_filtered{name='lab'}) do local li=l.get_inventory(defines.inventory.lab_input);"
-        "  if r>0 then local k=li.insert{name='automation-science-pack',count=math.min(2,r)}; inv.remove{name='automation-science-pack',count=k}; r=r-k; ri=ri+k end;"
-        "  if g>0 then local k=li.insert{name='logistic-science-pack',count=math.min(2,g)}; inv.remove{name='logistic-science-pack',count=k}; g=g-k; gi=gi+k end end;"
+        "/sc local s=game.surfaces['nauvis'];"
+        "local function topup(cx,cy,item,target,area) local c=s.find_entities_filtered{position={cx,cy},radius=1,type='container'}[1]; if not c then return 0 end;"
+        "  local need=target-c.get_inventory(1).get_item_count(item); if need<=0 then return 0 end; local got=0;"
+        "  for _,f in pairs(s.find_entities_filtered{area=area,type='furnace'}) do local o=f.get_output_inventory(); local a=o.get_item_count(item); if a>0 then local k=math.min(a,need-got); o.remove{name=item,count=k}; c.insert{name=item,count=k}; got=got+k end if got>=need then break end end return got end;"
+        "local cu=topup(-5.5,-14.5,'copper-plate',200,{{-3,-46},{24,-40}});"
+        "local fe=topup(-12.5,-17.5,'iron-plate',200,{{-3,-33},{24,-28}});"
+        "rcon.print('service_components: cluster copper+='..cu..' iron+='..fe)"
+    )
+    return _print(lua)
+
+
+def feed_labs(target=10):
+    """Top up EVERY lab to `target` of BOTH red and green packs from player inventory,
+    so all labs in the array keep working (not just whichever got fed first). Reports
+    how many labs are actually working + research %. Part of every maintenance patrol."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory(); local T=" + str(int(target)) + ";"
+        "local ri=0; local gi=0; local labs=s.find_entities_filtered{name='lab'}; local work=0;"
+        "for _,l in pairs(labs) do local li=l.get_inventory(defines.inventory.lab_input);"
+        "  local nr=T-li.get_item_count('automation-science-pack'); if nr>0 then local k=li.insert{name='automation-science-pack',count=math.min(nr,inv.get_item_count('automation-science-pack'))}; inv.remove{name='automation-science-pack',count=k}; ri=ri+k end;"
+        "  local ng=T-li.get_item_count('logistic-science-pack'); if ng>0 then local k=li.insert{name='logistic-science-pack',count=math.min(ng,inv.get_item_count('logistic-science-pack'))}; inv.remove{name='logistic-science-pack',count=k}; gi=gi+k end;"
+        "  if l.status==1 then work=work+1 end end;"
         "local f=game.forces.player;"
-        "rcon.print('feed_labs: red+='..ri..' green+='..gi..' | '..(f.current_research and f.current_research.name or 'NONE')..' '..string.format('%.1f',f.research_progress*100)..'%')"
+        "rcon.print('feed_labs: red+='..ri..' green+='..gi..' labs_working='..work..'/'..#labs..' inv(r='..inv.get_item_count('automation-science-pack')..',g='..inv.get_item_count('logistic-science-pack')..') | '..(f.current_research and f.current_research.name or 'NONE')..' '..string.format('%.1f',f.research_progress*100)..'%')"
     )
     return _print(lua)
 
@@ -589,7 +615,8 @@ def maintain():
     """Unified periodic maintenance loop body. Runs the whole resilience system:
     pickup ground items, refill turrets, and if any turret is <50% drive ammo
     production; then defend_check (rebuild/repair after an attack)."""
-    log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip(), keep_fueled().strip()]
+    log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip(),
+           service_components().strip(), keep_fueled().strip(), feed_labs().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:

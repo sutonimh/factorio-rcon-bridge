@@ -27,6 +27,14 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
   where possible, route through the character's own inventory (walk to chest -> take
   coal into inventory -> walk to furnace -> insert) rather than a silent chest->machine
   script transfer, so Seth can see the material move.
+- **Maintenance patrol = service EVERYTHING (standing rule):** every patrol lap must
+  ensure all structures have both FUEL and COMPONENTS. That means: keep the coal stock
+  chest itself supplied (pull from the coal mine), fuel every burner (furnaces, boilers,
+  drills, burner inserters), top up assembler component inputs (cluster copper/iron,
+  green-factory chain), refill the ore storage chests, and top up ALL labs with BOTH
+  red+green packs so every lab keeps working (not just the first-fed one). `maintain()`
+  now chains pickup + fill_ore_chests + science_factory + service_components +
+  keep_fueled + feed_labs; the patrol also crafts a red+green buffer each lap.
 - **Proper pathfinding (standing rule):** walking must be smooth, no stutter/stopping.
   Pre-route around obstacles and follow waypoints, re-sending direction only on a real
   turn; keep walking_state=true through the whole route.
