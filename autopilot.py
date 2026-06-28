@@ -23,7 +23,7 @@ def _print(cmd):
 
 
 def pos():
-    out = _print("/sc local p=game.players[1]; rcon.print(p.position.x..','..p.position.y)")
+    out = _print("/sc local p=storage.derpface; rcon.print(p.position.x..','..p.position.y)")
     x, y = out.strip().split(",")
     return float(x), float(y)
 
@@ -33,6 +33,44 @@ def heading(px, py, tx, ty):
     ang = math.atan2(tx - px, -(ty - py))  # radians, 0=north
     idx = round(ang / (2 * math.pi / DIRS16)) % DIRS16
     return idx
+
+
+# The 8 directions the character can HOLD continuously (one fixed walking_state).
+# Aiming a continuous heading at an off-axis point makes the 16-way snap oscillate
+# between two neighbours (crab/triangle); instead we move in pure axis/diagonal legs.
+DIR8 = {(0, -1): 0, (1, -1): 2, (1, 0): 4, (1, 1): 6,
+        (0, 1): 8, (-1, 1): 10, (-1, 0): 12, (-1, -1): 14}
+
+
+def stop():
+    """Halt the character NOW. ALWAYS call this before killing/restarting any pathing
+    driver: a killed walk leaves walking_state=true in-game and the character runs
+    endlessly in the last direction (Seth saw this happen). Idempotent + cheap."""
+    return _print("/sc storage.derpface.walking_state={walking=false}")
+
+
+def _legs_to(px, py, wx, wy):
+    """Decompose a move (px,py)->(wx,wy) into FIXED legs the character holds in ONE
+    direction each: a 45-degree diagonal leg (consuming the shorter axis) then a single
+    cardinal leg for the remainder. Each leg is ((sx,sy), endx, endy). Direction is fixed
+    per leg, so it physically can't oscillate/crab (the resilient model)."""
+    dx, dy = wx - px, wy - py
+    adx, ady = abs(dx), abs(dy)
+    legs = []
+    cx, cy = px, py
+    diag = min(adx, ady)
+    if diag >= 0.5 and adx >= 0.5 and ady >= 0.5:
+        sx = 1 if dx > 0 else -1
+        sy = 1 if dy > 0 else -1
+        cx, cy = px + sx * diag, py + sy * diag
+        legs.append(((sx, sy), cx, cy))
+    rdx, rdy = wx - cx, wy - cy
+    if abs(rdx) >= 0.5:
+        legs.append(((1 if rdx > 0 else -1, 0), wx, cy))
+        cx = wx
+    if abs(rdy) >= 0.5:
+        legs.append(((0, 1 if rdy > 0 else -1), cx, wy))
+    return legs
 
 
 def _blocked_tiles(minx, miny, maxx, maxy):
@@ -65,6 +103,29 @@ def _clear_line(ax, ay, bx, by, blocked):
     for i in range(n + 1):
         t = i / n if n else 0
         if (round(ax + (bx - ax) * t), round(ay + (by - ay) * t)) in blocked:
+            return False
+    return True
+
+
+def _clear_Lpath(ax, ay, bx, by, blocked):
+    """True if the L-PATH the leg-walker actually takes - a 45-degree diagonal leg then a
+    cardinal leg - from (ax,ay) to (bx,by) is clear. Used for string-pulling so the few
+    waypoints we keep are exactly the ones the walker can glide between without clipping."""
+    dx, dy = bx - ax, by - ay
+    sx = (dx > 0) - (dx < 0)
+    sy = (dy > 0) - (dy < 0)
+    x, y = ax, ay
+    for _ in range(min(abs(dx), abs(dy))):           # diagonal leg
+        x += sx; y += sy
+        if (x, y) in blocked:
+            return False
+    while x != bx:                                   # cardinal remainder (x)
+        x += (1 if bx > x else -1)
+        if (x, y) in blocked:
+            return False
+    while y != by:                                   # cardinal remainder (y)
+        y += (1 if by > y else -1)
+        if (x, y) in blocked:
             return False
     return True
 
@@ -106,54 +167,86 @@ def route(sx, sy, gx, gy, pad=6):
     while n is not None:
         path.append(n); n = came[n]
     path.reverse()
-    # string-pull: greedily extend each waypoint to the farthest line-of-sight point
+    # String-pull into FEW waypoints, each reachable from the previous by a clear L-PATH (the
+    # diagonal+cardinal legs the walker actually takes). This collapses the jagged A* staircase
+    # (which made the leg-walker oscillate) into a handful of long, glide-able legs that also
+    # never clip a building. Greedily extend each waypoint to the farthest L-clear point.
+    if len(path) < 2:
+        return [goal]
     wps = []
     i = 0
     while i < len(path) - 1:
         j = len(path) - 1
-        while j > i + 1 and not _clear_line(path[i][0], path[i][1], path[j][0], path[j][1], blocked):
+        while j > i + 1 and not _clear_Lpath(path[i][0], path[i][1], path[j][0], path[j][1], blocked):
             j -= 1
         wps.append(path[j]); i = j
     return wps
 
 
+_route_cache = {}   # (start_region, goal) -> waypoints; reused so we don't recompute the same
+                    # route every walk (Seth's rule). Invalidated when the character deviates.
+
+
 def walk(tx, ty, tol=2.0, timeout=150):
-    """Smooth pathfinding walk: route around obstacles (incl. belts) into a few long
-    straight segments, then walk each with ONE fixed direction (no mid-segment
-    re-sends), letting the game animate it smoothly. Never stops between segments.
-    Recovers with a brief sidestep if a segment genuinely stalls (moving entity)."""
+    """Smooth pathfinding walk: route around obstacles into a few long straight L-legs, walk
+    each with ONE fixed direction (no mid-leg re-sends) for a smooth glide. The route is CACHED
+    by start-region+goal and reused; it's only recomputed when the character genuinely stalls
+    (deviates from the plan) - we don't recalculate pathfinding every time."""
     t0 = time.time()
-    px, py = pos()
-    wps = route(px, py, tx, ty) or [(round(tx), round(ty))]
-    SPEED = 8.0  # tiles/sec (char_running_speed 0.15/tick ~ 9/s, slightly conservative)
-    last_dir = None
-    stall = 0
-    for k, (wx, wy) in enumerate(wps):
-        final = (k == len(wps) - 1)
-        wt = tol if final else 1.0
-        prev = (px, py)
-        while True:
-            if time.time() - t0 > timeout:
-                _print("/sc game.players[1].walking_state={walking=false}")
-                return px, py, False
-            dist = math.hypot(wx - px, wy - py)
-            if dist <= wt:
-                break
-            d = heading(px, py, wx, wy)
-            if math.hypot(px - prev[0], py - prev[1]) < 0.2 and last_dir is not None:
-                stall += 1                      # genuinely stuck: brief sidestep
-                d = (d + (4 if stall % 2 else 12)) % 16
-            else:
-                stall = 0
-            prev = (px, py)
-            if d != last_dir:
-                _print(f"/sc game.players[1].walking_state={{walking=true,direction={d}}}")
-                last_dir = d
-            # sleep proportional to remaining distance, uninterrupted = smooth motion
-            time.sleep(min(0.8, max(0.15, dist / SPEED)))
+    key = (round(tx), round(ty))
+    try:
+        px, py = pos()
+        ck = (round(px / 8), round(py / 8), key[0], key[1])
+        wps = _route_cache.get(ck)
+        if wps is None:
+            wps = route(px, py, tx, ty) or [(round(tx), round(ty))]
+            _route_cache[ck] = wps
+        for k, (wx, wy) in enumerate(wps):
+            final = (k == len(wps) - 1)
             px, py = pos()
-    _print("/sc game.players[1].walking_state={walking=false}")
-    return px, py, True
+            for (dvec, ex, ey) in _legs_to(px, py, wx, wy):
+                d = DIR8[dvec]
+                nrm = math.hypot(dvec[0], dvec[1]) or 1.0
+                # leg arrival tolerance: tight for the final approach, loose at turns
+                legtol = tol if (final and (ex, ey) == (wx, wy)) else 0.8
+                _print(f"/sc storage.derpface.walking_state={{walking=true,direction={d}}}")
+                last_move = time.time()
+                ppx, ppy = px, py
+                sidesteps = 0
+                while True:
+                    if time.time() - t0 > timeout:
+                        _route_cache.pop(ck, None)   # plan was bad -> drop it
+                        return px, py, False
+                    px, py = pos()
+                    # remaining distance ALONG the leg direction (projection):
+                    # overshoot/lateral drift can't fool it, and direction never
+                    # changes mid-leg, so the character glides straight (no crab).
+                    rem = ((ex - px) * dvec[0] + (ey - py) * dvec[1]) / nrm
+                    if rem <= legtol:
+                        break
+                    if math.hypot(px - ppx, py - ppy) > 0.1:
+                        last_move = time.time()
+                    elif time.time() - last_move > 1.0:   # genuinely stuck: sidestep + resume
+                        sidesteps += 1
+                        if sidesteps > 3:
+                            # the character is NOT routing as expected -> drop the cached plan
+                            # and recompute a fresh route from where it actually is.
+                            _route_cache.pop(ck, None)
+                            wps2 = route(px, py, tx, ty) or [(round(tx), round(ty))]
+                            _route_cache[ck] = wps2
+                            return walk(tx, ty, tol=tol, timeout=max(10, int(timeout - (time.time() - t0))))
+                        sd = (d + 4) % 16
+                        _print(f"/sc storage.derpface.walking_state={{walking=true,direction={sd}}}")
+                        time.sleep(0.3)
+                        _print(f"/sc storage.derpface.walking_state={{walking=true,direction={d}}}")
+                        last_move = time.time()
+                    ppx, ppy = px, py
+                    time.sleep(0.12)
+        return px, py, True
+    finally:
+        # ALWAYS halt on exit (normal, timeout, or exception) so the character never
+        # keeps running. Process-kill bypasses this, hence stop() before re-pathing.
+        _print("/sc storage.derpface.walking_state={walking=false}")
 
 
 def belt_path(sx, sy, gx, gy, pad=14):
@@ -366,7 +459,7 @@ def build_belt(sx, sy, gx, gy, item='transport-belt', ug='underground-belt', tag
             % (nm, spec, spec)
         )
     lua = (
-        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local f=p.force; local inv=p.get_main_inventory(); local n=0; local pl={}; "
+        "/sc local s=game.surfaces['nauvis']; local p=storage.derpface; local f=p.force; local inv=p.get_main_inventory(); local n=0; local pl={}; "
         + " ".join(cmds) +
         " rcon.print(n..'/'..#pl..'\\n'..table.concat(pl,';'))"
     )
@@ -396,7 +489,7 @@ def mine(name, count):
     # and add the same amount to the inventory. The patch loses exactly what the
     # inventory gains, so no resources are created. Respects inventory space.
     lua = (
-        "/sc local p=game.players[1]; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local inv=p.get_main_inventory();"
         "local target=" + str(int(count)) + "; local name='" + name + "';"
         "local got=0;"
         "local es=p.surface.find_entities_filtered{position=p.position,radius=10,name=name};"
@@ -406,22 +499,96 @@ def mine(name, count):
         "    local prod=e.prototype.mineable_properties.products[1].name;"
         "    local take=math.min(e.amount, target-got);"
         "    local ins=inv.insert{name=prod, count=take};"
-        "    if ins>0 then e.amount=e.amount-ins; if e.amount<=0 then e.destroy() end; got=got+ins end"
+        "    if ins>0 then if ins>=e.amount then e.destroy() else e.amount=e.amount-ins end; got=got+ins end"
         "  end end;"
         "rcon.print('mined '..got..' '..name)"
     )
     return _print(lua)
 
 
-def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0):
+def clear_spaceship_debris(radius=300):
+    """Remove the Space Age crash-site spaceship wreckage that litters spawn on a FRESH
+    world (Seth's rule: always clear it). Collects any mineable loot first, then destroys
+    every crash-site-* entity (ship, wreck pieces, loot chests). Returns count removed."""
+    lua = (
+        "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local n=0;"
+        "for _,e in pairs(s.find_entities_filtered{position={0,0},radius=" + str(int(radius)) + "}) do"
+        "  if e.valid and string.sub(e.name,1,11)=='crash-site-' then"
+        "    local oi=e.get_output_inventory and e.get_output_inventory();"
+        "    if oi then for _,c in pairs(oi.get_contents()) do inv.insert{name=c.name,count=c.count} end end;"
+        "    local mp=e.prototype.mineable_properties;"
+        "    if mp and mp.products then for _,pr in pairs(mp.products) do"
+        "      if pr.type=='item' then local a=pr.amount or pr.amount_max or 0; if a>0 then inv.insert{name=pr.name,count=a} end end end end;"
+        "    e.destroy(); n=n+1 end end;"
+        "rcon.print('removed '..n..' crash-site debris')"
+    )
+    return _print(lua)
+
+
+def richest_spot(name, near_x, near_y, radius=90):
+    """Find the RICHEST tile of an ore patch (max ore summed over a 5x5 neighbourhood),
+    not the nearest sparse edge (Seth's rule: always drill the richest deposits). Returns
+    (tx, ty, density) - the ore tile to anchor a drill on - or None if no ore in range."""
+    nx, ny, R = round(near_x), round(near_y), int(radius)
+    lua = (
+        "/sc local s=game.surfaces[1];"
+        "local es=s.find_entities_filtered{position={" + str(nx) + "," + str(ny) + "},radius=" + str(R) + ",name='" + name + "'};"
+        "local amt={}; for _,e in pairs(es) do amt[math.floor(e.position.x)..','..math.floor(e.position.y)]=e.amount end;"
+        "local best,bx,by=-1,nil,nil;"
+        "for _,e in pairs(es) do local x=math.floor(e.position.x); local y=math.floor(e.position.y); local sum=0;"
+        "  for dx=-2,2 do for dy=-2,2 do local v=amt[(x+dx)..','..(y+dy)]; if v then sum=sum+v end end end;"
+        "  if sum>best then best=sum; bx=x; by=y end end;"
+        "if bx then rcon.print(bx..','..by..','..best) else rcon.print('NONE') end"
+    )
+    out = _print(lua).strip()
+    if out == "NONE" or "," not in out:
+        return None
+    x, y, d = out.split(",")
+    return int(x), int(y), int(d)
+
+
+def clear_area(cx, cy, radius=10):
+    """Clear a build site of trees + rocks (Seth's rule: >=10-tile clearspace around
+    EVERY building, no trees/boulders/cliffs). Collects the wood/stone/coal the cleared
+    trees+rocks yield (free stone for the bootstrap). Returns how many were removed and
+    how many CLIFFS remain - cliffs can't be mined without explosives, so if cliffs>0 the
+    caller must MOVE the build site. Returns (removed, cliffs)."""
+    cx, cy, r = round(cx), round(cy), int(radius)
+    lua = (
+        "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
+        "local A={{" + str(cx - r) + "," + str(cy - r) + "},{" + str(cx + r) + "," + str(cy + r) + "}};"
+        "local removed=0;"
+        "for _,e in pairs(s.find_entities_filtered{area=A, type={'tree','simple-entity'}}) do"
+        "  if e.valid then local mp=e.prototype.mineable_properties;"
+        "    if mp and mp.products then for _,pr in pairs(mp.products) do"
+        "      if pr.type=='item' then local amt=pr.amount or pr.amount_max or 1; if amt>0 then inv.insert{name=pr.name,count=amt} end end end end;"
+        "    e.destroy(); removed=removed+1 end end;"
+        "local cliffs=#s.find_entities_filtered{area=A, type='cliff'};"
+        "rcon.print(removed..'|'..cliffs)"
+    )
+    out = _print(lua).strip()
+    try:
+        rem, cliffs = out.split("|")
+        return int(rem), int(cliffs)
+    except ValueError:
+        return 0, 0
+
+
+def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0, clear=10):
     # Walk the character to the build site (visible travel), then place the entity.
     # The cursor/hand-build API is client-authoritative for a connected player and
     # can't be driven over RCON, so placement itself is server-side create_entity.
     # Conservative: the item is removed from the real inventory (world += 1, inv -= 1).
     if walk_first:
         walk(x, y, tol=reach_tol)
+    if clear:
+        # Seth's rule: >=10-tile clearspace around every building. Clear trees/rocks;
+        # if a cliff remains (unmineable) the site is bad - abort so the caller MOVES it.
+        _, cliffs = clear_area(x, y, clear)
+        if cliffs:
+            return f"CLIFF x{cliffs} within {clear} of ({x},{y}) - MOVE build site"
     lua = (
-        "/sc local p=game.players[1]; local s=p.surface; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local item='" + name + "'; local pos={" + str(x) + "," + str(y) + "}; local dir=" + str(int(direction)) + ";"
         "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
         "local proto=prototypes.item[item]; local ename=proto and proto.place_result and proto.place_result.name or item;"
@@ -433,16 +600,23 @@ def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0):
 
 
 def craft(recipe, count, timeout=90):
-    started = _print(
-        "/sc rcon.print(game.players[1].begin_crafting{recipe='" + recipe + "',count=" + str(int(count)) + "})"
-    ).strip()
-    t0 = time.time()
-    while time.time() - t0 < timeout:
-        q = _print("/sc rcon.print(game.players[1].crafting_queue_size)").strip()
-        if q == "0":
-            break
-        time.sleep(1.5)
-    return f"crafted {recipe} (started {started})"
+    # script-craft on the player-less derpface (recursive hand-craft); see bootstrap._SC.
+    sc = ("local D=storage.derpface; local INV=D.get_main_inventory(); local F=D.force;"
+          "local STOP={['iron-plate']=true,['copper-plate']=true,['steel-plate']=true,['stone']=true,['coal']=true,['iron-ore']=true,['copper-ore']=true};"
+          "local function cnt(n) return INV.get_item_count(n) end;"
+          "local sc; sc=function(name,count) if STOP[name] then return 0 end; local r=F.recipes[name];"
+          "  if not r or not r.enabled then return 0 end;"
+          "  for _,fi in pairs(r.ingredients) do if fi.type=='fluid' then return 0 end end; local made=0;"
+          "  for i=1,count do local ok=true;"
+          "    for _,ing in pairs(r.ingredients) do if ing.type=='item' then"
+          "      if cnt(ing.name)<ing.amount then sc(ing.name, ing.amount-cnt(ing.name)) end;"
+          "      if cnt(ing.name)<ing.amount then ok=false; break end end end;"
+          "    if not ok then break end;"
+          "    for _,ing in pairs(r.ingredients) do if ing.type=='item' then INV.remove{name=ing.name,count=ing.amount} end end;"
+          "    for _,prod in pairs(r.products) do if prod.type=='item' then INV.insert{name=prod.name,count=(prod.amount or prod.amount_max or 1)} end end;"
+          "    made=made+1 end; return made end;")
+    made = _print(f"/sc {sc} rcon.print(sc('{recipe}',{int(count)}))").strip()
+    return f"crafted {made} {recipe}"
 
 
 # --- Placement geometry (learned from Seth's hand-built layout) -----------------
@@ -455,12 +629,18 @@ def craft(recipe, count, timeout=90):
 # drops east). `drill.drop_position` / `inserter.pickup_position`/`drop_position`
 # are readable - use them to verify, unlike fluidbox.
 
-def place(name, tile_x, tile_y, direction=0):
+def place(name, tile_x, tile_y, direction=0, clear=10):
     """Place an entity by its TOP-LEFT footprint tile, auto-centering by size.
     Conservative: removes one from the real inventory. Returns a status string
-    with the actual snapped position."""
+    with the actual snapped position. Clears a >=10-tile clearspace (trees/rocks)
+    around the site first (Seth's rule); aborts on an unmineable cliff so the caller
+    MOVES the site."""
+    if clear:
+        _, cliffs = clear_area(tile_x, tile_y, clear)
+        if cliffs:
+            return f"CLIFF x{cliffs} within {clear} of tile({tile_x},{tile_y}) - MOVE build site"
     lua = (
-        "/sc local p=game.players[1]; local s=p.surface; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local item='" + name + "'; local tx=" + str(tile_x) + "; local ty=" + str(tile_y) + "; local dir=" + str(int(direction)) + ";"
         "local proto=prototypes.item[item]; local ename=(proto and proto.place_result and proto.place_result.name) or item;"
         "local ep=prototypes.entity[ename]; local cx=tx+ep.tile_width/2; local cy=ty+ep.tile_height/2;"
@@ -490,7 +670,7 @@ def build_ghosts(cadence=0.35, batch=2):
     a realistic player-like cadence (a couple at a time with a short delay),
     consuming items from inventory and fueling burners."""
     revive = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory(); local built=0;"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory(); local built=0;"
         "for _,g in pairs(s.find_entities_filtered{name='entity-ghost', force='player'}) do if built>=" + str(batch) + " then break end;"
         "  local gp=g.ghost_prototype; local item=(gp.items_to_place_this and gp.items_to_place_this[1] and gp.items_to_place_this[1].name) or g.ghost_name;"
         "  if inv.get_item_count(item)>0 then local col,e=g.revive{}; if e then inv.remove{name=item,count=1}; built=built+1;"
@@ -513,6 +693,32 @@ def build_ghosts(cadence=0.35, batch=2):
     return f"built {n} entities in cadence"
 
 
+def now(action, plan=None):
+    """Update the on-screen note. Structure (Seth's rule): the FIRST line is always the live
+    pending task / thing being waited on (bold, highlighted); below it is the task QUEUE. Keep
+    it current - call this at every action and each maintenance lap so it never goes stale."""
+    plan = plan if plan is not None else [
+        "Supply: iron/copper/coal mines -> base smelters",
+        "Red + green science (assemblers -> labs)",
+        "Research -> oil-gathering",
+        "Oil economy + blue science",
+        "construction-robotics -> robot factory",
+        "(biters OFF, crash debris cleared)",
+    ]
+    safe = lambda s: str(s).replace("'", "").replace("\\", "")[:90]
+    plan_lua = "{" + ",".join("'" + safe(s) + "'" for s in plan) + "}"
+    lua = (
+        "/sc local p=storage.derpface; local g=p.gui.screen;"
+        "if g.autopilot_notepad then g.autopilot_notepad.destroy() end;"
+        "local f=g.add{type='frame', name='autopilot_notepad', direction='vertical'}; f.location={4,44};"
+        "local nl=f.add{type='label', caption='> " + safe(action) + "'}; nl.style.single_line=false; nl.style.maximal_width=340; nl.style.font='default-bold'; nl.style.font_color={1,0.85,0.3};"
+        "local hl=f.add{type='label', caption='-- queue --'}; hl.style.font_color={0.5,0.55,0.6};"
+        "local pl=" + plan_lua + "; for _,t in ipairs(pl) do local l=f.add{type='label', caption=t}; l.style.single_line=false; l.style.maximal_width=340; l.style.font_color={0.7,0.75,0.8} end;"
+        "rcon.print('now: '..'" + safe(action) + "')"
+    )
+    return _print(lua)
+
+
 def notepad(lines):
     """Persistent on-screen 'notepad' GUI anchored to the SCREEN top-left corner
     (not world-space, so it never moves or clips). Each queue entry word-wraps."""
@@ -521,7 +727,7 @@ def notepad(lines):
     lua_list = "{" + ",".join("'" + s.replace("'", "").replace("\\", "") + "'" for s in items) + "}"
     lua = (
         "/sc " + rendering_clear +
-        "local p=game.players[1]; local g=p.gui.screen;"
+        "local p=storage.derpface; local g=p.gui.screen;"
         "if g.autopilot_notepad then g.autopilot_notepad.destroy() end;"
         "local f=g.add{type='frame', name='autopilot_notepad', direction='vertical'};"
         "f.location={4,44};"
@@ -603,7 +809,7 @@ def pickup(radius=12):
     """Pick up items lying on the ground (e.g. spilled coal) near the character
     into the real inventory. Conservative: items move from ground to inventory."""
     lua = (
-        "/sc local p=game.players[1]; local s=p.surface; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local picked={};"
         "for _,e in pairs(s.find_entities_filtered{position=p.position, radius=" + str(radius) + ", name='item-on-ground'}) do"
         "  if e.valid and e.stack and e.stack.valid_for_read then local n=e.stack.name; local c=e.stack.count;"
@@ -641,7 +847,7 @@ def store_overflow(ox=-20, oy=-36, keep_coal=100):
     at (ox,oy). Keeps `keep_coal` coal in inventory for fueling. Places a new chest
     (from inventory wooden/iron chests) whenever the array is full."""
     lua = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local OX=" + str(ox) + "; local OY=" + str(oy) + "; local COLS=12;"
         "local function chests() return s.find_entities_filtered{area={{OX,OY},{OX+COLS,OY+10}}, name={'wooden-chest','iron-chest','steel-chest'}} end;"
         # clearance guard: only place in the dedicated zone, never adjacent to a non-chest build
@@ -670,7 +876,7 @@ def feed_smelter():
     maintain loop so the 12-furnace plant smelts continuously. (A physical belt from
     the mine would make it fully self-running; this is the software feed until then.)"""
     lua = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         # feed both stacks: (ore, chest_pos, ore-belt area, plant area)
         "local stacks={"
         "  {'iron-ore',{17.5,0.5},{{-3,-28},{23,-27}},{{-3,-33},{23,-28}}},"
@@ -721,7 +927,7 @@ def science_factory():
     (Belt input is topped from player inventory; a dedicated belt+gear assembler would
     make it fully self-contained - Phase-1 TODO.)"""
     lua = (
-        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "/sc local s=game.surfaces['nauvis']; local p=storage.derpface; local inv=p.get_main_inventory();"
         "local function cc(x,y) return s.find_entities_filtered{position={x,y},radius=0.5,type='container'}[1] end;"
         "local function move(fx,fy,tx,ty,item,cap) local a=cc(fx,fy); local b=cc(tx,ty); if not(a and b) then return 0 end;"
         "  local have=a.get_inventory(1).get_item_count(item); local room=cap-b.get_inventory(1).get_item_count(item);"
@@ -800,7 +1006,7 @@ def manage_inventory():
     chests in the buffer zone (-22..-12, -38..-28). Keeps all build items + a working
     material buffer. Runs on the maintain loop."""
     lua = (
-        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "/sc local s=game.surfaces['nauvis']; local p=storage.derpface; local inv=p.get_main_inventory();"
         # only offload when free space is actually low, so we don't strip materials a build needs
         "if inv.count_empty_stacks()>=12 then rcon.print('manage_inventory: '..inv.count_empty_stacks()..' free (ok, no offload)') return end;"
         "local function dump(item,keep,chest) if not chest then return end; local n=inv.get_item_count(item)-keep; if n>0 then local k=chest.insert{name=item,count=n}; if k>0 then inv.remove{name=item,count=k} end end end;"
@@ -846,7 +1052,7 @@ def collect_science():
     green sub-factory output chest (-6.5,-12.5), red from the cluster red assembler
     output (-5.5,-17.5, leaving a couple for the cluster's own lab inserter)."""
     lua = (
-        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "/sc local s=game.surfaces['nauvis']; local p=storage.derpface; local inv=p.get_main_inventory();"
         "local g=0; local gc=s.find_entities_filtered{position={-6.5,-12.5},radius=0.6,type='container'}[1];"
         "if gc then local n=gc.get_inventory(1).get_item_count('logistic-science-pack'); if n>0 then gc.get_inventory(1).remove{name='logistic-science-pack',count=n}; inv.insert{name='logistic-science-pack',count=n}; g=n end end;"
         "local r=0; local ra=s.find_entities_filtered{position={-5.5,-17.5},radius=1.2,type='assembling-machine'}[1];"
@@ -861,7 +1067,7 @@ def feed_labs(target=10):
     so all labs in the array keep working (not just whichever got fed first). Reports
     how many labs are actually working + research %. Part of every maintenance patrol."""
     lua = (
-        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory(); local T=" + str(int(target)) + ";"
+        "/sc local s=game.surfaces['nauvis']; local p=storage.derpface; local inv=p.get_main_inventory(); local T=" + str(int(target)) + ";"
         "local ri=0; local gi=0; local labs=s.find_entities_filtered{name='lab'}; local work=0;"
         "for _,l in pairs(labs) do local li=l.get_inventory(defines.inventory.lab_input);"
         "  local cr=math.min(T-li.get_item_count('automation-science-pack'),inv.get_item_count('automation-science-pack')); if cr>0 then local k=li.insert{name='automation-science-pack',count=cr}; inv.remove{name='automation-science-pack',count=k}; ri=ri+k end;"
@@ -879,7 +1085,7 @@ def produce_ammo():
     stock the ammo buffer chest. Run repeatedly (e.g. on the maintain loop) to
     drive turret ammo back to full after it drops below 50%."""
     lua = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local got=0;"
         "for _,fur in pairs(s.find_entities_filtered{area={{-3,-33},{23,-28}},name='stone-furnace'}) do"
         "  local o=fur.get_output_inventory(); local c=o.get_item_count('iron-plate'); if c>0 then got=got+c; inv.insert{name='iron-plate',count=c}; o.remove{name='iron-plate',count=c} end end;"
@@ -946,7 +1152,7 @@ def retrieve(item, count, ox=-20, oy=-36):
     """Pull up to `count` of `item` from the overflow chest array into the player
     inventory. Use when a craft/build needs materials that were stored."""
     lua = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local need=" + str(int(count)) + "; local got=0;"
         "for _,c in pairs(s.find_entities_filtered{area={{" + str(ox) + "," + str(oy) + "},{" + str(ox+12) + "," + str(oy+10) + "}}, name={'wooden-chest','iron-chest','steel-chest'}}) do"
         "  if got>=need then break end; local ci=c.get_inventory(defines.inventory.chest); local avail=ci.get_item_count('" + item + "');"
@@ -964,7 +1170,7 @@ def fortify(cx, cy, count=16, radius=13, detect_range=90, ammo_each=10, base=6, 
     light EVEN ring (`base`). Salvages+replaces existing turrets, so it re-runs on
     the maintain loop to reconfigure as nests spawn/grow/die. Caps at turrets on hand."""
     lua = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local cx=" + str(cx) + "; local cy=" + str(cy) + "; local cmax=" + str(int(count)) + "; local R=" + str(radius) + "; local det=" + str(detect_range) + "; local pi=math.pi;"
         "local nest=nil; local bd=det*det; local nnests=0; for _,e in pairs(s.find_entities_filtered{type='unit-spawner',force='enemy'}) do local d=(e.position.x-cx)^2+(e.position.y-cy)^2; if d<det*det then nnests=nnests+1 end; if d<bd then bd=d; nest=e end end;"
         "local count=math.max(" + str(base) + ", math.min(cmax, " + str(base) + "+" + str(per_nest) + "*nnests));"
@@ -985,7 +1191,7 @@ def auto_repair():
     """Repair damaged (not destroyed) player structures using repair-packs from the
     inventory. Part of the post-attack sequence. No-op if no repair-packs yet."""
     lua = (
-        "/sc local p=game.players[1]; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
+        "/sc local p=storage.derpface; local s=game.surfaces['nauvis']; local inv=p.get_main_inventory();"
         "local packs=inv.get_item_count('repair-pack'); local damaged=0; local repaired=0;"
         "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
         "  if e.name~='character' and e.health and e.max_health and e.health<e.max_health then damaged=damaged+1;"
@@ -1073,7 +1279,7 @@ if __name__ == "__main__":
         name, n = sys.argv[2], int(sys.argv[3])
         # find nearest patch, walk to it, mine
         out = _print(
-            "/sc local p=game.players[1]; local es=p.surface.find_entities_filtered{position=p.position,radius=400,name='"
+            "/sc local p=storage.derpface; local es=p.surface.find_entities_filtered{position=p.position,radius=400,name='"
             + name + "'}; local best,bd=nil,1e18; for _,e in pairs(es) do local d=(e.position.x-p.position.x)^2+(e.position.y-p.position.y)^2; if d<bd then bd=d; best=e end end; if best then rcon.print(best.position.x..','..best.position.y) else rcon.print('none') end"
         ).strip()
         if out == "none":

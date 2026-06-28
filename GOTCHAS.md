@@ -2,12 +2,155 @@
 
 Every mistake below cost a real iteration. Read before changing autopilot behavior.
 
-## STANDING PRACTICE: always be learning
-Seth's directive: capture EVERY new lesson here and keep improving. After any mistake,
-surprise, or hard-won fix, add a rule below before moving on. This file is the project
-memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
+## STANDING PRACTICE: always be learning + the CODEBASE is the source of truth (WORKFLOW RULE)
+Seth's directives (mandatory workflow):
+1. **Codify every mistake.** After ANY mistake, surprise, or hard-won fix: add a lesson here
+   AND fix it in code, before moving on. This file is the project memory (Factorio is non-Abyss;
+   lessons live here, never in Abyss memory).
+2. **The codebase auto-grows; don't rely on my memory.** Every feature/tweak/fix becomes a
+   function in `autopilot.py` / `bootstrap.py` (not a one-off live RCON script I hand-drive), so
+   the base builds + runs WITHOUT my per-step input. Prefer: add/extend a function -> call it ->
+   it self-runs. The reusable pieces: `bootstrap.py` (fresh-world sequence + provisioner +
+   maintain loop), `autopilot.py` (primitives), `techdb.py`+`tech-tree.json` (gating).
+3. **On a new world, immediately run `bootstrap.bootstrap()`** then `bootstrap.maintain()` - no
+   thinking time.
+
+Recent lessons codified:
+- **POWER MUST NEVER DIE - monitor + refuel the steam plant as the TOP priority (Seth).** If the
+  boiler's coal runs out the engine stops and ALL electric machines (assemblers, labs, inserters)
+  halt. The boiler buffer chest being empty = power death. The boiler-buffer gate must be checked
+  EVERY lap and resolved before long builds; long build tasks must not run the plant dry.
+- **When REBUILDING/replacing a setup, TEAR DOWN the old one (Seth).** Don't leave the superseded
+  build standing (furnaces at mine patches, old scattered assemblers, dead poles). Refund + remove
+  it in the same pass (`build_mine_outpost` clean-slates patches; `setup_science_io` removes old
+  assemblers).
+- **Build to MINIMIZE run distances (Seth).** Place new infrastructure near where it's used / near
+  the character / near its inputs, so maintenance hauls and build trips are short. Don't scatter.
+- **When SWAPPING an entity, recreate it at the OLD one's EXACT position - never a guessed offset
+  (Seth).** I swapped the coal-mine burner inserter for electric but placed it a tile off, ON the
+  belt instead of adjacent to the chest, so it didn't load the chest. Capture `old.position` (and
+  `direction`) before destroying, and create the replacement at that exact position. A belt-side
+  output inserter sits ADJACENT TO THE CHEST, picking off the belt and dropping into the chest -
+  it must not sit on the belt.
+- **PRIORITY MODEL (Seth): build pending tasks FIRST when able; only switch to refuel/refill
+  when a GATE blocks; resolve the gate; resume building. Rinse + repeat.** `maintain()`:
+  `if _gated(): clear it; elif BUILD_QUEUE: do next build; else: light upkeep`. A separate
+  server-side SCIENCE strand (thread; RCON is thread-safe - fresh socket per call) always
+  progresses research so the character's hauls never stall it. `_gated()` = boiler coal <20%,
+  any drill low fuel, an outpost chest full enough to haul, or character low on coal.
+- **SUPPLY ARCHITECTURE (Seth): scaled MINE outposts, base smelts EXCLUSIVELY.** Each patch =
+  `build_mine_outpost(ore,n)`: a row of drills all dropping onto ONE belt -> inserter -> OUTPUT
+  CHEST. No furnaces at patches (`build_mine_outpost` clean-slates any). The character HAULS ore
+  from the output chest to the base smelter array (`haul_ore`), loading iron into the 8-furnace
+  stack and copper into the 4-furnace stack (separate `FURNACE_AREA` per ore - mixing them = no
+  copper plates). Build outposts for iron, copper, AND coal.
+- **FUEL: drills mining ore don't self-fuel; refuel them PROACTIVELY (Seth).** A dry drill stops
+  producing -> chest never fills -> no haul trip -> never refueled = deadlock. So `haul_ore`
+  visits an outpost when it has ore OR its drills are low on fuel, and refuels all its burners.
+  `restock_coal` keeps 6-12 stacks of coal in inventory from the COAL MINE chest and refuels the
+  coal drills too. `ensure()` HAULS from a mine's output chest before ever hand-mining.
+- **ALL LABS ALWAYS RUNNING is a priority (Seth).** Labs are fed by HARDWARE: a feed chest +
+  powered inserter above each lab; `service_science` tops each feed chest EVENLY (not the first
+  lab to 10). Power the feed inserters (they sit north of the labs, outside the lab-row poles).
+- **ASSEMBLERS use INPUT/OUTPUT chests + inserters (Seth), not just a software shuffle.**
+  `build_io_cell(recipe,x,y)` = [input chest][in inserter][assembler][out inserter][output chest]
+  + pole; `setup_science_io()` rebuilds the chain spaced (7 wide/unit - the old 4-spacing was too
+  tight for chests). `_service_assembler_chests()` fills input chests with each recipe's
+  ingredients and empties output chests to inventory every science lap; the inserters do the
+  machine I/O so the chain flows continuously.
+- **PATHFINDING: string-pull to FEW waypoints via the L-PATH the walker takes, and CACHE it.**
+  Collapsing A* steps staircased off-45 diagonals -> 68 jagged waypoints -> oscillation. Fix:
+  `_clear_Lpath` string-pull -> a handful of glide-able legs (diagonal then cardinal). Routes are
+  cached by start-region+goal in `_route_cache` and only recomputed when the character genuinely
+  STALLS (deviates) - don't recompute every walk. Always `stop()` before re-pathing.
+- **Automated science = assemblers (parallel production) + a software SHUFFLER, not belts.**
+  `service_science()` (in `maintain()`) is GENERIC: for every assembling-machine it feeds each
+  recipe ingredient from inventory and pulls the output back, so any chain (cable->circuit->
+  inserter->belt->green-pack; gear->red-pack) self-runs with the inventory as the 'bus'. Place
+  assemblers + `set_recipe`; the loop does the logistics. `automate_green_science()` builds the
+  green chain; `_advance_research()` keeps research targeting the next fuelable tech.
+- **`defines.inventory.assembling_machine_input` errored nil and silently broke feeding** (253
+  iron plates sat unused, 0 assemblers worked, research stalled). Use the ROBUST API instead:
+  `a.insert{name,count}` routes an ingredient to the input, `a.get_item_count(name)` reads an
+  ingredient's input count, `a.get_output_inventory()` for products. Don't use inventory-index
+  defines for machine I/O. (Diagnose stalls by reading assembler status + inputs, per Seth.)
+- **The supply (iron) is the perennial bottleneck.** `build_outpost(ore,n)` builds burner
+  drill->furnace rows for continuous plates; `maintain()` collects them. The provisioner's
+  long iron-patch<->base smelting shuttle is slow - the TODO is smelt-at-nearest-furnace +
+  automated coal delivery so supply builds are fast (don't hand-shuttle bulk).
+- **NEVER blind-fire `begin_crafting` (Seth, repeated).** It spams "not enough ingredients".
+  Use `bootstrap.make(recipe,count)`: it computes raw needs (`raw_cost`), GATHERS them
+  (`ensure_plates` mines ore + smelts; `ensure` mines coal/stone/ore), THEN crafts. `_craft_wait`
+  guards on `get_craftable_count` and diagnoses the missing ingredient (`missing_for`).
+- **Coal buffer for boilers (Seth):** boilers must have a chest + burner inserter feeding them
+  coal so they don't starve before auto-mining exists (`bootstrap.coal_buffer`). The inserter
+  MUST sit on a tile ADJACENT to the boiler (drop lands IN it, not a gap) and REUSE an existing
+  chest rather than dropping a new empty one. `refill_buffers()` tops any boiler-adjacent buffer
+  chest that falls <20% (mining coal if short); run it every `maintain()` lap.
+- **Burner-inserter status 36 = waiting_for_space (NORMAL when the boiler fuel slot is topped).**
+  A lightly-loaded boiler burns slowly, so the inserter idles with the chest full behind it and
+  feeds on demand. Don't "fix" a working buffer; verify power is up (engine.energy>0) instead.
+- **Consolidate like buildings (Seth):** when adding labs, place them ADJACENT to existing ones
+  (one cluster), don't scatter. Same for any repeated structure.
 
 ## TOP LESSONS (the expensive ones, read first)
+- **WORK FROM THE TECH DB; don't discover gating via failed crafts (Seth's rule).**
+  `tech-tree.json` (277 techs, 631 recipe->tech mappings, dumped live) + `techdb.py` give the
+  prereq chain, science packs, and TRIGGER flags for any recipe: `python3 techdb.py <recipe>`
+  or `techdb.report('roboport')`. Check it BEFORE crafting/building anything that might be
+  gated. Re-dump after big version changes. Key revelations it surfaces:
+  - Space Age `assembling-machine-1` is NOT free - it needs `automation` research (red
+    science). You bootstrap with HAND-CRAFTED red science packs in a lab, not an assembler.
+  - Many early "techs" are CRAFT-ITEM TRIGGERS that auto-complete from normal play:
+    `steam-power` (craft iron-plate), `electronics` (craft copper-plate),
+    `automation-science-pack` (craft a lab). So smelting your first plates + crafting a lab
+    silently unlocks red science + electronics. `oil-processing` triggers on mining crude oil.
+  - Full path to construction-robot = 21 techs needing red+green+blue science (the long pole
+    is the oil economy for blue).
+- **FRESH WORLD: always remove the crash-site spaceship debris first (Seth's rule).** A new
+  Space Age Nauvis litters spawn with ~11 `crash-site-spaceship-wreck-*` pieces (+ ship/loot
+  chests). `clear_spaceship_debris(radius=300)` collects any loot then destroys every
+  `crash-site-*` entity. Run it as part of fresh-world setup before building at spawn.
+- **Drill the RICHEST part of a deposit, not the nearest edge (Seth's rule, screenshot).**
+  I anchored the first drill at the tile NEAREST spawn = the sparse eastern edge (5x5 ore
+  density 213) when the thick field was ~19 tiles west (density 32,174, ~150x richer).
+  `richest_spot(name, near_x, near_y)` returns the ore tile whose 5x5 neighbourhood holds the
+  most ore; anchor drills there. Pick deposits by DENSITY, never by distance-to-spawn.
+- **CLEARSPACE: >=10 tiles clear around EVERY building (Seth's rule, with screenshots).**
+  Never build in/among trees, boulders, or cliffs. I planted the first drill+furnace in a
+  dense cypress grove; Seth called it out. `clear_area(cx,cy,radius=10)` removes trees+rocks
+  (and COLLECTS their wood/stone/coal - free bootstrap stone) and reports remaining CLIFFS;
+  cliffs can't be mined without explosives, so if cliffs>0 you MOVE the build site, you don't
+  build there. `build()`/`place()` now auto-clear a 10-tile radius before placing and ABORT
+  with `CLIFF ...` if a cliff remains. For multi-entity builds, `clear_area` the whole site
+  bbox+10 once up front.
+- **ALWAYS `stop()` the character before killing/restarting any pathing driver.** A
+  killed walk process leaves `walking_state={walking=true}` set in-game, so the character
+  RUNS ENDLESSLY in the last direction (Seth saw it crab off to x=-116 after I killed a
+  walk). `walk()` now halts in a `finally` (covers normal/timeout/exception exits), but a
+  PROCESS KILL bypasses Python finally, so the operational rule stands: send
+  `game.players[1].walking_state={walking=false}` (or `autopilot.stop()`) FIRST, every time,
+  before re-running pathing/patrol code. Also: the character must NOT move unless there is a
+  task to do on-site (Seth's rule) - no idle wandering; walk only to a build/work location.
+- **Smooth walking = pure axis/diagonal LEGS, never a continuous off-axis heading.** Aiming
+  the 16-way `heading()` continuously at an off-axis target makes it snap-oscillate between
+  two neighbouring directions (each held ~0.3s over RCON) = visible crab/triangle zigzag.
+  FIX (in `walk()`): move in 8-direction legs - hold a 45-degree diagonal while both axes
+  have distance left, then the remaining cardinal once one axis is consumed. One diagonal
+  leg + one straight leg = one continuous glide each, no oscillation. `DIR8` maps sign(dx,dy)
+  -> the 8 holdable directions.
+- **A "robot-rush" factory blueprint is HAND-BUILT, not bot-built. Don't conflate "needs
+  bots to build" with "needs robotics tech to craft its parts."** Seth's "All-In-One
+  Early-Game Robot Factory" BP (374 entities) is the thing you HAND-BUILD to GET your first
+  robots; it is not a bot-built endgame base. Verified gating from the live tech tree:
+  assembling-machine-2=automation-2 (red+green), fast-inserter/undergrounds/splitters=red,
+  chemical-plant=oil-processing (trigger), medium-pole=electric-energy-distribution-1
+  (red+green); ONLY the single roboport + the bots it outputs need construction-robotics
+  (red+green+BLUE). "With only blue science" = research up to construction-robotics, hand-
+  build the factory, let IT mass-produce bots/armor/equipment. I wrongly told Seth it "needs
+  robotics first / can't be hand-built." The check that settles it: query `f.recipes[name].
+  enabled` + the unlocking tech's `research_unit_ingredients`, never argue tech gates from
+  memory.
 - **Space Age TRIGGER techs + research-queue quirks.** `oil-processing` unlocks by
   MINING crude oil with a pumpjack (research_trigger = mine-entity crude-oil), NOT the
   science queue - check `tech.prototype.research_trigger` before trying to queue. The
