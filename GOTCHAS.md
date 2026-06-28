@@ -8,6 +8,21 @@ surprise, or hard-won fix, add a rule below before moving on. This file is the p
 memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
 
 ## TOP LESSONS (the expensive ones, read first)
+- **Space Age TRIGGER techs + research-queue quirks.** `oil-processing` unlocks by
+  MINING crude oil with a pumpjack (research_trigger = mine-entity crude-oil), NOT the
+  science queue - check `tech.prototype.research_trigger` before trying to queue. The
+  whole robot path is gated behind it and needs the oil economy (science packs need oil
+  PRODUCTS as ingredients) - no shortcut. Also: `f.research_queue = {names}` silently
+  emptied the queue; use `f.add_research(name)` ONE tech at a time (it works). Nearest
+  crude oil here was 440 tiles from spawn - scout oil early on a fresh world.
+- **A blueprint base needs CONSTRUCTION ROBOTS.** The Nilaus/megabase books are meant to
+  be stamped + bot-built. Without bots, hand-placing 300+ entities via create_entity
+  floundered (agents over-analyze and stall; I made messes). The right objective is:
+  bootstrap -> reach construction-robotics -> stamp the book -> bots build it. Don't try
+  to "follow blueprints" by hand without bots. See FRESH-START.md.
+- **Don't hand a vague 300-entity build to one agent.** It reads docs, measures forever,
+  and never places anything. Either get bots first (stamp), or build in SMALL verified
+  increments from ONE session (and watch out for multi-session character conflict).
 - **Route belts DIRECT + cross with undergrounds (learned from a before/after Seth made).**
   My `build_belt` avoided EVERY belt as a hard obstacle, so it A*-snaked a long convoluted
   mess out of the boxed-in mine. Seth's fix: a near-straight belt up a clear corridor that
