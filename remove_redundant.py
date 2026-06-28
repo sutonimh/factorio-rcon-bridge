@@ -8,7 +8,7 @@ WIRE = 7.0  # small pole reach 7.5; margin
 
 raw = a._print(
     "/sc local s=game.surfaces['nauvis']; local o={};"
-    "for _,pl in pairs(s.find_entities_filtered{type='electric-pole'}) do o[#o+1]='P:'..pl.position.x..','..pl.position.y end;"
+    "for _,pl in pairs(s.find_entities_filtered{type='electric-pole'}) do o[#o+1]='P:'..pl.name..'@'..pl.position.x..','..pl.position.y end;"
     "for _,e in pairs(s.find_entities_filtered{type={'assembling-machine','lab','inserter','mining-drill','pumpjack','beacon'}}) do"
     "  if e.prototype.electric_energy_source_prototype then o[#o+1]=((e.tile_width>=3) and 'B:' or 'S:')..e.position.x..','..e.position.y end end;"
     "for _,e in pairs(s.find_entities_filtered{name='steam-engine'}) do o[#o+1]='G:'..e.position.x..','..e.position.y end;"
@@ -16,13 +16,22 @@ raw = a._print(
 ).strip()
 
 poles, cons, gens = [], [], []
+polenames = {}
 for tok in raw.split(';'):
     if ':' not in tok: continue
-    t, xy = tok.split(':'); x, y = map(float, xy.split(','))
-    if t == 'P': poles.append([x, y])
-    elif t == 'B': cons.append((x, y, 4.0))   # 3x3 consumer: supply 2.5 + half-size 1.5
-    elif t == 'S': cons.append((x, y, 3.0))   # 1x1 consumer: supply 2.5 + 0.5
-    elif t == 'G': gens.append((x, y, 4.0))
+    t, rest = tok.split(':', 1)
+    if t == 'P':
+        name, xy = rest.split('@'); x, y = map(float, xy.split(','))
+        poles.append([x, y]); polenames[name] = polenames.get(name, 0) + 1
+    else:
+        x, y = map(float, rest.split(','))
+        if t == 'B': cons.append((x, y, 4.0))
+        elif t == 'S': cons.append((x, y, 3.0))
+        elif t == 'G': gens.append((x, y, 4.0))
+# preserve the dominant existing pole type (small now, medium after the swap)
+POLE = max(polenames, key=polenames.get) if polenames else 'small-electric-pole'
+WIRE = 8.5 if POLE == 'medium-electric-pole' else 7.0   # medium reach 9, small 7.5
+print(f"pole type={POLE} wire={WIRE}")
 allcons = cons + gens
 print(f"start: {len(poles)} poles, {len(cons)} consumers, {len(gens)} generators")
 
@@ -65,7 +74,7 @@ print(a._print(
     "/sc local s=game.surfaces['nauvis']; local p=game.players[1];"
     "for _,pl in pairs(s.find_entities_filtered{type='electric-pole'}) do pl.destroy() end;"
     "local t={" + targ + "}; local n=0;"
-    "for _,xy in ipairs(t) do if s.can_place_entity{name='small-electric-pole',position={xy[1],xy[2]},force=p.force} then s.create_entity{name='small-electric-pole',position={xy[1],xy[2]},force=p.force}; n=n+1 end end;"
+    "for _,xy in ipairs(t) do if s.can_place_entity{name='" + POLE + "',position={xy[1],xy[2]},force=p.force} then s.create_entity{name='" + POLE + "',position={xy[1],xy[2]},force=p.force}; n=n+1 end end;"
     "rcon.print('placed '..n..' poles')"
 ).strip())
 
@@ -76,7 +85,7 @@ print(a._print(
     "for _,e in pairs(s.find_entities_filtered{type={'assembling-machine','lab','inserter','mining-drill','pumpjack','beacon'}}) do"
     "  if e.prototype.electric_energy_source_prototype and e.status==58 then local done=false;"
     "    for _,off in ipairs({{2,0},{-2,0},{0,2},{0,-2}}) do if not done then local x,y=e.position.x+off[1],e.position.y+off[2];"
-    "      if s.can_place_entity{name='small-electric-pole',position={x,y},force=p.force} then s.create_entity{name='small-electric-pole',position={x,y},force=p.force}; done=true; fixed=fixed+1 end end end;"
+    "      if s.can_place_entity{name='" + POLE + "',position={x,y},force=p.force} then s.create_entity{name='" + POLE + "',position={x,y},force=p.force}; done=true; fixed=fixed+1 end end end;"
     "    if not done then still=still+1 end end end;"
     "local tot=#s.find_entities_filtered{type='electric-pole'};"
     "rcon.print('stragglers re-added='..fixed..' still_unpowered='..still..' | FINAL pole count='..tot)"

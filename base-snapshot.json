@@ -1,5 +1,5 @@
 {
-"count": 11195,
+"count": 11186,
 "entities": [
 {
 "name": "offshore-pump",
@@ -72,13 +72,6 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
-"x": -41.5,
-"y": -7.5,
-"direction": 0,
-"recipe": ""
-},
-{
 "name": "small-lamp",
 "x": -40.5,
 "y": -7.5,
@@ -86,8 +79,8 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
-"x": -40.5,
+"name": "medium-electric-pole",
+"x": -41.5,
 "y": -3.5,
 "direction": 0,
 "recipe": ""
@@ -135,16 +128,9 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
-"x": -36.5,
-"y": -0.5,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -35.5,
-"y": -7.5,
+"y": -9.5,
 "direction": 0,
 "recipe": ""
 },
@@ -506,7 +492,7 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -2.5,
 "y": -41.5,
 "direction": 0,
@@ -590,9 +576,9 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -1.5,
-"y": -35.5,
+"y": -34.5,
 "direction": 0,
 "recipe": ""
 },
@@ -611,16 +597,16 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -29.5,
-"y": -7.5,
+"y": -10.5,
 "direction": 0,
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -23.5,
-"y": -8.5,
+"y": -11.5,
 "direction": 0,
 "recipe": ""
 },
@@ -660,16 +646,16 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -16.5,
 "y": -11.5,
 "direction": 0,
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -16.5,
-"y": -8.5,
+"y": -7.5,
 "direction": 0,
 "recipe": ""
 },
@@ -814,7 +800,7 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -12.5,
 "y": -18.5,
 "direction": 0,
@@ -831,13 +817,6 @@
 "name": "iron-chest",
 "x": -12.5,
 "y": -17.5,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "small-electric-pole",
-"x": -12.5,
-"y": -9.5,
 "direction": 0,
 "recipe": ""
 },
@@ -919,9 +898,16 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -8.5,
-"y": -9.5,
+"y": -11.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "medium-electric-pole",
+"x": -8.5,
+"y": -7.5,
 "direction": 0,
 "recipe": ""
 },
@@ -945,13 +931,6 @@
 "y": -17.5,
 "direction": 0,
 "recipe": "automation-science-pack"
-},
-{
-"name": "small-electric-pole",
-"x": -7.5,
-"y": -16.5,
-"direction": 0,
-"recipe": ""
 },
 {
 "name": "inserter",
@@ -1178,9 +1157,9 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": -4.5,
-"y": -14.5,
+"y": -15.5,
 "direction": 0,
 "recipe": ""
 },
@@ -1213,7 +1192,14 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
+"x": -2.5,
+"y": -27.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "medium-electric-pole",
 "x": -2.5,
 "y": -19.5,
 "direction": 0,
@@ -1234,20 +1220,6 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
-"x": -3.5,
-"y": -7.5,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "small-electric-pole",
-"x": -0.5,
-"y": -31.5,
-"direction": 0,
-"recipe": ""
-},
-{
 "name": "inserter",
 "x": -1.5,
 "y": -31.5,
@@ -1260,13 +1232,6 @@
 "y": -30.0,
 "direction": 0,
 "recipe": "iron-plate"
-},
-{
-"name": "small-electric-pole",
-"x": -0.5,
-"y": -28.5,
-"direction": 0,
-"recipe": ""
 },
 {
 "name": "inserter",
@@ -1300,27 +1265,6 @@
 "name": "iron-chest",
 "x": -1.5,
 "y": -25.5,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "small-electric-pole",
-"x": -1.5,
-"y": -23.5,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "small-electric-pole",
-"x": -1.5,
-"y": -19.5,
-"direction": 0,
-"recipe": ""
-},
-{
-"name": "small-electric-pole",
-"x": -0.5,
-"y": -15.5,
 "direction": 0,
 "recipe": ""
 },
@@ -1829,13 +1773,6 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
-"x": 0.5,
-"y": -38.5,
-"direction": 0,
-"recipe": ""
-},
-{
 "name": "transport-belt",
 "x": 0.5,
 "y": -39.5,
@@ -1889,7 +1826,7 @@
 "x": 3.0,
 "y": -42.0,
 "direction": 0,
-"recipe": "copper-plate"
+"recipe": ""
 },
 {
 "name": "burner-inserter",
@@ -2648,9 +2585,9 @@
 "recipe": ""
 },
 {
-"name": "small-electric-pole",
+"name": "medium-electric-pole",
 "x": 4.5,
-"y": -14.5,
+"y": -17.5,
 "direction": 0,
 "recipe": ""
 },
