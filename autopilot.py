@@ -558,6 +558,22 @@ def service_components():
     return _print(lua)
 
 
+def collect_science():
+    """Pull finished packs from the AUTOMATED producers into player inventory so
+    feed_labs can spread them across ALL labs (not just the main one): green from the
+    green sub-factory output chest (-6.5,-12.5), red from the cluster red assembler
+    output (-5.5,-17.5, leaving a couple for the cluster's own lab inserter)."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "local g=0; local gc=s.find_entities_filtered{position={-6.5,-12.5},radius=0.6,type='container'}[1];"
+        "if gc then local n=gc.get_inventory(1).get_item_count('logistic-science-pack'); if n>0 then gc.get_inventory(1).remove{name='logistic-science-pack',count=n}; inv.insert{name='logistic-science-pack',count=n}; g=n end end;"
+        "local r=0; local ra=s.find_entities_filtered{position={-5.5,-17.5},radius=1.2,type='assembling-machine'}[1];"
+        "if ra then local o=ra.get_output_inventory(); local n=o.get_item_count('automation-science-pack')-2; if n>0 then o.remove{name='automation-science-pack',count=n}; inv.insert{name='automation-science-pack',count=n}; r=n end end;"
+        "rcon.print('collect_science: green+'..g..' red+'..r)"
+    )
+    return _print(lua)
+
+
 def feed_labs(target=10):
     """Top up EVERY lab to `target` of BOTH red and green packs from player inventory,
     so all labs in the array keep working (not just whichever got fed first). Reports
@@ -619,7 +635,8 @@ def maintain():
     pickup ground items, refill turrets, and if any turret is <50% drive ammo
     production; then defend_check (rebuild/repair after an attack)."""
     log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip(),
-           service_components().strip(), keep_fueled().strip(), feed_labs().strip()]
+           service_components().strip(), keep_fueled().strip(),
+           collect_science().strip(), feed_labs().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:
