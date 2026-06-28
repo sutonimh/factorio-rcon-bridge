@@ -8,6 +8,16 @@ surprise, or hard-won fix, add a rule below before moving on. This file is the p
 memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
 
 ## TOP LESSONS (the expensive ones, read first)
+- **NEVER area-destroy belts (or anything) to tear down YOUR build.** An area-based
+  `find_entities_filtered{area=...,name='transport-belt'}; destroy()` will delete
+  EXISTING infrastructure in that box too. I wiped the coal supply line + iron feeder
+  this way. Teardown must be SURGICAL: track the exact tiles/entities you placed (e.g.
+  build_belt should return its tile list) and destroy only those. Recovery: `rebuild()`
+  from a fresh snapshot restores missing belts, but FIRST remove your conflicting new
+  build (it blocks restore at the original positions), then rebuild.
+- **A mine/area with burner inserters has NO power.** A new ELECTRIC inserter placed
+  at the iron mine read no_power. Before swapping a feed to electric or adding electric
+  inserters at a mine, confirm/extend power there (or use a burner inserter).
 - **Patrol removes unneeded infrastructure (Seth's standing rule).** Every maintenance
   patrol must prune stray infra, not just fuel/feed: orphaned belts (stray stubs from
   abandoned builds) and redundant/island power poles. `cleanup_infra()` (in maintain)
