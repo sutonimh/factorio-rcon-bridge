@@ -1111,8 +1111,9 @@ def fuel_arrays():
     re-spaced for coal inserters.)"""
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
-        "for _,z in ipairs({{-8,4,12,7},{-8,13,12,16}}) do"
-        "  for _,fc in pairs(s.find_entities_filtered{name='stone-furnace',area={{z[1],z[2]},{z[3],z[4]}}}) do"
+        # iron array, copper array, and the STEEL-PROCESSING stack (iron-plate -> steel-plate)
+        "for _,z in ipairs({{-8,4,12,7},{-8,13,12,16},{13,7,24,10}}) do"
+        "  for _,fc in pairs(s.find_entities_filtered{name={'stone-furnace','steel-furnace'},area={{z[1],z[2]},{z[3],z[4]}}}) do"
         "    local fi=fc.get_fuel_inventory(); if fi then local need=5-fi.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal'));"
         "    if c>0 then fi.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end")
 
@@ -1129,7 +1130,8 @@ def harvest_array_plates():
         "local function move(item, area, cap) local have=inv.get_item_count(item); if have>=cap then return end;"
         "  for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do local si=src.get_inventory(defines.inventory.chest);"
         "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n}; si.remove{name=item,count=ins}; have=have+ins end end end;"
-        "move('iron-plate',{{10,1},{16,6}},300); move('copper-plate',{{2,10},{8,16}},300)")
+        # iron + copper plates for science; steel plates (steel stack drain ~x26,y6) for steel-furnace builds + recipes
+        "move('iron-plate',{{10,1},{16,6}},300); move('copper-plate',{{2,10},{8,16}},300); move('steel-plate',{{24,4},{28,8}},200)")
 
 
 def _gated():
