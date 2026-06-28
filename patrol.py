@@ -19,8 +19,10 @@ def restock_and_craft():
         "local fe=0; for _,f in pairs(s.find_entities_filtered{area={{-3,-33},{24,-28}},type='furnace'}) do"
         " local o=f.get_output_inventory(); local c=o.get_item_count('iron-plate'); if c>0 then"
         " inv.insert{name='iron-plate',count=c}; o.remove{name='iron-plate',count=c}; fe=fe+c end if fe>=400 then break end end;"
-        "if inv.get_item_count('logistic-science-pack')<30 then p.begin_crafting{recipe='logistic-science-pack',count=40} end;"
-        "if inv.get_item_count('automation-science-pack')<30 then p.begin_crafting{recipe='automation-science-pack',count=40} end"
+        # belts feed the green sub-factory's final stage (green = belt + inserter); keep them stocked
+        "if inv.get_item_count('transport-belt')<40 then p.begin_crafting{recipe='transport-belt',count=60} end;"
+        "if inv.get_item_count('logistic-science-pack')<20 then p.begin_crafting{recipe='logistic-science-pack',count=30} end;"
+        "if inv.get_item_count('automation-science-pack')<20 then p.begin_crafting{recipe='automation-science-pack',count=30} end"
     )
 
 

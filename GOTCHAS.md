@@ -8,6 +8,22 @@ surprise, or hard-won fix, add a rule below before moving on. This file is the p
 memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
 
 ## TOP LESSONS (the expensive ones, read first)
+- **ALWAYS clean up your messes (Seth's standing rule).** Never leave stray/half-built
+  junk behind: failed builds, orphaned poles, abandoned ghosts, test entities. When a
+  plan is reverted or abandoned, remove what it placed in the SAME pass. I left a whole
+  dead pole grid (incl. a column running into empty desert) after reverting the inserter
+  swap; Seth had to point it out.
+- **But pole cleanup must PRESERVE connectivity bridges.** Removing "poles that power
+  nothing within 3 tiles" also deletes the bridge poles that link two sections of one
+  network, splitting it and browning out everything downstream (I disconnected the green
+  factory this way). Before removing a pole, check it isn't the only link between a
+  powered source and a consumer cluster (compare electric_network_id before/after, or
+  keep poles whose removal raises the count of distinct networks).
+- **Watch power CAPACITY as the base grows.** 2 boilers / 5 engines can't feed factory
+  + 4 labs + dozens of electric inserters; the network goes deficient and far-end
+  consumers read energy=0 (status no_power) even though they're connected. Scale boilers
+  +engines (and keep them fueled) when adding electric load. Engine `energy` near 0 =
+  starved plant, not healthy.
 - **Don't swap powered-by-fuel for powered-by-electricity without VERIFIED power.**
   Replacing 73 burner inserters with electric ones cascaded: the smelter/mining/boiler
   areas have NO power grid (they were burner BY DESIGN), so the new electric inserters
