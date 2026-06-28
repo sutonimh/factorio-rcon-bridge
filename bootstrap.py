@@ -1117,6 +1117,23 @@ def fuel_arrays():
         "    if c>0 then fi.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end")
 
 
+def harvest_array_plates():
+    """Move smelted plates from the belt-fed array DRAIN chests into the BUFFER chests the science
+    pipeline pulls from (gamedb.BUFFER_ROW ~ x16..19,y-7). Without this the arrays produce plates
+    that pile up in their drain chests and NEVER reach the science assemblers, so research stalls
+    (labs go missing_science_packs) even though plates are abundant. Server-side, no walk."""
+    A._print(
+        "/sc local s=game.surfaces[1];"
+        "local buffers=s.find_entities_filtered{name={'wooden-chest','iron-chest'},area={{15,-8},{20,-5}}};"
+        "if #buffers==0 then return end;"
+        "local function move(item, area) for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do"
+        "  local si=src.get_inventory(defines.inventory.chest); local n=si.get_item_count(item);"
+        "  while n>0 do local placed=false; for _,b in pairs(buffers) do local bi=b.get_inventory(defines.inventory.chest);"
+        "    local ins=bi.insert{name=item,count=math.min(n,200)}; if ins>0 then si.remove{name=item,count=ins}; n=n-ins; placed=true end end;"
+        "    if not placed then break end end end end;"
+        "move('iron-plate',{{10,1},{16,6}}); move('copper-plate',{{2,10},{8,16}})")
+
+
 def _gated():
     """True ONLY for a CRITICAL refill/refuel gate that would stall production (so we pause
     builds to clear it). Kept lenient so chronic-but-OK scarcity doesn't starve build tasks:
@@ -1167,6 +1184,7 @@ def maintain(laps=0):
             try:
                 keep_power()                  # TOP PRIORITY: keep the steam plant fueled (server-side)
                 fuel_arrays()                 # keep the belt-fed smelter array furnaces fueled (server-side)
+                harvest_array_plates()        # array drain chests -> science buffer chests
                 _collect_plates_all()         # furnace plates -> inventory
                 _service_assembler_chests()   # fill assembler INPUT chests, empty OUTPUT chests
                 service_science()             # lab feed chests (+ direct-feed any chest-less asm)
