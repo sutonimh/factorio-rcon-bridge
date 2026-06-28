@@ -469,36 +469,94 @@ def build_smelter_array(ore, n=8):
         make("inserter", n * 2)
     if _count("transport-belt") < n * 4 + 6:
         make("transport-belt", n * 4 + 6)
-    if _count("small-electric-pole") < n:
-        make("small-electric-pole", n)
+    if _count("small-electric-pole") < n + 12:
+        make("small-electric-pole", n + 12)
+    if _count("iron-chest") < 1:
+        make("iron-chest", 1)
     A.stop(); A.walk(ox + n, oy - 2, tol=3.0)
     A._print(
         f"/sc local s=game.surfaces[1]; local f=game.forces.player; local ox={ox}; local oy={oy}; local n={n};"
-        "for _,e in pairs(s.find_entities_filtered{area={{ox-2,oy-1},{ox+n*2+2,oy+7}},type={'tree','simple-entity'}}) do e.destroy() end;"
+        "for _,e in pairs(s.find_entities_filtered{area={{ox-2,oy-2},{ox+n*2+4,oy+7}},type={'tree','simple-entity'}}) do e.destroy() end;"
         "for x=ox-1,ox+n*2 do s.create_entity{name='transport-belt',position={x+0.5,oy+0.5},direction=4,force=f}; s.create_entity{name='transport-belt',position={x+0.5,oy+5.5},direction=4,force=f} end;"
+        # furnaces + inserters with EXPLICIT pickup/drop (direction semantics bit us repeatedly):
+        # plate inserter furnace->plate-belt, ore inserter ore-belt->furnace.
         "for k=0,n-1 do local fx=ox+k*2; s.create_entity{name='stone-furnace',position={fx+1,oy+3},force=f};"
-        "  s.create_entity{name='inserter',position={fx+0.5,oy+1.5},direction=8,force=f}; s.create_entity{name='inserter',position={fx+0.5,oy+4.5},direction=8,force=f} end;"
-        "for x=ox-1,ox+n*2,4 do s.create_entity{name='small-electric-pole',position={x+0.5,oy+2.5},force=f} end;"
+        "  local pi=s.create_entity{name='inserter',position={fx+0.5,oy+1.5},direction=8,force=f}; pi.pickup_position={fx+0.5,oy+2.5}; pi.drop_position={fx+0.5,oy+0.5};"
+        "  local oi=s.create_entity{name='inserter',position={fx+0.5,oy+4.5},direction=8,force=f}; oi.pickup_position={fx+0.5,oy+5.5}; oi.drop_position={fx+0.5,oy+3.5} end;"
+        # FLANKING pole rows: poles CANNOT sit on the furnace row (oy+2..oy+3) - they get refused
+        # silently. Put them above the plate belt (oy-1) and below the ore belt (oy+6), every 3, so
+        # both inserter rows are in supply range; plus a vertical spine to the base grid (y -2).
+        "for x=ox-1,ox+n*2,3 do s.create_entity{name='small-electric-pole',position={x+0.5,oy-0.5},force=f}; s.create_entity{name='small-electric-pole',position={x+0.5,oy+6.5},force=f} end;"
+        "for y=-2,oy-1,3 do if s.can_place_entity{name='small-electric-pole',position={ox-0.5,y+0.5},force=f} then s.create_entity{name='small-electric-pole',position={ox-0.5,y+0.5},force=f} end end;"
+        # plate-belt DRAIN: chest + inserter (explicit pickup/drop) at the east end so plates don't
+        # back up and stall the furnaces (full_output). The autopilot pulls plates from this chest.
+        "local ex=ox+n*2; if s.can_place_entity{name='iron-chest',position={ex+2.5,oy+0.5},force=f} then s.create_entity{name='iron-chest',position={ex+2.5,oy+0.5},force=f}; local di=s.create_entity{name='inserter',position={ex+1.5,oy+0.5},direction=12,force=f}; di.pickup_position={ex+0.5,oy+0.5}; di.drop_position={ex+2.5,oy+0.5} end;"
         "rcon.print('array built')")
-    # power: connect the array's pole row to the base network
-    power_row(ox - 1, ox + n * 2, oy + 2)
+    ensure_grid_connected()
+
+
+def lay_belt_path(waypoints):
+    """Lay a transport-belt along an L-path of (x,y) CORNER waypoints, SERVER-SIDE (no walk),
+    auto-undergrounding blocked spans up to 5 tiles. REPLACES autopilot.build_belt for long
+    cross-base runs: build_belt's A* walker snaked and left gaps over 70+ tiles, so the iron/coal
+    mine->array belts silently never connected; this lays exact tiles and connects reliably.
+
+    Each tile's direction points toward the NEXT tile, so a corner tile automatically takes the new
+    segment's direction. (The bug that silently broke the iron belt: the corner was left in the OLD
+    direction, sending items straight past the turn instead of around it. Verified fix: derive the
+    direction per-tile from the path, never per-segment.) Returns the count of unbridged gaps."""
+    DIRS = {(0, -1): 0, (1, 0): 4, (0, 1): 8, (-1, 0): 12}
+    pts = []
+    for i in range(len(waypoints) - 1):
+        x1, y1 = waypoints[i]
+        x2, y2 = waypoints[i + 1]
+        dx = (x2 > x1) - (x2 < x1)
+        dy = (y2 > y1) - (y2 < y1)
+        for k in range(max(abs(x2 - x1), abs(y2 - y1))):
+            pts.append((x1 + dx * k, y1 + dy * k))
+    pts.append(tuple(waypoints[-1]))
+    tiles = []
+    for i in range(len(pts) - 1):
+        x, y = pts[i]
+        nx, ny = pts[i + 1]
+        tiles.append((x, y, DIRS[((nx > x) - (nx < x), (ny > y) - (ny < y))]))
+    if tiles:
+        tiles.append((pts[-1][0], pts[-1][1], tiles[-1][2]))   # last tile keeps prior direction
+    spec = ";".join(f"{x},{y},{d}" for (x, y, d) in tiles)
+    gaps = A._print(
+        "/sc local s=game.surfaces[1]; local f=game.forces.player;"
+        "local T={}; for a,b,c in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+),(%d+)') do T[#T+1]={tonumber(a),tonumber(b),tonumber(c)} end;"
+        "local function freebelt(x,y) for _,e in pairs(s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.6,type={'tree','simple-entity','cliff'}}) do if e.destroy then e.destroy() end end; return s.can_place_entity{name='transport-belt',position={x+0.5,y+0.5},force=f} end;"
+        "local gaps=0; local i=1;"
+        "while i<=#T do local x,y,d=T[i][1],T[i][2],T[i][3];"
+        "  if freebelt(x,y) then local old=s.find_entity('transport-belt',{x+0.5,y+0.5}); if old then old.destroy() end; s.create_entity{name='transport-belt',position={x+0.5,y+0.5},direction=d,force=f}; i=i+1;"
+        "  else local j=i+1; while j<=#T and not freebelt(T[j][1],T[j][2]) do j=j+1 end;"
+        "    if i>1 and j<=#T and (j-(i-1))<=5 then local p=T[i-1]; local old=s.find_entity('transport-belt',{p[1]+0.5,p[2]+0.5}); if old then old.destroy() end;"
+        "      pcall(function() s.create_entity{name='underground-belt',position={p[1]+0.5,p[2]+0.5},direction=p[3],type='input',force=f} end);"
+        "      pcall(function() s.create_entity{name='underground-belt',position={T[j][1]+0.5,T[j][2]+0.5},direction=T[j][3],type='output',force=f} end);"
+        "    else gaps=gaps+1 end; i=j+1 end end;"
+        "rcon.print(gaps)").strip()
+    return int(gaps or 0)
 
 
 def connect_mine_to_array(ore):
     """Reconfigure a mine's output to feed a BELT to its smelter array's ore belt: remove the
-    output inserter+chest, then build_belt from the mine belt end to the array's ore-belt west end.
-    Frees derpface from hauling this ore."""
+    output inserter+chest, then lay_belt_path from the mine belt end to the array's ore-belt west
+    end. Frees derpface from hauling this ore. Uses the codified server-side layer (NOT build_belt,
+    which left the iron/coal belts disconnected)."""
     ox, oy = SMELT_ZONE[ore]
     spot = STATE.get(ore) or A.richest_spot(ore, 0, 0, radius=160)
     if not spot:
         return
-    rx, ry = spot[0], spot[1]
+    rx, ry = int(spot[0]), int(spot[1])
     # remove the mine's output inserter + chest (refund) so the belt runs through instead
     A._print(f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); "
              f"for _,e in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name={{'burner-inserter','inserter','wooden-chest'}}}}) do "
              "local ci=e.get_inventory and e.get_inventory(defines.inventory.chest); if ci then for _,c in pairs(ci.get_contents()) do inv.insert{name=c.name,count=c.count} end end; inv.insert{name=e.name,count=1}; e.destroy() end")
-    # build a belt from the mine belt's east end to the array ore-belt west end (ox-1, oy+5)
-    A.build_belt(rx + 10, ry, ox - 1, oy + 5, tag=f"{ore}-supply")
+    # L-path: from the mine output, run to the array's column, then into the ore-belt west end.
+    # Two-segment L via the array's x just outside the array, then up/down to the ore belt row.
+    ax, ay = ox - 1, oy + 5
+    lay_belt_path([(rx + 10, ry), (ax - 1, ry), (ax - 1, ay), (ax, ay)])
 
 
 def build_belt_supply():
@@ -510,13 +568,11 @@ def build_belt_supply():
     build_smelter_array("copper-ore", 4)
     connect_mine_to_array("iron-ore")
     connect_mine_to_array("copper-ore")
-    # coal belt from the coal mine to under the arrays (so furnaces can be belt-fueled later)
+    # coal belt from the coal mine down to the arrays (codified layer, not build_belt)
     cs = STATE.get("coal")
     if cs:
-        A.build_belt(cs[0] + 10, cs[1], SMELT_ZONE["iron-ore"][0] - 2, SMELT_ZONE["iron-ore"][1] + 6, tag="coal-supply")
-    # plate belt: array plate-belt east end -> a chest near the science cell
-    px, py = SMELT_ZONE["iron-ore"]
-    A.build_belt(px + 16, py, 0, -26, tag="iron-plate-out")
+        ox, oy = SMELT_ZONE["iron-ore"]
+        lay_belt_path([(int(cs[0]) + 10, int(cs[1])), (ox - 2, int(cs[1])), (ox - 2, oy + 6)])
 
 
 def build_mine_outpost(ore, n=8):
@@ -942,12 +998,25 @@ def automate_green_science(origin=(30, -16)):
     return placed
 
 
+def _network_count():
+    """Number of DISTINCT electric networks among all poles. A unified grid is 1; fragmentation
+    (generator islanded from the base) shows up as >1. dedupe_poles uses this to refuse any removal
+    that SPLITS the grid."""
+    return int(A._print("/sc local s=game.surfaces[1]; local seen={}; local n=0; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do local id=p.electric_network_id; if id and not seen[id] then seen[id]=true; n=n+1 end end; rcon.print(n)").strip() or 0)
+
+
 def dedupe_poles():
-    """Remove UNNEEDED power poles - both REDUNDANT (overlapping) and ORPHANED (powering nothing,
-    e.g. left over when an old build was torn down) - Seth's rule: watch + correct every
-    maintenance run. Power-verified: try removing EACH pole and keep it gone only if NO consumer
-    loses power (so connectivity + coverage are preserved by construction - browned-out removals
-    are restored)."""
+    """Remove ONLY genuinely REDUNDANT poles (another pole within ~2 tiles covering the same area),
+    and ONLY when removal neither unpowers a consumer NOR SPLITS the grid.
+
+    IMPORTANT (root-cause fix, 2026-06-28): this used to also remove 'orphan' poles - any pole with
+    no machine within 3 tiles. But a pole powering nothing is almost always a load-bearing CONNECTOR
+    (the bridge tying the steam engine to the base, the spine linking a smelter array to the grid).
+    Deleting connectors fragmented the electric grid EVERY maintenance lap - the engine kept getting
+    islanded from the base and the belt-fed smelter arrays lost power repeatedly. The old
+    'power-verified' guard missed it because 0.3s was too short for the brownout to register and it
+    never checked for a network SPLIT. We now: (1) never touch orphans, (2) revert any removal that
+    raises the electric-network count, (3) settle 0.6s before judging. See GOTCHAS 'power grid'."""
     import math
     raw = A._print("/sc local s=game.surfaces[1]; local o={}; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do o[#o+1]=string.format('%.2f,%.2f',p.position.x,p.position.y) end; rcon.print(table.concat(o,';'))").strip()
     P = [tuple(map(float, t.split(","))) for t in raw.split(";") if "," in t]
@@ -955,20 +1024,17 @@ def dedupe_poles():
     def unpowered():
         return int(A._print("/sc local s=game.surfaces[1]; local n=0; for _,e in pairs(s.find_entities_filtered{type={'assembling-machine','lab','inserter','mining-drill','furnace'}}) do if e.prototype.electric_energy_source_prototype and e.status==58 then n=n+1 end end; rcon.print(n)").strip() or 0)
 
-    # candidates = orphans (no machine within a small pole's 2.5 supply area) FIRST, then poles
-    # near another pole (redundant). Test orphans first so they're removed even if isolated.
-    def covers_machine(x, y):
-        return A._print(f"/sc local s=game.surfaces[1]; rcon.print(tostring(#s.find_entities_filtered{{area={{{{{x-3},{y-3}}},{{{x+3},{y+3}}}}},type={{'assembling-machine','lab','inserter','mining-drill','furnace'}}}}>0))").strip() == "true"
-    orphans = [p for p in P if not covers_machine(p[0], p[1])]
-    near = [P[i] for i in range(len(P)) for j in range(len(P)) if i != j and math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]) < 2.6]
-    cand = list(dict.fromkeys(orphans + near))
+    # candidates = ONLY redundant poles (another pole within 2.0 tiles). Orphans are NEVER removed:
+    # they are connectors/spines and deleting them splits the grid.
+    near = [P[i] for i in range(len(P)) for j in range(len(P)) if i != j and math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]) < 2.0]
+    cand = list(dict.fromkeys(near))
     removed = 0
     for (x, y) in cand:
-        base = unpowered()
+        base_unpow, base_nets = unpowered(), _network_count()
         A._print(f"/sc local s=game.surfaces[1]; for _,p in pairs(s.find_entities_filtered{{type='electric-pole',position={{{x},{y}}},radius=0.4}}) do p.destroy() end")
-        time.sleep(0.3)
-        if unpowered() > base:
-            A._print(f"/sc local s=game.surfaces[1]; local p=storage.derpface; s.create_entity{{name='small-electric-pole',position={{{x},{y}}},force=p.force}}")
+        time.sleep(0.6)
+        if unpowered() > base_unpow or _network_count() > base_nets:
+            A._print(f"/sc local s=game.surfaces[1]; local p=storage.derpface; s.create_entity{{name='small-electric-pole',position={{{x},{y}}},force=p.force}}")   # browned out or SPLIT the grid -> revert
         else:
             removed += 1
     return removed
@@ -1016,6 +1082,23 @@ def keep_power():
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local b=s.find_entities_filtered{name='boiler'}[1]; if b then local need=5-b.get_fuel_inventory().get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end;"
         "local bc=s.find_entities_filtered{name='wooden-chest',position={45,-2},radius=6}[1]; if bc then local ci=bc.get_inventory(defines.inventory.chest); local need=120-ci.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then ci.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
+    ensure_grid_connected()
+
+
+def ensure_grid_connected():
+    """SELF-HEAL the electric grid: if a steam engine ends up on a DIFFERENT network than the main
+    grid (the pole network with the most poles), bridge it back with a pole line. The recurring
+    fragmented-generator failure - engine islanded from the base, so the whole base browns out and
+    the smelter arrays lose power - now repairs ITSELF each power cycle instead of needing a human
+    to re-bridge. Pairs with dedupe_poles no longer deleting connector poles. Server-side, no walk."""
+    A._print(
+        "/sc local s=game.surfaces[1]; local f=game.forces.player;"
+        "local cnt={}; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do cnt[p.electric_network_id]=(cnt[p.electric_network_id] or 0)+1 end;"
+        "local main,best=nil,-1; for id,c in pairs(cnt) do if c>best then best=c; main=id end end; if not main then return end;"
+        "for _,e in pairs(s.find_entities_filtered{name='steam-engine'}) do if e.electric_network_id~=main then"
+        "  local near,bd=nil,1e9; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do if p.electric_network_id==main then local d=(p.position.x-e.position.x)^2+(p.position.y-e.position.y)^2; if d<bd then bd=d; near=p end end end;"
+        "  if near then local ex,ey,tx,ty=e.position.x,e.position.y,near.position.x,near.position.y; local dist=math.sqrt((tx-ex)^2+(ty-ey)^2); local steps=math.ceil(dist/6);"
+        "    for k=1,steps do local x=math.floor(ex+(tx-ex)*k/steps)+0.5; local y=math.floor(ey+(ty-ey)*k/steps)+0.5; for _,t in pairs(s.find_entities_filtered{position={x,y},radius=0.4,type={'tree','simple-entity'}}) do t.destroy() end; if s.can_place_entity{name='small-electric-pole',position={x,y},force=f} then s.create_entity{name='small-electric-pole',position={x,y},force=f} end end end end end")
 
 
 def _gated():
