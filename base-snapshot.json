@@ -1,5 +1,5 @@
 {
-"count": 564,
+"count": 589,
 "entities": [
 {
 "name": "offshore-pump",
@@ -227,8 +227,29 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -44.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -44.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -42.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -43.5,
 "direction": 8,
 "recipe": ""
 },
@@ -248,6 +269,20 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -40.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -41.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -40.5,
 "direction": 8,
@@ -257,6 +292,20 @@
 "name": "transport-belt",
 "x": -4.5,
 "y": -41.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -38.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -39.5,
 "direction": 8,
 "recipe": ""
 },
@@ -276,6 +325,20 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -36.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -37.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -36.5,
 "direction": 8,
@@ -290,6 +353,20 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -34.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -35.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -34.5,
 "direction": 8,
@@ -299,6 +376,13 @@
 "name": "transport-belt",
 "x": -4.5,
 "y": -35.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -33.5,
 "direction": 8,
 "recipe": ""
 },
@@ -632,6 +716,20 @@
 "recipe": ""
 },
 {
+"name": "transport-belt",
+"x": -5.5,
+"y": -30.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -31.5,
+"direction": 8,
+"recipe": ""
+},
+{
 "name": "underground-belt",
 "x": -4.5,
 "y": -31.5,
@@ -642,6 +740,20 @@
 "name": "transport-belt",
 "x": -4.5,
 "y": -30.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -28.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -29.5,
 "direction": 8,
 "recipe": ""
 },
@@ -661,6 +773,20 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -26.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -27.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -26.5,
 "direction": 8,
@@ -670,6 +796,20 @@
 "name": "transport-belt",
 "x": -4.5,
 "y": -27.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -24.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -25.5,
 "direction": 8,
 "recipe": ""
 },
@@ -689,6 +829,20 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -22.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -23.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -22.5,
 "direction": 8,
@@ -703,6 +857,20 @@
 },
 {
 "name": "transport-belt",
+"x": -5.5,
+"y": -20.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -21.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
 "x": -4.5,
 "y": -20.5,
 "direction": 8,
@@ -712,6 +880,13 @@
 "name": "transport-belt",
 "x": -4.5,
 "y": -21.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "transport-belt",
+"x": -5.5,
+"y": -19.5,
 "direction": 8,
 "recipe": ""
 },
@@ -1245,7 +1420,7 @@
 "x": 5.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1308,7 +1483,7 @@
 "x": 7.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1371,7 +1546,7 @@
 "x": 9.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1434,7 +1609,7 @@
 "x": 11.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1497,7 +1672,7 @@
 "x": 13.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1560,7 +1735,7 @@
 "x": 15.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1623,7 +1798,7 @@
 "x": 17.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1686,7 +1861,7 @@
 "x": 19.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1742,7 +1917,7 @@
 "x": 21.0,
 "y": -42.0,
 "direction": 0,
-"recipe": ""
+"recipe": "copper-plate"
 },
 {
 "name": "burner-inserter",
@@ -1903,7 +2078,7 @@
 "x": 5.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -1952,7 +2127,7 @@
 "x": 7.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -2029,7 +2204,7 @@
 "x": 9.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
@@ -2127,7 +2302,7 @@
 "x": 11.0,
 "y": -30.0,
 "direction": 0,
-"recipe": ""
+"recipe": "iron-plate"
 },
 {
 "name": "burner-inserter",
