@@ -1118,20 +1118,18 @@ def fuel_arrays():
 
 
 def harvest_array_plates():
-    """Move smelted plates from the belt-fed array DRAIN chests into the BUFFER chests the science
-    pipeline pulls from (gamedb.BUFFER_ROW ~ x16..19,y-7). Without this the arrays produce plates
-    that pile up in their drain chests and NEVER reach the science assemblers, so research stalls
-    (labs go missing_science_packs) even though plates are abundant. Server-side, no walk."""
+    """Move smelted plates from the belt-fed array DRAIN chests into DERPFACE's inventory (the
+    conduit service_science feeds the science assemblers from). Without this the arrays produce
+    plates that pile up in their drain chests and NEVER reach the assemblers, so research stalls
+    (labs go missing_science_packs) even though plates are abundant. NOTE: do NOT target the
+    gamedb.BUFFER_ROW chests - those double as the dump_excess junk dump and are full. Keeps
+    derpface topped to ~300 of each plate. Server-side, no walk."""
     A._print(
-        "/sc local s=game.surfaces[1];"
-        "local buffers=s.find_entities_filtered{name={'wooden-chest','iron-chest'},area={{15,-8},{20,-5}}};"
-        "if #buffers==0 then return end;"
-        "local function move(item, area) for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do"
-        "  local si=src.get_inventory(defines.inventory.chest); local n=si.get_item_count(item);"
-        "  while n>0 do local placed=false; for _,b in pairs(buffers) do local bi=b.get_inventory(defines.inventory.chest);"
-        "    local ins=bi.insert{name=item,count=math.min(n,200)}; if ins>0 then si.remove{name=item,count=ins}; n=n-ins; placed=true end end;"
-        "    if not placed then break end end end end;"
-        "move('iron-plate',{{10,1},{16,6}}); move('copper-plate',{{2,10},{8,16}})")
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+        "local function move(item, area, cap) local have=inv.get_item_count(item); if have>=cap then return end;"
+        "  for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do local si=src.get_inventory(defines.inventory.chest);"
+        "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n}; si.remove{name=item,count=ins}; have=have+ins end end end;"
+        "move('iron-plate',{{10,1},{16,6}},300); move('copper-plate',{{2,10},{8,16}},300)")
 
 
 def _gated():
