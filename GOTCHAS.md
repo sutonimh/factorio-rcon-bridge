@@ -19,11 +19,15 @@ memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss me
   factory this way). Before removing a pole, check it isn't the only link between a
   powered source and a consumer cluster (compare electric_network_id before/after, or
   keep poles whose removal raises the count of distinct networks).
-- **Watch power CAPACITY as the base grows.** 2 boilers / 5 engines can't feed factory
-  + 4 labs + dozens of electric inserters; the network goes deficient and far-end
-  consumers read energy=0 (status no_power) even though they're connected. Scale boilers
-  +engines (and keep them fueled) when adding electric load. Engine `energy` near 0 =
-  starved plant, not healthy.
+- **VERIFY the real cause before building a fix.** I diagnosed "plant undersized" and
+  nearly built more boilers/engines, but the definitive check (boiler steam 399/400 FULL
+  + all 35 electric consumers at no_power=0) proved the plant had ample headroom. The
+  brownout was entirely my own pole cleanup disconnecting the factory. Diagnosis signals
+  for power: FULL boiler steam buffer = supply>=demand (adequate); DRAINED steam buffer =
+  deficient (scale generation). Don't infer "undersized" from one unpowered consumer.
+- **Watch power capacity ONLY when the signal says so.** Generation needs scaling when
+  the boiler steam buffer runs low under load (it didn't here). The big electric load is
+  still ahead (electric furnaces) - size the plant to that when it lands, with medium poles.
 - **Don't swap powered-by-fuel for powered-by-electricity without VERIFIED power.**
   Replacing 73 burner inserters with electric ones cascaded: the smelter/mining/boiler
   areas have NO power grid (they were burner BY DESIGN), so the new electric inserters
