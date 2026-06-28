@@ -490,3 +490,43 @@ Recent lessons codified:
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
   so the read hangs. Read one response packet, then drain with a short timeout.
+
+## Power grid: never delete connector poles; self-heal islanded generators (2026-06-28)
+
+The single worst recurring failure was the electric grid fragmenting so the steam engine got
+ISLANDED from the base (and the belt-fed smelter arrays lost power) every maintenance lap.
+
+Root cause: `dedupe_poles` removed "orphan" poles (any pole with no machine within 3 tiles). But a
+pole powering nothing is almost always a load-bearing CONNECTOR: the bridge tying the generator to
+the base, or a spine linking an array to the grid. Deleting connectors split the network. The old
+"power-verified" guard missed it: 0.3s was too short for the brownout to register, and it never
+checked for a network SPLIT.
+
+Rules now codified:
+- `dedupe_poles` removes ONLY redundant poles (another pole within 2.0 tiles), NEVER orphans, and
+  reverts any removal that raises the electric-network count (`_network_count`) or unpowers a
+  consumer. Settle 0.6s before judging.
+- `ensure_grid_connected()` (called from `keep_power`, top priority) self-heals: if any steam engine
+  is on a different network than the main pole network, it auto-bridges with a pole line. The grid
+  repairs itself instead of needing a human to re-bridge.
+- To check fragmentation by hand: count distinct `electric_network_id` across poles; a healthy grid
+  is 1 (plus maybe tiny dead stubs). Engine buffer ~95% while consumers read `no_power` = a SPLIT
+  (engine islanded), NOT a generation shortage.
+
+## Belt-fed smelter arrays: lay belts server-side, flank the poles (2026-06-28)
+
+- `autopilot.build_belt` (A* walker) snaked and left GAPS over 70+ tile cross-base runs, so the
+  iron/coal mine->array belts silently never connected (only the copper one, hand-laid, worked).
+  Use `lay_belt_path(waypoints)` instead: server-side, exact tiles, auto-undergrounds blocked spans
+  up to 5. Each tile's direction points to the NEXT tile, so a CORNER auto-takes the new direction
+  (a corner left in the old segment's direction sends items straight past the turn - the bug that
+  broke the iron belt; ore reached the corner then ran east instead of turning north).
+- Poles CANNOT sit on the furnace row (oy+2..oy+3) - `can_place` refuses them silently and you get
+  0 placed. FLANK the array: pole rows above the plate belt (oy-1) and below the ore belt (oy+6).
+- Inserter `direction` semantics are error-prone (the drain inserter ended up picking from the
+  chest and dropping on the belt). ALWAYS set `pickup_position` + `drop_position` EXPLICITLY.
+- Furnaces stall `full_output` if the plate belt backs up: give each array a plate-DRAIN (chest +
+  explicit-position inserter) at the plate-belt east end; the autopilot pulls plates from it.
+- find_entities{position=p, radius=0.4} can MISS an entity whose center is >0.4 from p even if p is
+  inside its bbox (e.g. a furnace center 0.58 from an inserter drop) - a query artifact, not a real
+  misalignment. Use the bbox or a larger radius to confirm.
