@@ -1101,6 +1101,22 @@ def ensure_grid_connected():
         "    for k=1,steps do local x=math.floor(ex+(tx-ex)*k/steps)+0.5; local y=math.floor(ey+(ty-ey)*k/steps)+0.5; for _,t in pairs(s.find_entities_filtered{position={x,y},radius=0.4,type={'tree','simple-entity'}}) do t.destroy() end; if s.can_place_entity{name='small-electric-pole',position={x,y},force=f} then s.create_entity{name='small-electric-pole',position={x,y},force=f} end end end end end")
 
 
+def fuel_arrays():
+    """Keep the belt-fed SMELTER ARRAY furnaces fueled SERVER-SIDE from derpface's carried coal.
+    The compact arrays have no room for coal inserters, and threading a dedicated coal belt past the
+    congested coal mine + base proved fragile; this is the reliable mechanism (like keep_power tops
+    the boiler). derpface restocks coal from the mine (restock_coal) and this distributes it to the
+    array furnaces with no walk. Tops each array furnace to ~5 coal. The OLD base stacks keep their
+    own supply. (A true dedicated coal belt remains the eventual upgrade once the arrays are
+    re-spaced for coal inserters.)"""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+        "for _,z in ipairs({{-8,4,12,7},{-8,13,12,16}}) do"
+        "  for _,fc in pairs(s.find_entities_filtered{name='stone-furnace',area={{z[1],z[2]},{z[3],z[4]}}}) do"
+        "    local fi=fc.get_fuel_inventory(); if fi then local need=5-fi.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal'));"
+        "    if c>0 then fi.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end")
+
+
 def _gated():
     """True ONLY for a CRITICAL refill/refuel gate that would stall production (so we pause
     builds to clear it). Kept lenient so chronic-but-OK scarcity doesn't starve build tasks:
@@ -1150,6 +1166,7 @@ def maintain(laps=0):
         while flag["run"]:
             try:
                 keep_power()                  # TOP PRIORITY: keep the steam plant fueled (server-side)
+                fuel_arrays()                 # keep the belt-fed smelter array furnaces fueled (server-side)
                 _collect_plates_all()         # furnace plates -> inventory
                 _service_assembler_chests()   # fill assembler INPUT chests, empty OUTPUT chests
                 service_science()             # lab feed chests (+ direct-feed any chest-less asm)
