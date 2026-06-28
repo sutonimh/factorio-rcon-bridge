@@ -184,6 +184,28 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
   on concat. Use `inv.get_item_count('name')` for specific items, or index the
   entry fields.
 
+## Megabase ghost placement (Nilaus/factoriobin blueprints over RCON)
+- Endgame blueprints can be placed as GHOSTS regardless of tech (no research/bots
+  needed to lay the plan); they auto-build later once entities + construction robots
+  exist. This is the legit way to "place" a megabase early (Seth's choice).
+- `build_blueprint{surface,force,position,force_build=true}` returns the ghost list;
+  it returns 0 (places nothing) when:
+  1. Target chunks aren't generated -> `request_to_generate_chunks` + `force_generate_chunk_requests` first.
+  2. Terrain obstacles (trees/rocks/cliffs) collide -> CLEAR TERRAIN FIRST: destroy
+     `find_entities_filtered{type={'tree','simple-entity','cliff'}}` in the footprint
+     (Seth's standing rule: clear terrain before placing).
+  3. The blueprint has `absolute-snapping=true` + `snap-to-grid` -> it snaps to a fixed
+     world grid and can collide with already-placed blocks; pop snap-to-grid/
+     absolute-snapping/position-relative-to-grid from the BP json to place at an exact spot.
+  4. Overlaps existing entity-ghosts (e.g. two modules whose footprints intersect).
+- Tile the City Block grid at the blueprint's snap period, aligned to that grid
+  (origins at exact multiples), or blocks collapse onto each other.
+- MOVE THE CHARACTER to the placement area first (Seth wants to watch it happen):
+  `walk(tx,ty)` to the site, then place. Don't place ghosts remotely while the
+  character stands elsewhere.
+- Parallel placement via subagents is safe if each agent's import_stack+build_blueprint
+  +clear is ONE atomic /sc command (no interleave) and uses a unique temp file.
+
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
   so the read hangs. Read one response packet, then drain with a short timeout.
