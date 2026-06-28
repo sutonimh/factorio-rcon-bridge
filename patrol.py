@@ -26,12 +26,16 @@ def restock_and_craft():
     )
 
 
+import subprocess
+
 CYCLES = 20
 for cyc in range(CYCLES):
     wx, wy = PERIMETER[cyc % len(PERIMETER)]
     a.walk(wx, wy, tol=3, timeout=70)
     restock_and_craft()      # keep a science buffer crafting every lap
-    a.maintain()             # pickup, ore chests, green factory, components, fuel ALL burners, feed ALL labs
+    a.maintain()             # pickup, ore chests, green factory, components, fuel ALL burners, feed labs, cleanup orphans
+    if cyc % 10 == 9:        # periodic deep prune of redundant (connected) power poles
+        subprocess.run(['python3', 'remove_redundant.py'], cwd='/Users/sutonimh/code/factorio')
     out = a.feed_labs().strip()
     print(f"[patrol {cyc+1}/{CYCLES}] at ({wx},{wy}) | {out}", flush=True)
 

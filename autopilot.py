@@ -558,6 +558,29 @@ def service_components():
     return _print(lua)
 
 
+def cleanup_infra():
+    """Maintenance cleanup (Seth's standing rule: remove unneeded infra on patrol).
+    Conservatively removes ONLY truly orphaned things: transport belts with no adjacent
+    belt/inserter/splitter/machine/chest (stray belt stubs from abandoned builds), and
+    electric poles that power no consumer AND have no other pole within wire range
+    (islands in empty space). Never touches connected lines or connectivity poles."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local rb=0; local rp=0;"
+        "for _,b in pairs(s.find_entities_filtered{type='transport-belt'}) do local p=b.position;"
+        "  local nb=s.find_entities_filtered{area={{p.x-1.4,p.y-1.4},{p.x+1.4,p.y+1.4}}, type={'transport-belt','underground-belt','splitter','inserter','loader','loader-1x1','assembling-machine','furnace','lab','container','logistic-container','mining-drill'}};"
+        "  local cnt=0; for _,e in pairs(nb) do if e~=b then cnt=cnt+1 end end;"
+        "  if cnt==0 then b.destroy(); rb=rb+1 end end;"
+        "for _,pole in pairs(s.find_entities_filtered{type='electric-pole'}) do local p=pole.position;"
+        "  local hascons=false;"
+        "  for _,e in pairs(s.find_entities_filtered{area={{p.x-2.5,p.y-2.5},{p.x+2.5,p.y+2.5}}}) do"
+        "    if (e.prototype.electric_energy_source_prototype) or e.name=='steam-engine' then hascons=true break end end;"
+        "  local np=0; for _,e in pairs(s.find_entities_filtered{area={{p.x-7,p.y-7},{p.x+7,p.y+7}},type='electric-pole'}) do if e~=pole then np=np+1 end end;"
+        "  if (not hascons) and np==0 then pole.destroy(); rp=rp+1 end end;"
+        "rcon.print('cleanup_infra: removed '..rb..' orphan belts, '..rp..' island poles')"
+    )
+    return _print(lua)
+
+
 def collect_science():
     """Pull finished packs from the AUTOMATED producers into player inventory so
     feed_labs can spread them across ALL labs (not just the main one): green from the
@@ -636,7 +659,7 @@ def maintain():
     production; then defend_check (rebuild/repair after an attack)."""
     log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip(),
            service_components().strip(), keep_fueled().strip(),
-           collect_science().strip(), feed_labs().strip()]
+           collect_science().strip(), feed_labs().strip(), cleanup_infra().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:

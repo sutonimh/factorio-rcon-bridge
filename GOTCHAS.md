@@ -8,6 +8,12 @@ surprise, or hard-won fix, add a rule below before moving on. This file is the p
 memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
 
 ## TOP LESSONS (the expensive ones, read first)
+- **Patrol removes unneeded infrastructure (Seth's standing rule).** Every maintenance
+  patrol must prune stray infra, not just fuel/feed: orphaned belts (stray stubs from
+  abandoned builds) and redundant/island power poles. `cleanup_infra()` (in maintain)
+  conservatively removes truly isolated belts + island poles every lap; the patrol runs
+  the deeper `remove_redundant.py` (poles whose coverage is duplicated) every 10th lap.
+  Keep it CONSERVATIVE: never remove a connected belt line or a connectivity-bridge pole.
 - **ALWAYS clean up your messes (Seth's standing rule).** Never leave stray/half-built
   junk behind: failed builds, orphaned poles, abandoned ghosts, test entities. When a
   plan is reverted or abandoned, remove what it placed in the SAME pass. I left a whole
