@@ -156,6 +156,66 @@ def walk(tx, ty, tol=2.0, timeout=150):
     return px, py, True
 
 
+def belt_path(sx, sy, gx, gy, pad=14):
+    """4-directional A* tile path from (sx,sy) to (gx,gy) that AVOIDS every building
+    AND every existing belt (Seth's rule: belts never go through buildings or cross
+    other belts). Returns the full ordered tile list, or [] if no clear path exists."""
+    import heapq
+    sx, sy, gx, gy = round(sx), round(sy), round(gx), round(gy)
+    minx, maxx = min(sx, gx) - pad, max(sx, gx) + pad
+    miny, maxy = min(sy, gy) - pad, max(sy, gy) + pad
+    blocked = _blocked_tiles(minx, miny, maxx, maxy)   # includes ALL entities (turrets, belts, poles, ...) + water
+    blocked.discard((sx, sy)); blocked.discard((gx, gy))
+    start, goal = (sx, sy), (gx, gy)
+    openq = [(0, start)]; came = {start: None}; g = {start: 0}; found = False; exp = 0
+    while openq and exp < 60000:
+        _, cur = heapq.heappop(openq); exp += 1
+        if cur == goal:
+            found = True; break
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cur[0] + dx, cur[1] + dy
+            if not (minx <= nx <= maxx and miny <= ny <= maxy) or (nx, ny) in blocked:
+                continue
+            ng = g[cur] + 1
+            if (nx, ny) not in g or ng < g[(nx, ny)]:
+                g[(nx, ny)] = ng; came[(nx, ny)] = cur
+                heapq.heappush(openq, (ng + abs(gx - nx) + abs(gy - ny), (nx, ny)))
+    if not found:
+        return []
+    path = []; n = goal
+    while n is not None:
+        path.append(n); n = came[n]
+    path.reverse()
+    return path
+
+
+def build_belt(sx, sy, gx, gy, item='transport-belt'):
+    """Route + build a belt from (sx,sy) to (gx,gy) AROUND all buildings/belts (A*).
+    Walks the character to the start first (Seth's rules: walk to the build site; never
+    run a belt through a building or across another belt). Each tile faces the next."""
+    goto(sx, sy)
+    path = belt_path(sx, sy, gx, gy)
+    if not path:
+        return f"build_belt: NO clear route from ({sx},{sy}) to ({gx},{gy}) (blocked); widen area or clear obstacles"
+    def d(a, b):
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        return 4 if dx == 1 else 12 if dx == -1 else 8 if dy == 1 else 0
+    cmds = []
+    for i, t in enumerate(path):
+        nxt = path[i + 1] if i + 1 < len(path) else t
+        di = d(t, nxt) if nxt != t else d(path[-2], path[-1]) if len(path) > 1 else 0
+        cmds.append("if s.can_place_entity{name='" + item + "',position={%g,%g},direction=%d,force=f} then s.create_entity{name='%s',position={%g,%g},direction=%d,force=f}; n=n+1 end" % (t[0]+0.5, t[1]+0.5, di, item, t[0]+0.5, t[1]+0.5, di))
+    lua = "/sc local s=game.surfaces['nauvis']; local f=game.players[1].force; local n=0; " + " ".join(cmds) + " rcon.print('build_belt: placed '..n..'/" + str(len(path)) + " tiles')"
+    return _print(lua)
+
+
+def goto(cx, cy, tol=4.0):
+    """Walk the character to a build/work site BEFORE operating there (Seth's standing
+    rule: always be where you're actively building). Call this at the start of every
+    build/teardown so Seth can watch it happen. Thin wrapper over the smooth walk()."""
+    return walk(cx, cy, tol=tol)
+
+
 def mine(name, count):
     # Deplete-and-insert: take ore from real resource entities near the player
     # and add the same amount to the inventory. The patch loses exactly what the

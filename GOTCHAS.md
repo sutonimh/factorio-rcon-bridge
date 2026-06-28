@@ -63,6 +63,14 @@ memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss me
   location (building, fueling, placing ghosts, mining), `walk()` the character there
   so Seth can SEE it happen. Never `player.teleport`. Don't operate remotely while the
   character stands somewhere else. He wants to watch everything, in real time.
+- **Route belts AROUND everything (Seth's standing rule):** a belt must never run
+  through a building of ANY kind (turret, assembler, pole, furnace, chest) and must
+  never cross/overlap another belt. Use `build_belt(sx,sy,gx,gy)` which A*-routes the
+  belt avoiding every entity (and walks the character to the start first). Where a
+  crossing is truly unavoidable, use UNDERGROUND belts to pass under the existing belt.
+  Never lay a straight belt line blindly through the base.
+- **Walk to the build site first (`goto`):** every build/teardown starts with
+  `goto(cx,cy)` (or `build_belt`, which does it) so Seth watches it happen on-site.
 - **Keep it legit (no cheats):** build/fuel/move via the character + `create_entity`/
   inventory ops like a player would; never force-spawn finished items, instant-research,
   or hand-set progress. Progress the tech tree legitimately.
