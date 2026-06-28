@@ -27,6 +27,7 @@ def restock_and_craft():
 
 
 import subprocess
+import tasks
 
 CYCLES = 20
 for cyc in range(CYCLES):
@@ -37,6 +38,7 @@ for cyc in range(CYCLES):
     if cyc % 10 == 9:        # periodic deep prune of redundant (connected) power poles
         subprocess.run(['python3', 'remove_redundant.py'], cwd='/Users/sutonimh/code/factorio')
     out = a.feed_labs().strip()
+    tasks.render()   # keep the GUI note fresh every lap (never stale)
     print(f"[patrol {cyc+1}/{CYCLES}] at ({wx},{wy}) | {out}", flush=True)
 
 print("patrol stint complete", flush=True)

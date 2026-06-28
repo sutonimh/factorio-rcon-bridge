@@ -1,0 +1,7 @@
+[
+  {"desc": "Iron mine -> smelter belt (fix gaps + tear down feeder chest/loader)", "status": "active"},
+  {"desc": "Coal mine -> smelter belt (direct coal feed + per-furnace inserters)", "status": "queued"},
+  {"desc": "Automated science production (sustain all 4 labs)", "status": "queued"},
+  {"desc": "Convert smelter to ELECTRIC furnaces (needs oil->plastic->circuits chain)", "status": "queued"},
+  {"desc": "Maintenance patrol: fuel all burners, top feeders+labs, cleanup stray infra", "status": "active"}
+]
