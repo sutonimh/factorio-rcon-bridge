@@ -189,24 +189,199 @@ def belt_path(sx, sy, gx, gy, pad=14):
     return path
 
 
-def build_belt(sx, sy, gx, gy, item='transport-belt'):
-    """Route + build a belt from (sx,sy) to (gx,gy) AROUND all buildings/belts (A*).
-    Walks the character to the start first (Seth's rules: walk to the build site; never
-    run a belt through a building or across another belt). Each tile faces the next."""
-    goto(sx, sy)
-    path = belt_path(sx, sy, gx, gy)
+def _blocked_buildings(minx, miny, maxx, maxy):
+    """Obstacle tiles for DIRECT belt routing: NON-belt buildings (turrets, machines,
+    poles, chests, furnaces, splitters, drills) + water. Existing transport-belts and
+    underground-belts are NOT obstacles here: a routed belt crosses them with an
+    underground pair (the direct+underground model). Returns set of (x,y)."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local o={};"
+        "for _,e in pairs(s.find_entities_filtered{area={{" + str(minx) + "," + str(miny) + "},{" + str(maxx) + "," + str(maxy) + "}}}) do"
+        "  local t=e.type;"
+        "  if t~='character' and t~='character-corpse' and t~='resource' and t~='item-entity' and t~='entity-ghost' and t~='tile-ghost'"
+        "     and t~='transport-belt' and t~='underground-belt' then"
+        "    local b=e.bounding_box; for tx=math.floor(b.left_top.x),math.ceil(b.right_bottom.x)-1 do for ty=math.floor(b.left_top.y),math.ceil(b.right_bottom.y)-1 do o[#o+1]=tx..','..ty end end end end;"
+        "for tx=" + str(minx) + "," + str(maxx) + " do for ty=" + str(miny) + "," + str(maxy) + " do if string.find(s.get_tile(tx,ty).name,'water') then o[#o+1]=tx..','..ty end end end;"
+        "rcon.print(table.concat(o,';'))"
+    )
+    out = _print(lua).strip()
+    blocked = set()
+    for tok in out.split(";"):
+        if "," in tok:
+            try:
+                x, y = tok.split(","); blocked.add((int(x), int(y)))
+            except ValueError:
+                pass
+    return blocked
+
+
+def belt_route(sx, sy, gx, gy, pad=10):
+    """Near-DIRECT 4-dir A* path from (sx,sy) to (gx,gy) treating only NON-belt
+    buildings + water as hard obstacles (existing belts are passable, to be crossed
+    with undergrounds). Diagonal-free, Manhattan heuristic, so it hugs a straight
+    corridor and only detours around real buildings. Returns the full tile list."""
+    import heapq
+    sx, sy, gx, gy = round(sx), round(sy), round(gx), round(gy)
+    minx, maxx = min(sx, gx) - pad, max(sx, gx) + pad
+    miny, maxy = min(sy, gy) - pad, max(sy, gy) + pad
+    blocked = _blocked_buildings(minx, miny, maxx, maxy)
+    blocked.discard((sx, sy)); blocked.discard((gx, gy))
+    start, goal = (sx, sy), (gx, gy)
+    openq = [(0, start)]; came = {start: None}; g = {start: 0}; found = False; exp = 0
+    while openq and exp < 60000:
+        _, cur = heapq.heappop(openq); exp += 1
+        if cur == goal:
+            found = True; break
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nx, ny = cur[0] + dx, cur[1] + dy
+            if not (minx <= nx <= maxx and miny <= ny <= maxy) or (nx, ny) in blocked:
+                continue
+            # small turn penalty keeps the path straight (fewer corners = cleaner bus)
+            turn = 0.0
+            prev = came[cur]
+            if prev is not None:
+                pdx, pdy = cur[0] - prev[0], cur[1] - prev[1]
+                if (pdx, pdy) != (dx, dy):
+                    turn = 0.4
+            ng = g[cur] + 1 + turn
+            if (nx, ny) not in g or ng < g[(nx, ny)]:
+                g[(nx, ny)] = ng; came[(nx, ny)] = cur
+                heapq.heappush(openq, (ng + abs(gx - nx) + abs(gy - ny), (nx, ny)))
+    if not found:
+        return []
+    path = []; n = goal
+    while n is not None:
+        path.append(n); n = came[n]
+    path.reverse()
+    return path
+
+
+_TRACK_FILE = str(HERE / "build-track.json")
+
+
+def _track_add(entries, tag):
+    """Append placed (name,x,y) records under `tag` to the build-track file, so the
+    exact entities a build placed can be torn down surgically (never area-destroy)."""
+    try:
+        with open(_TRACK_FILE) as f:
+            data = json.load(f)
+    except Exception:
+        data = {}
+    data.setdefault(tag, []).extend(entries)
+    with open(_TRACK_FILE, "w") as f:
+        json.dump(data, f)
+
+
+def teardown(tag):
+    """Surgically remove ONLY the entities a tagged build placed (from build-track),
+    matching name + exact position. Never area-destroys, so existing infrastructure is
+    untouched. Refunds nothing (conservative removal of our own additions)."""
+    try:
+        with open(_TRACK_FILE) as f:
+            data = json.load(f)
+    except Exception:
+        return "teardown: no build-track file"
+    ents = data.get(tag, [])
+    if not ents:
+        return f"teardown: nothing tracked under '{tag}'"
+    rows = ";".join("{'%s',%g,%g}" % (e[0], e[1], e[2]) for e in ents)
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local L={" + rows + "}; local rem=0;"
+        "for _,d in ipairs(L) do local e=s.find_entities_filtered{position={d[2],d[3]},radius=0.4,name=d[1]}[1]; if e then e.destroy(); rem=rem+1 end end;"
+        "rcon.print('teardown: removed '..rem..'/'..#L..' tracked entities')"
+    )
+    out = _print(lua)
+    data[tag] = []
+    with open(_TRACK_FILE, "w") as f:
+        json.dump(data, f)
+    return out
+
+
+def build_belt(sx, sy, gx, gy, item='transport-belt', ug='underground-belt', tag='belt', walk_first=True):
+    """Build a DIRECT belt corridor from (sx,sy) to (gx,gy): route treating only NON-belt
+    buildings as hard obstacles, and CROSS existing belts with underground-belt pairs
+    (entrance just before the crossing, exit just after) instead of A*-snaking around
+    them (the lesson from Seth's iron-belt fix). Walks to the start first. Tracks every
+    placed entity under `tag` for surgical teardown(). Returns a status string."""
+    if walk_first:
+        goto(sx, sy)
+    path = belt_route(sx, sy, gx, gy)
     if not path:
-        return f"build_belt: NO clear route from ({sx},{sy}) to ({gx},{gy}) (blocked); widen area or clear obstacles"
+        return f"build_belt: NO route from ({sx},{sy}) to ({gx},{gy}) avoiding buildings; widen/clear"
+
     def d(a, b):
         dx, dy = b[0] - a[0], b[1] - a[1]
         return 4 if dx == 1 else 12 if dx == -1 else 8 if dy == 1 else 0
+
+    # which path tiles currently hold a crossable belt (transport/underground)?
+    qrows = ",".join("{%d,%d}" % (t[0], t[1]) for t in path)
+    qlua = (
+        "/sc local s=game.surfaces['nauvis']; local L={" + qrows + "}; local o={};"
+        "for i,t in ipairs(L) do local e=s.find_entities_filtered{position={t[1]+0.5,t[2]+0.5},radius=0.4,type={'transport-belt','underground-belt','splitter'}}[1];"
+        "  o[#o+1]=(e and '1' or '0') end; rcon.print(table.concat(o,''))"
+    )
+    occ = _print(qlua).strip()
+    isbelt = [c == '1' for c in occ] if len(occ) == len(path) else [False] * len(path)
+
+    # plan placements: free tile -> transport-belt; runs of existing belt -> underground pair
+    placements = []   # (name, tilex, tiley, dir, type) ; type '' for belt, 'input'/'output' for ug
+    i = 0
+    n = len(path)
+    while i < n:
+        if isbelt[i]:
+            j = i
+            while j < n and isbelt[j]:
+                j += 1
+            # crossing run is path[i..j-1]; entrance = path[i-1], exit = path[j]
+            if i - 1 < 0 or j >= n or (j - i) > 4:
+                # can't bracket the crossing cleanly; skip these tiles (leave the belt)
+                i = j
+                continue
+            ent = path[i - 1]; ex = path[j]
+            dd = d(ent, ex if ex != ent else path[i])
+            # replace the entrance free-tile belt with an underground input
+            if placements and placements[-1][1] == ent[0] and placements[-1][2] == ent[1]:
+                placements.pop()
+            placements.append((ug, ent[0], ent[1], dd, 'input'))
+            placements.append((ug, ex[0], ex[1], dd, 'output'))
+            i = j + 1
+            # the tile after exit (if any) belt faces from exit onward; continue loop
+            continue
+        else:
+            nxt = path[i + 1] if i + 1 < n else path[i - 1] if i > 0 else path[i]
+            di = d(path[i], nxt) if i + 1 < n else (d(path[i - 1], path[i]) if i > 0 else 0)
+            placements.append((item, path[i][0], path[i][1], di, ''))
+            i += 1
+
+    # emit build commands (conservative: pull from inventory)
     cmds = []
-    for i, t in enumerate(path):
-        nxt = path[i + 1] if i + 1 < len(path) else t
-        di = d(t, nxt) if nxt != t else d(path[-2], path[-1]) if len(path) > 1 else 0
-        cmds.append("if s.can_place_entity{name='" + item + "',position={%g,%g},direction=%d,force=f} then s.create_entity{name='%s',position={%g,%g},direction=%d,force=f}; n=n+1 end" % (t[0]+0.5, t[1]+0.5, di, item, t[0]+0.5, t[1]+0.5, di))
-    lua = "/sc local s=game.surfaces['nauvis']; local f=game.players[1].force; local n=0; " + " ".join(cmds) + " rcon.print('build_belt: placed '..n..'/" + str(len(path)) + " tiles')"
-    return _print(lua)
+    for nm, tx, ty, di, ty2 in placements:
+        cx, cy = tx + 0.5, ty + 0.5
+        if ty2:
+            spec = "name='%s',position={%g,%g},direction=%d,type='%s',force=f" % (nm, cx, cy, di, ty2)
+        else:
+            spec = "name='%s',position={%g,%g},direction=%d,force=f" % (nm, cx, cy, di)
+        cmds.append(
+            "do local it='%s'; if inv.get_item_count(it)>0 and s.can_place_entity{%s} then local e=s.create_entity{%s,player=p}; if e then inv.remove{name=it,count=1}; n=n+1; pl[#pl+1]=string.format('%%s|%%g|%%g',e.name,e.position.x,e.position.y) end end end"
+            % (nm, spec, spec)
+        )
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local f=p.force; local inv=p.get_main_inventory(); local n=0; local pl={}; "
+        + " ".join(cmds) +
+        " rcon.print(n..'/'..#pl..'\\n'..table.concat(pl,';'))"
+    )
+    out = _print(lua).strip()
+    lines = out.split("\n", 1)
+    placed = []
+    if len(lines) > 1:
+        for rec in lines[1].split(";"):
+            parts = rec.split("|")
+            if len(parts) == 3:
+                placed.append([parts[0], float(parts[1]), float(parts[2])])
+    if placed:
+        _track_add(placed, tag)
+    nplaced = lines[0].split("/")[0] if lines else "?"
+    return f"build_belt[{tag}]: placed {nplaced} entities ({len(placements)} planned, route {len(path)} tiles) -> tracked"
 
 
 def goto(cx, cy, tol=4.0):
@@ -618,6 +793,28 @@ def service_components():
     return _print(lua)
 
 
+def manage_inventory():
+    """Keep the player inventory from clogging so queued builds ALWAYS have room
+    (Seth's rule: maintain free space). Offloads excess bulk to chests: firearm-magazine
+    -> ammo buffer, iron-ore/stone -> mine chest, copper/iron plate over 300 -> storage
+    chests in the buffer zone (-22..-12, -38..-28). Keeps all build items + a working
+    material buffer. Runs on the maintain loop."""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "local function dump(item,keep,chest) if not chest then return end; local n=inv.get_item_count(item)-keep; if n>0 then local k=chest.insert{name=item,count=n}; if k>0 then inv.remove{name=item,count=k} end end end;"
+        "local ammo=s.find_entities_filtered{position={20.5,-2.5},radius=3,type='container'}[1];"
+        "local mc=s.find_entities_filtered{position={17.5,0.5},radius=2,type='container'}[1];"
+        "dump('firearm-magazine',0,ammo); dump('iron-ore',0,mc); dump('stone',0,mc);"
+        "local function store(item,keep) local excess=inv.get_item_count(item)-keep; if excess<=0 then return end; local stored=0;"
+        "  for cx=-22,-12,2 do for cy=-38,-28,2 do if stored<excess then local c=s.find_entities_filtered{position={cx+0.5,cy+0.5},radius=0.6,type='container'}[1];"
+        "    if (not c) and inv.get_item_count('iron-chest')>0 and s.can_place_entity{name='iron-chest',position={cx+0.5,cy+0.5},force=p.force} then c=s.create_entity{name='iron-chest',position={cx+0.5,cy+0.5},force=p.force}; inv.remove{name='iron-chest',count=1} end;"
+        "    if c then local want=excess-stored; if want>0 then local k=c.insert{name=item,count=want}; if k>0 then inv.remove{name=item,count=k}; stored=stored+k end end end end end end end;"
+        "store('copper-plate',300); store('iron-plate',300);"
+        "rcon.print('manage_inventory: '..inv.count_empty_stacks()..' free slots')"
+    )
+    return _print(lua)
+
+
 def cleanup_infra():
     """Maintenance cleanup (Seth's standing rule: remove unneeded infra on patrol).
     Conservatively removes ONLY truly orphaned things: transport belts with no adjacent
@@ -719,7 +916,8 @@ def maintain():
     production; then defend_check (rebuild/repair after an attack)."""
     log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip(),
            service_components().strip(), keep_fueled().strip(),
-           collect_science().strip(), feed_labs().strip(), cleanup_infra().strip()]
+           collect_science().strip(), feed_labs().strip(),
+           manage_inventory().strip(), cleanup_infra().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:

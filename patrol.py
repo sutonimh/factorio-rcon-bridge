@@ -9,18 +9,19 @@ PERIMETER = [(26, -10), (26, -32), (-14, -32), (-14, -12)]
 
 
 def restock_and_craft():
-    # pull copper + iron from furnace outputs, craft a science buffer to keep ALL labs fed
+    # Pull copper/iron ONLY when low (never over-pull - that clogged the inventory with
+    # thousands of plates). Craft a small science buffer to keep labs fed.
     a._print(
         "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
-        "local cu=0; for _,f in pairs(s.find_entities_filtered{area={{-3,-46},{24,-40}},type='furnace'}) do"
-        " local o=f.get_output_inventory(); local c=o.get_item_count('copper-plate'); if c>0 then"
-        " local n=math.min(c,400-cu); o.remove{name='copper-plate',count=n}; inv.insert{name='copper-plate',count=n}; cu=cu+n end"
-        " if cu>=400 then break end end;"
-        "local fe=0; for _,f in pairs(s.find_entities_filtered{area={{-3,-33},{24,-28}},type='furnace'}) do"
-        " local o=f.get_output_inventory(); local c=o.get_item_count('iron-plate'); if c>0 then"
-        " inv.insert{name='iron-plate',count=c}; o.remove{name='iron-plate',count=c}; fe=fe+c end if fe>=400 then break end end;"
-        # belts feed the green sub-factory's final stage (green = belt + inserter); keep them stocked
-        "if inv.get_item_count('transport-belt')<40 then p.begin_crafting{recipe='transport-belt',count=60} end;"
+        # copper: top up to ~250 only if below 150
+        "if inv.get_item_count('copper-plate')<150 then local need=250-inv.get_item_count('copper-plate');"
+        " for _,f in pairs(s.find_entities_filtered{area={{-3,-46},{24,-40}},type='furnace'}) do local o=f.get_output_inventory();"
+        "  local c=math.min(o.get_item_count('copper-plate'),need); if c>0 then o.remove{name='copper-plate',count=c}; inv.insert{name='copper-plate',count=c}; need=need-c end if need<=0 then break end end end;"
+        # iron: top up to ~250 only if below 150
+        "if inv.get_item_count('iron-plate')<150 then local need=250-inv.get_item_count('iron-plate');"
+        " for _,f in pairs(s.find_entities_filtered{area={{-3,-33},{24,-28}},type='furnace'}) do local o=f.get_output_inventory();"
+        "  local c=math.min(o.get_item_count('iron-plate'),need); if c>0 then o.remove{name='iron-plate',count=c}; inv.insert{name='iron-plate',count=c}; need=need-c end if need<=0 then break end end end;"
+        "if inv.get_item_count('transport-belt')<40 then p.begin_crafting{recipe='transport-belt',count=40} end;"
         "if inv.get_item_count('logistic-science-pack')<20 then p.begin_crafting{recipe='logistic-science-pack',count=30} end;"
         "if inv.get_item_count('automation-science-pack')<20 then p.begin_crafting{recipe='automation-science-pack',count=30} end"
     )

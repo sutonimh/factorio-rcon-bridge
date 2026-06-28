@@ -88,6 +88,15 @@ memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss me
   belt avoiding every entity (and walks the character to the start first). Where a
   crossing is truly unavoidable, use UNDERGROUND belts to pass under the existing belt.
   Never lay a straight belt line blindly through the base.
+- **Maintain FREE inventory space (Seth's standing rule):** never let the player
+  inventory clog - queued builds need room. The patrol runs `manage_inventory()` each
+  pass: offload excess bulk (copper/iron plate >300, ore, ammo) to chests, keep build
+  items + a working buffer. NEVER over-pull materials (a 400-plate/cycle restock buried
+  the inventory under 5,497 copper plates and stalled all builds). Pull only when low.
+- **One controller at a time / patrol stands still:** multiple processes (other sessions
+  sharing this dir) each issuing walk commands yank the character around (looks like
+  teleporting). The patrol stays stationary so it never competes for the character; do
+  builds from ONE session. All movement is `walk()` - NEVER `player.teleport`.
 - **Patrol STANDS STILL (Seth's standing rule):** the maintenance patrol must NOT wander
   a perimeter. Maintenance is all server-side (fuel/feed/craft/cleanup via RCON), so the
   character stays put and only moves when a specific task needs it on-site (a build or

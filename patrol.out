@@ -1,0 +1,7 @@
+[patrol 1/20] at (26,-10) | feed_labs: red+=0 green+=0 labs_working=3/4 inv(r=0,g=5) | oil-gathering 79.5%
+[patrol 2/20] at (26,-32) | feed_labs: red+=0 green+=0 labs_working=3/4 inv(r=0,g=4) | oil-gathering 80.9%
+[patrol 3/20] at (-14,-32) | feed_labs: red+=0 green+=0 labs_working=3/4 inv(r=0,g=3) | oil-gathering 81.9%
+[patrol 4/20] at (-14,-12) | feed_labs: red+=0 green+=0 labs_working=2/4 inv(r=0,g=9) | oil-gathering 86.3%
+[patrol 5/20] at (26,-10) | feed_labs: red+=0 green+=0 labs_working=2/4 inv(r=0,g=9) | oil-gathering 87.7%
+[patrol 6/20] at (26,-32) | feed_labs: red+=0 green+=0 labs_working=1/4 inv(r=0,g=19) | oil-gathering 90.8%
+[patrol 7/20] at (-14,-32) | feed_labs: red+=0 green+=0 labs_working=1/4 inv(r=0,g=20) | oil-gathering 93.4%
