@@ -456,6 +456,40 @@ def fill_ore_chests(target=1200):
     return _print(lua)
 
 
+def science_factory():
+    """Drive the Phase-1 green-science sub-factory at the (-20,-13) plot.
+    4 assemblers in a row at y=-9.5: cable(-18.5) -> circuit(-14.5) -> inserter(-10.5)
+    -> green(-6.5). Each has south input chests (y=-6.5) and a north output chest
+    (y=-12.5). This moves intermediates along the chain, refills raw inputs from the
+    smelter furnace outputs + cluster gear assembler, and feeds finished green packs
+    into the lab so the research queue keeps progressing. Run on the maintain loop.
+    (Belt input is topped from player inventory; a dedicated belt+gear assembler would
+    make it fully self-contained - Phase-1 TODO.)"""
+    lua = (
+        "/sc local s=game.surfaces['nauvis']; local p=game.players[1]; local inv=p.get_main_inventory();"
+        "local function cc(x,y) return s.find_entities_filtered{position={x,y},radius=0.5,type='container'}[1] end;"
+        "local function move(fx,fy,tx,ty,item,cap) local a=cc(fx,fy); local b=cc(tx,ty); if not(a and b) then return 0 end;"
+        "  local have=a.get_inventory(1).get_item_count(item); local room=cap-b.get_inventory(1).get_item_count(item);"
+        "  local n=math.min(have,room); if n>0 then local ins=b.insert{name=item,count=n}; a.get_inventory(1).remove{name=item,count=ins}; return ins end return 0 end;"
+        # move intermediates along the chain
+        "local m1=move(-18.5,-12.5,-13.5,-6.5,'copper-cable',100);"
+        "local m2=move(-14.5,-12.5,-9.5,-6.5,'electronic-circuit',100);"
+        "local m3=move(-10.5,-12.5,-5.5,-6.5,'inserter',100);"
+        # green-out -> lab
+        "local g=cc(-6.5,-12.5); local lab=s.find_entities_filtered{position={-1.5,-17.5},radius=1.5,name='lab'}[1]; local gl=0;"
+        "if g and lab then local n=g.get_inventory(1).get_item_count('logistic-science-pack'); if n>0 then gl=lab.get_inventory(defines.inventory.lab_input).insert{name='logistic-science-pack',count=n}; g.get_inventory(1).remove{name='logistic-science-pack',count=gl} end end;"
+        # refill raw: copper + iron from furnace outputs, gear from cluster gear asm, belt from player inv
+        "local function fillFrom(cx,cy,item,cap,srcArea) local c=cc(cx,cy); if not c then return 0 end; local need=cap-c.get_inventory(1).get_item_count(item); if need<=0 then return 0 end;"
+        "  local got=0; for _,f in pairs(s.find_entities_filtered{area=srcArea,type='furnace'}) do local o=f.get_output_inventory(); local a=o.get_item_count(item); if a>0 then local k=math.min(a,need-got); o.remove{name=item,count=k}; c.insert{name=item,count=k}; got=got+k end if got>=need then break end end return got end;"
+        "local fcu=fillFrom(-18.5,-6.5,'copper-plate',180,{{-3,-46},{24,-40}});"
+        "local fi=fillFrom(-15.5,-6.5,'iron-plate',150,{{-3,-33},{24,-28}})+fillFrom(-11.5,-6.5,'iron-plate',150,{{-3,-33},{24,-28}});"
+        "local gc=cc(-10.5,-6.5); local fg=0; if gc then local need=50-gc.get_inventory(1).get_item_count('iron-gear-wheel'); if need>0 then for _,a in pairs(s.find_entities_filtered{area={{-12,-19},{-8,-16}},type='assembling-machine'}) do local o=a.get_output_inventory(); local k=math.min(o.get_item_count('iron-gear-wheel'),need-fg); if k>0 then o.remove{name='iron-gear-wheel',count=k}; gc.insert{name='iron-gear-wheel',count=k}; fg=fg+k end end end end;"
+        "local bc=cc(-7.5,-6.5); local fb=0; if bc then local need=50-bc.get_inventory(1).get_item_count('transport-belt'); local av=inv.get_item_count('transport-belt'); local k=math.min(need,av); if k>0 then bc.insert{name='transport-belt',count=k}; inv.remove{name='transport-belt',count=k}; fb=k end end;"
+        "rcon.print('science_factory: chain('..m1..'/'..m2..'/'..m3..') green->lab='..gl..' refill cu='..fcu..' iron='..fi..' gear='..fg..' belt='..fb)"
+    )
+    return _print(lua)
+
+
 def produce_ammo():
     """One ammo-production cycle: collect smelted iron from the furnace row, reload
     the furnaces from the mining chest, craft magazines from available iron, and
@@ -499,7 +533,7 @@ def maintain():
     """Unified periodic maintenance loop body. Runs the whole resilience system:
     pickup ground items, refill turrets, and if any turret is <50% drive ammo
     production; then defend_check (rebuild/repair after an attack)."""
-    log = [pickup().strip(), fill_ore_chests().strip()]
+    log = [pickup().strip(), fill_ore_chests().strip(), science_factory().strip()]
     low, ratio = turrets_low()
     log.append(refill_turrets().strip())
     if low:

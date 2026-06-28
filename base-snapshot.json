@@ -1,5 +1,5 @@
 {
-"count": 589,
+"count": 624,
 "entities": [
 {
 "name": "offshore-pump",
@@ -534,6 +534,55 @@
 "recipe": ""
 },
 {
+"name": "small-electric-pole",
+"x": -20.5,
+"y": -9.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -18.5,
+"y": -12.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -18.5,
+"y": -11.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "assembling-machine-1",
+"x": -18.5,
+"y": -9.5,
+"direction": 0,
+"recipe": "copper-cable"
+},
+{
+"name": "inserter",
+"x": -18.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -18.5,
+"y": -6.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -16.5,
+"y": -9.5,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "transport-belt",
 "x": -14.5,
 "y": -30.5,
@@ -646,6 +695,41 @@
 "recipe": ""
 },
 {
+"name": "iron-chest",
+"x": -14.5,
+"y": -12.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -14.5,
+"y": -11.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "assembling-machine-1",
+"x": -14.5,
+"y": -9.5,
+"direction": 0,
+"recipe": "electronic-circuit"
+},
+{
+"name": "inserter",
+"x": -15.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -15.5,
+"y": -6.5,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "small-electric-pole",
 "x": -13.5,
 "y": -19.5,
@@ -663,6 +747,27 @@
 "name": "iron-chest",
 "x": -12.5,
 "y": -17.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -12.5,
+"y": -9.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -13.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -13.5,
+"y": -6.5,
 "direction": 0,
 "recipe": ""
 },
@@ -688,6 +793,55 @@
 "recipe": ""
 },
 {
+"name": "iron-chest",
+"x": -10.5,
+"y": -12.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -10.5,
+"y": -11.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "assembling-machine-1",
+"x": -10.5,
+"y": -9.5,
+"direction": 0,
+"recipe": "inserter"
+},
+{
+"name": "inserter",
+"x": -10.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -10.5,
+"y": -6.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -11.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -11.5,
+"y": -6.5,
+"direction": 0,
+"recipe": ""
+},
+{
 "name": "small-electric-pole",
 "x": -9.5,
 "y": -19.5,
@@ -698,6 +852,27 @@
 "name": "small-electric-pole",
 "x": -9.5,
 "y": -17.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -8.5,
+"y": -9.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -9.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -9.5,
+"y": -6.5,
 "direction": 0,
 "recipe": ""
 },
@@ -713,6 +888,41 @@
 "x": -7.5,
 "y": -17.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -6.5,
+"y": -12.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -6.5,
+"y": -11.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "assembling-machine-1",
+"x": -6.5,
+"y": -9.5,
+"direction": 0,
+"recipe": "logistic-science-pack"
+},
+{
+"name": "inserter",
+"x": -7.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -7.5,
+"y": -6.5,
+"direction": 0,
 "recipe": ""
 },
 {
@@ -920,6 +1130,27 @@
 },
 {
 "name": "small-electric-pole",
+"x": -4.5,
+"y": -9.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "inserter",
+"x": -5.5,
+"y": -7.5,
+"direction": 8,
+"recipe": ""
+},
+{
+"name": "iron-chest",
+"x": -5.5,
+"y": -6.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
 "x": -3.5,
 "y": -31.5,
 "direction": 0,
@@ -958,6 +1189,20 @@
 "x": -3.5,
 "y": -17.5,
 "direction": 12,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -2.5,
+"y": -14.5,
+"direction": 0,
+"recipe": ""
+},
+{
+"name": "small-electric-pole",
+"x": -2.5,
+"y": -11.5,
+"direction": 0,
 "recipe": ""
 },
 {
