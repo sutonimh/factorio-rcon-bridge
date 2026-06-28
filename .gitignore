@@ -1,6 +1,15 @@
-# secrets + runtime artifacts - never commit
-rcon.pass
-server.log
-*.log
+# runtime / generated (written by the autopilot on Charon)
+status.json
+state-db.json
+autopilot.log
+base-snapshot.json
+# editor/sed backups
+*.bak
 __pycache__/
 *.pyc
+# local working files
+server.log
+patrol.out
+
+# secret: RCON password (lives in charon /config, never the repo)
+rcon.pass
