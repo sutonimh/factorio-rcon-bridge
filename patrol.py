@@ -29,16 +29,18 @@ def restock_and_craft():
 import subprocess
 import tasks
 
-CYCLES = 20
+CYCLES = 80
 for cyc in range(CYCLES):
-    wx, wy = PERIMETER[cyc % len(PERIMETER)]
-    a.walk(wx, wy, tol=3, timeout=70)
-    restock_and_craft()      # keep a science buffer crafting every lap
+    # STAND STILL: maintenance is all server-side, so the character stays put and only
+    # moves when a task explicitly needs it on-site (a build/repair calls goto()). Seth's
+    # rule: no aimless perimeter walking.
+    restock_and_craft()      # keep a science buffer crafting
     a.maintain()             # pickup, ore chests, green factory, components, fuel ALL burners, feed labs, cleanup orphans
     if cyc % 10 == 9:        # periodic deep prune of redundant (connected) power poles
         subprocess.run(['python3', 'remove_redundant.py'], cwd='/Users/sutonimh/code/factorio')
     out = a.feed_labs().strip()
-    tasks.render()   # keep the GUI note fresh every lap (never stale)
-    print(f"[patrol {cyc+1}/{CYCLES}] at ({wx},{wy}) | {out}", flush=True)
+    tasks.render()   # keep the GUI note fresh (never stale)
+    print(f"[patrol {cyc+1}/{CYCLES}] (stationary) | {out}", flush=True)
+    time.sleep(15)   # wait between maintenance passes; character does NOT wander
 
 print("patrol stint complete", flush=True)

@@ -88,6 +88,10 @@ memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss me
   belt avoiding every entity (and walks the character to the start first). Where a
   crossing is truly unavoidable, use UNDERGROUND belts to pass under the existing belt.
   Never lay a straight belt line blindly through the base.
+- **Patrol STANDS STILL (Seth's standing rule):** the maintenance patrol must NOT wander
+  a perimeter. Maintenance is all server-side (fuel/feed/craft/cleanup via RCON), so the
+  character stays put and only moves when a specific task needs it on-site (a build or
+  repair calls `goto`). No aimless walking.
 - **Walk to the build site first (`goto`):** every build/teardown starts with
   `goto(cx,cy)` (or `build_belt`, which does it) so Seth watches it happen on-site.
 - **Keep it legit (no cheats):** build/fuel/move via the character + `create_entity`/
