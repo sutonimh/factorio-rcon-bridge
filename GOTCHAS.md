@@ -8,6 +8,15 @@ surprise, or hard-won fix, add a rule below before moving on. This file is the p
 memory (Factorio is a non-Abyss project, so lessons live here, never in Abyss memory).
 
 ## TOP LESSONS (the expensive ones, read first)
+- **Route belts DIRECT + cross with undergrounds (learned from a before/after Seth made).**
+  My `build_belt` avoided EVERY belt as a hard obstacle, so it A*-snaked a long convoluted
+  mess out of the boxed-in mine. Seth's fix: a near-straight belt up a clear corridor that
+  dips UNDER the existing distribution/ore belts with underground belts where they cross.
+  CORRECT routing: treat only NON-belt buildings (turrets, machines, poles) as hard
+  obstacles; go through/over existing belts by placing an underground-belt pair (entrance
+  before the crossing, exit after). Prefer a short direct corridor over a detour. A
+  convoluted belt that avoids everything is as bad as one through a building. (build_belt
+  needs rework to this model; current version snakes - do NOT use it as-is for dense areas.)
 - **NEVER area-destroy belts (or anything) to tear down YOUR build.** An area-based
   `find_entities_filtered{area=...,name='transport-belt'}; destroy()` will delete
   EXISTING infrastructure in that box too. I wiped the coal supply line + iron feeder

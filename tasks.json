@@ -1,9 +1,5 @@
 [
   {
-    "desc": "Iron mine -> smelter belt (needs: power at mine + build_belt returns tiles for surgical teardown)",
-    "status": "queued"
-  },
-  {
     "desc": "Coal mine -> smelter belt (direct coal feed + per-furnace inserters)",
     "status": "queued"
   },
