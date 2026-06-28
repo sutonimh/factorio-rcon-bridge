@@ -13,6 +13,23 @@ Every mistake below cost a real iteration. Read before changing autopilot behavi
 - **Keep it legit (no cheats):** build/fuel/move via the character + `create_entity`/
   inventory ops like a player would; never force-spawn finished items, instant-research,
   or hand-set progress. Progress the tech tree legitimately.
+- **NON-STOP work, never stand idle (Seth's standing rule):** the character must always
+  be doing something visible. Don't stop between actions. Chain walks continuously
+  (don't set walking_state=false then sit while running RCON). ALL idle/wait time
+  (research finishing, crafting, builds settling) MUST be spent on refueling +
+  restocking maintenance, walking a patrol of the base.
+- **Keep EVERYTHING fueled, especially the smelter stack (standing rule):** every
+  maintenance pass tops up all stone furnaces (the iron + copper smelter stacks),
+  boilers, and burner drills from the coal stock chest (20.5,-1.5). Never let the
+  smelter starve. `keep_fueled()` does this; run it constantly.
+- **Make material handling VISIBLE (standing rule):** when taking from a chest or
+  inserting into a machine, do it AT the chest/machine with the character present and,
+  where possible, route through the character's own inventory (walk to chest -> take
+  coal into inventory -> walk to furnace -> insert) rather than a silent chest->machine
+  script transfer, so Seth can see the material move.
+- **Proper pathfinding (standing rule):** walking must be smooth, no stutter/stopping.
+  Pre-route around obstacles and follow waypoints, re-sending direction only on a real
+  turn; keep walking_state=true through the whole route.
 - **Blueprint-first, then cadence:** to build anything, (1) `stamp_blueprint()` the
   ghosts, (2) ASK Seth to check/approve, (3) only then `build_ghosts()` which builds
   in a realistic player-like cadence (a couple at a time with delay).
