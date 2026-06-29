@@ -923,15 +923,33 @@ _relocate_cooldown = {}    # ore -> lap index until which not to retry (set afte
 
 
 def _ore_under_drills(ore):
-    """(avg_per_tile, live_count, cx, cy): average ore remaining per tile UNDER the drills
-    currently mining `ore`, the count of those drills, and their centroid. avg_per_tile is the
-    'how thin is the patch we're on' signal - a sparse-edge outpost reads low even with many
-    drills (the iron drought: 11 drills on a 425/tile edge while a 1071/tile field sat adjacent)."""
+    """(density_per_tile, live_count, cx, cy): the per-tile ore density of the patch UNDER the
+    drills currently mining `ore`, the count of those drills, and their centroid. density_per_tile
+    is the 'how thin is the patch we're on' signal - a sparse-edge outpost reads low even with many
+    drills (the iron drought: 11 drills on a 425/tile edge while a 1071/tile field sat adjacent).
+
+    CRITICAL (the 2026-06-29 thrash bug): this MUST measure density the SAME way `richest_spot`
+    measures candidate patches - the ore summed over each drill's 5x5 footprint, averaged, then /25
+    for per-tile - so on-patch and best-patch are apples-to-apples. The old version summed each
+    drill's single actively-depleting `mining_target.amount` tile, which reads far lower than the
+    5x5 average on the SAME patch (494 vs 532/tile here). That made a freshly-relocated outpost ON
+    the richest patch still read 'thin + a richer patch exists' forever -> relocate every 12th lap
+    on a false signal (build_mine_outpost's idempotency made each 'rebuild' a no-op, so it never
+    converged). Measuring the 5x5 footprint kills the false trigger while still firing on a genuine
+    drought (a sparse edge reads low; a dense field reads high)."""
     out = A._print(
-        "/sc local s=game.surfaces[1]; local tot=0; local n=0; local sx=0; local sy=0;"
+        "/sc local s=game.surfaces[1]; local ds={}; local sx=0; local sy=0; local n=0;"
         "for _,d in pairs(s.find_entities_filtered{type='mining-drill'}) do local mt=d.mining_target;"
-        f"  if mt and mt.name=='{ore}' then tot=tot+mt.amount; n=n+1; sx=sx+d.position.x; sy=sy+d.position.y end end;"
-        "if n>0 then rcon.print(math.floor(tot/n)..','..n..','..math.floor(sx/n)..','..math.floor(sy/n)) else rcon.print('0,0,0,0') end").strip()
+        f"  if mt and mt.name=='{ore}' then local x=math.floor(d.position.x); local y=math.floor(d.position.y);"
+        "     ds[#ds+1]={x,y}; sx=sx+x; sy=sy+y; n=n+1 end end;"
+        "if n==0 then rcon.print('0,0,0,0') return end;"
+        "local cx=math.floor(sx/n); local cy=math.floor(sy/n);"
+        f"local amt={{}}; for _,e in pairs(s.find_entities_filtered{{name='{ore}',position={{cx,cy}},radius=40}}) do"
+        "  amt[math.floor(e.position.x)..','..math.floor(e.position.y)]=e.amount end;"
+        "local tot=0; for _,p in pairs(ds) do local sum=0;"
+        "  for dx=-2,2 do for dy=-2,2 do local v=amt[(p[1]+dx)..','..(p[2]+dy)]; if v then sum=sum+v end end end;"
+        "  tot=tot+sum end;"
+        "rcon.print(math.floor(tot/n/25)..','..n..','..cx..','..cy)").strip()
     try:
         avg, c, x, y = out.split(",")
         return int(avg), int(c), int(x), int(y)

@@ -106,6 +106,14 @@ Ordered work:
         14 tiles away). Healthy patches (copper ~1054/tile) never relocate -> no thrash. Tears down
         the failing outpost (refund) then `build_mine_outpost` on the fresh patch; off-ore drills get
         reaped, so placement self-corrects.
+        - [x] FIXED 2026-06-29 thrash: `_ore_under_drills` now measures the on-patch density the same
+          way `richest_spot` measures candidates (per-drill 5x5 footprint avg, /25), not the depleting
+          single-tile `mining_target.amount`. The old per-tile read (494) under the 500 threshold while
+          the true density (532) was above it, so it relocated onto its OWN richest patch every lap.
+        - [ ] FOLLOW-UP: `build_mine_outpost`'s radius-22 idempotency makes an edge->dense-core
+          relocation WITHIN one patch a no-op (it returns the existing chest). Not biting now (the
+          measurement fix stops false triggers), but a genuine same-patch re-center can't rebuild.
+          Gate idempotency on a tile-exact drill-row marker, or re-center drills onto the peak.
 
 - AUTO-UPGRADE TO CURRENT TECH (Seth's standing directive; build toward replacing old tier):
   - [ ] FURNACES: a steel-furnace crafter (craft when steel-smelting researched + steel plates
