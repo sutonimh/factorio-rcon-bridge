@@ -490,6 +490,13 @@ Recent lessons codified:
 ## RCON client protocol
 - Don't use the empty-RESPONSE_VALUE end-marker trick — Factorio doesn't echo it,
   so the read hangs. Read one response packet, then drain with a short timeout.
+- LARGE reads (>~4KB) get truncated/lost in a single response (the known gamedb.snapshot
+  (0,0) bug). FIX (used by architect.py): build the payload server-side into a `storage`
+  global as a JSON string, `rcon.print(#str)` its length, then read it back in fixed-size
+  slices via `str:sub(i,i+CHUNK-1)`. CRUCIAL: `rcon.print` appends a trailing newline to
+  EACH response, so `.rstrip("\r\n")` every slice before concatenating, or you inject a
+  control char into the JSON at every chunk boundary (invalid-control-character at char N).
+  Compact JSON (helpers.table_to_json) has no other trailing whitespace, so the strip is safe.
 
 ## Power grid: never delete connector poles; self-heal islanded generators (2026-06-28)
 

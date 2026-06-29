@@ -3,6 +3,7 @@ status.json
 state-db.json
 autopilot.log
 base-snapshot.json
+architect-report.json
 # editor/sed backups
 *.bak
 __pycache__/
