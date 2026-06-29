@@ -210,9 +210,10 @@ def power():
     pump = A._print(
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local g;"
         "local function iw(x,y) return string.find(s.get_tile(x,y).name,'water')~=nil end;"
-        f"for _,wt in pairs(s.find_tiles_filtered{{position={{{wx},{wy}}},radius=12,name={{'water','deepwater'}}}}) do if g then break end;"
+        f"for _,wt in pairs(s.find_tiles_filtered{{position={{{wx},{wy}}},radius=14,name={{'water','deepwater'}}}}) do if g then break end;"
         "  local x,y=math.floor(wt.position.x),math.floor(wt.position.y);"
-        "  for _,nb in ipairs({{x,y-1,8},{x,y+1,0},{x-1,y,4},{x+1,y,12}}) do local lx,ly,d=nb[1],nb[2],nb[3];"
+        # water-SOUTH shores only (land at y-1, pump dir8) so the proven plant layout applies
+        "  for _,nb in ipairs({{x,y-1,8}}) do local lx,ly,d=nb[1],nb[2],nb[3];"
         "    if not g and not iw(lx,ly) and s.can_place_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d} then"
         "      local e=s.create_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d,force=p.force};"
         "      if e then inv.remove{name='offshore-pump',count=1}; g={x=lx,y=ly,d=d} end end end end;"
@@ -226,35 +227,55 @@ def power():
     return _build_boiler_engine(px, py, pd)
 
 
-def _build_boiler_engine(px, py, pd):
-    """Place a boiler near the pump, bridge water to whichever side actually feeds it
-    (probed live), fuel it, then seat a steam engine on the steam output - all verified."""
-    # output of pump is OPPOSITE its intake dir (pd points at the water); build on the land side.
-    dirvec = {0: (0, 1), 8: (0, -1), 4: (-1, 0), 12: (1, 0)}[pd]   # = output direction (away from water)
-    ox, oy = px + dirvec[0], py + dirvec[1]      # pump output tile (gets water)
-    # bridge: ensure a water pipe at the output tile
-    A.place("pipe", ox, oy, clear=0)
-    # boiler one more tile out, then ring its near side with pipes connected to the output pipe
-    bx, by = px + dirvec[0] * 3, py + dirvec[1] * 3
-    A.place("boiler", bx - 1, by - 1, direction=0, clear=4)
-    # probe: place pipes on the boiler's 4 mid-end tiles bridged from the output pipe; keep watered ones
+def _build_boiler_engine(px, py, pd, n_engines=2):
+    """Replicate Seth's PROVEN steam-plant layout (captured from the live working plant) for a
+    water-SOUTH pump (pd=8, output NORTH): a horizontal pipe line at py-1 carrying the pump output
+    east to the boiler's water inputs, a boiler at (px,py-3) dir0 (steam exits north), and
+    n_engines steam engines chained north (5 tiles apart) + a pole. Verified by get_fluid_count /
+    energy. Returns the boiler tile, or None if the boiler never got water.
+
+    Reference offsets from the proven plant (pump tile (44,0) dir8): pipes (43..46,-1), boiler
+    center (45.5,-2) dir0, engines (45.5,-5.5/-10.5/-15.5/...) dir0."""
+    if pd != 8:
+        A.now(f"power: pump dir {pd} not water-south; this layout supports water-south only for now")
+        return None
+    A.clear_area(px + 1, py - 12, 16)     # clear trees/rocks over the whole plant zone once; then
+    #                                       place everything with clear=0 (clear>0 cliff-aborts).
+    # 1) pipe line at y=py-1, x=px-1..px+2: pump output is the tile (px,py-1); carry it west, then
+    #    UP the west side to the boiler's WEST water input (a dir0 boiler takes water on its E/W
+    #    ENDS, not the south - so a pipe at (px-1,py-2) reaching the boiler's west end is required;
+    #    omitting it leaves the boiler dry. Proven plant had this exact west pipe at (43,-2)).
+    for x in range(px - 1, px + 3):
+        A.place("pipe", x, py - 1, clear=0)
+    A.place("pipe", px - 1, py - 2, clear=0)        # west riser to the boiler's water input
+    # 2) boiler at (px,py-3) dir0 -> center (px+1.5,py-2); west input meets the riser pipe.
+    #    clear=0: the pump area is already established, and clear>0 aborts on a CLIFF anywhere in
+    #    its radius even when the footprint itself is placeable (it bit us at the shore).
+    A.place("boiler", px, py - 3, direction=0, clear=0)
+    bcx, bcy = px + 1, py - 2
+    # 3) fuel the boiler
     A._print(
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
-        "local b=s.find_entities_filtered{name='boiler',position={" + f"{bx},{by}" + "},radius=3}[1]; if not b then rcon.print('nobl') return end;"
-        "local bb=b.bounding_box; local x1,y1,x2,y2=math.floor(bb.left_top.x),math.floor(bb.left_top.y),math.ceil(bb.right_bottom.x)-1,math.ceil(bb.right_bottom.y)-1;"
-        "local ring={};"
-        "for x=x1-1,x2+1 do ring[#ring+1]={x,y1-1}; ring[#ring+1]={x,y2+1} end;"
-        "for y=y1,y2 do ring[#ring+1]={x1-1,y}; ring[#ring+1]={x2+1,y} end;"
-        "for _,t in ipairs(ring) do if not string.find(s.get_tile(t[1],t[2]).name,'water') and s.can_place_entity{name='pipe',position={t[1]+0.5,t[2]+0.5},force=p.force} and inv.get_item_count('pipe')>0 then s.create_entity{name='pipe',position={t[1]+0.5,t[2]+0.5},force=p.force}; inv.remove{name='pipe',count=1} end end")
-    # fuel boiler
-    A._print("/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local b=s.find_entities_filtered{name='boiler',position={" + f"{bx},{by}" + "},radius=3}[1]; if b then local c=math.min(10,inv.get_item_count('coal')); b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end")
-    time.sleep(6)
-    # seat a steam engine adjacent to the boiler's steam side (north) and a pole; verify energy
-    A.place("steam-engine", bx - 1, by - 6, direction=0, clear=4)
-    A.place("small-electric-pole", bx + 2, by - 4, clear=2)
+        f"local b=s.find_entities_filtered{{name='boiler',position={{{bcx},{bcy}}},radius=3}}[1];"
+        "if b then local c=math.min(10,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
+    time.sleep(3)
+    bw = A._print(f"/sc local s=game.surfaces[1]; local b=s.find_entities_filtered{{name='boiler',position={{{bcx},{bcy}}},radius=3}}[1]; rcon.print(b and tostring(math.floor(b.get_fluid_count('water'))) or 'nobl')").strip()
+    # 4) engines chained north, 5 apart: A.place(engine,px,py-8-5k) -> center (px+1.5,py-5.5-5k)
+    for k in range(n_engines):
+        A.place("steam-engine", px, py - 8 - 5 * k, direction=0, clear=0)
+    A.place("small-electric-pole", px + 3, py - 9, clear=0)   # wire reach to the engines
     time.sleep(4)
-    st = A._print("/sc local s=game.surfaces[1]; local e=s.find_entities_filtered{name='steam-engine'}[1]; rcon.print(e and (e.status..'/'..string.format('%.0f',e.energy)) or 'none')").strip()
-    A.now(f"Bootstrap: steam engine status/energy = {st}")
+    st = A._print(
+        "/sc local s=game.surfaces[1]; local o={};"
+        f"local b=s.find_entities_filtered{{name='boiler',position={{{bcx},{bcy}}},radius=3}}[1];"
+        "o[#o+1]='boiler w='..(b and math.floor(b.get_fluid_count('water')) or -1)..' st='..(b and math.floor(b.get_fluid_count('steam')) or -1);"
+        f"local e=s.find_entities_filtered{{name='steam-engine',position={{{px+1},{py-6}}},radius=5}}[1];"
+        "o[#o+1]='engineE='..(e and math.floor(e.energy) or -1); rcon.print(table.concat(o,' '))").strip()
+    A.now(f"power plant verify: {st}")
+    try:
+        return (bcx, bcy) if int(bw) > 0 else None
+    except ValueError:
+        return None
 
 
 def _tech_done(name):
