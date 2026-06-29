@@ -5,6 +5,25 @@ honest conclusion: **plan it around a main bus + blueprints from the very start,
 drive to construction robots so the blueprint book can be stamped and bot-built.** This
 file is the strategic playbook; `GOTCHAS.md` has the tactical rules (read both).
 
+## Standing directives (Seth's, always-on)
+- ARCHITECT -> CODE: the Claude-API architect (`architect.py`) is a TEACHER, not a runtime crutch.
+  When it surfaces a recommendation, distill the DURABLE ones into autopilot/bootstrap functions so
+  the next fresh map needs less of it. GOAL: a fresh map drives all the way to ROBOT PRODUCTION
+  autonomously, with the API run only occasionally to find blind spots, never in the maintain loop.
+- SELF-RELOCATE SUPPLY: never let a mine sit on a thinning/sparse patch. `ensure_ore_supply`
+  re-anchors an outpost onto the densest patch when the ore under its drills goes thin;
+  `reap_dead_drills` removes exhausted drills. (Drill the densest, not the sparse edge, CONTINUOUSLY,
+  not just at first build.)
+- ALWAYS UPGRADE TO CURRENT UNLOCKED TECH (build toward replacing old tier with the new one):
+  - FURNACES: replace stone furnaces with STEEL as soon as steel-smelting is unlocked + steel plates
+    are available. Steel is strictly better (2x speed, identical footprint/recipes) so ALWAYS upgrade.
+    `upgrade_furnaces_to_steel` does the in-place swap; it needs a steel-furnace crafter + maintain
+    wiring (self-gates: no-ops until steel furnaces are craftable).
+  - ASSEMBLERS: upgrade assembling-machine-1 -> 2 -> 3 only when JUSTIFIED, NOT blanket-for-speed:
+    (a) a recipe REQUIRES a higher tier (more complex items the basic tier can't craft) -> use the
+    upgraded tier there; or (b) the upgrade IMPROVES BASE THROUGHPUT (that line is the bottleneck and
+    faster crafting actually helps). Don't upgrade an assembler whose line isn't throughput-gated.
+
 ## The core realization
 - A faithful Nilaus/blueprint base is **meant to be stamped and built by construction
   robots**. Without bots, "following the blueprints" means hand-placing 300+ entities via

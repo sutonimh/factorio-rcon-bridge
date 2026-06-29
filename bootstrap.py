@@ -892,6 +892,82 @@ def haul_ore(min_trip=30, per_trip=600, low_fuel=8):
                  f"local o=math.min(50,inv.get_item_count('{ore}')); if o>0 then fu.insert{{name='{ore}',count=o}}; inv.remove{{name='{ore}',count=o}} end end")
 
 
+def _ore_under_drills(ore):
+    """(avg_per_tile, live_count, cx, cy): average ore remaining per tile UNDER the drills
+    currently mining `ore`, the count of those drills, and their centroid. avg_per_tile is the
+    'how thin is the patch we're on' signal - a sparse-edge outpost reads low even with many
+    drills (the iron drought: 11 drills on a 425/tile edge while a 1071/tile field sat adjacent)."""
+    out = A._print(
+        "/sc local s=game.surfaces[1]; local tot=0; local n=0; local sx=0; local sy=0;"
+        "for _,d in pairs(s.find_entities_filtered{type='mining-drill'}) do local mt=d.mining_target;"
+        f"  if mt and mt.name=='{ore}' then tot=tot+mt.amount; n=n+1; sx=sx+d.position.x; sy=sy+d.position.y end end;"
+        "if n>0 then rcon.print(math.floor(tot/n)..','..n..','..math.floor(sx/n)..','..math.floor(sy/n)) else rcon.print('0,0,0,0') end").strip()
+    try:
+        avg, c, x, y = out.split(",")
+        return int(avg), int(c), int(x), int(y)
+    except ValueError:
+        return 0, 0, 0, 0
+
+
+def ensure_ore_supply(ore, n=10, thin_tile=500, min_ratio=2.0, min_fresh_tile=400):
+    """ARCHITECT-DERIVED self-relocation: when the patch UNDER the `ore` drills is thin AND a
+    clearly richer patch exists, tear down the failing outpost and rebuild a fresh `n`-drill
+    outpost on the DENSEST patch (`richest_spot`), updating STATE[ore] so haul_ore follows. This
+    is the autonomous fix for the 2026-06-29 iron drought (11 drills on a 425/tile sparse EDGE
+    while the 1071/tile dense field sat 14 tiles away, undrilled - Seth's 'drill the densest, not
+    the sparse edge' rule, enforced continuously). Character-driven, so it runs from the main
+    supply strand (NOT the science strand). Returns True if it relocated.
+
+    Trigger (avoids thrash): the per-tile ore under the drills is thin (< thin_tile, or all drills
+    dead) AND the best patch is >= min_ratio x richer (and >= min_fresh_tile/tile). A HEALTHY patch
+    (copper at ~1054/tile) never relocates even when a richer patch exists elsewhere. The failing
+    outpost is torn down (refunded) before the rebuild so build_mine_outpost won't see the old belt
+    and skip; drills landing off-ore get reaped next lap (reap_dead_drills), so placement
+    self-corrects. Touches only mine outposts, never operator base/power/pole layout."""
+    avg, live, cx, cy = _ore_under_drills(ore)
+    best = A.richest_spot(ore, 0, 0, radius=240)
+    if not best:
+        return False
+    fx, fy, sum5 = best
+    fresh_tile = sum5 // 25
+    if fresh_tile < min_fresh_tile:
+        return False                                   # best available patch is itself too thin
+    thin = (live == 0) or (avg < thin_tile)
+    richer = fresh_tile >= max(min_fresh_tile, int(avg * min_ratio))
+    if not (thin and richer):
+        return False
+    dens = sum5
+    status.log(f"ensure_ore_supply({ore}): patch under drills thin ({avg}/tile, {live} drills) and "
+               f"a richer patch exists ({fresh_tile}/tile @ {fx},{fy}) -> relocating")
+    _note(f"relocating {ore} outpost -> {fx},{fy}")
+    # 1. tear down the FAILING outpost (refund drills/belt/inserter/chest) so the rebuild is clean
+    #    and build_mine_outpost won't see an old belt within 22 tiles and skip. The failing drills
+    #    are at the live centroid; if all drills are already dead/reaped (live==0) there's nothing
+    #    to tear down (cleanup_infra sweeps any orphan belt/chest).
+    ox, oy = cx, cy
+    if live:
+        A._print(
+            "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+            f"for _,e in pairs(s.find_entities_filtered{{position={{{ox},{oy}}},radius=26,name={{'burner-mining-drill','transport-belt','underground-belt','burner-inserter','wooden-chest'}}}}) do "
+            "local fb=e.get_fuel_inventory(); if fb then for _,c in pairs(fb.get_contents()) do inv.insert{name=c.name,count=c.count} end end; "
+            "local oi=e.get_output_inventory(); if oi then for _,c in pairs(oi.get_contents()) do inv.insert{name=c.name,count=c.count} end end; "
+            "inv.insert{name=e.name,count=1}; e.destroy() end")
+    # 2. point STATE at the fresh patch and build the new outpost there
+    STATE[ore] = (fx, fy, dens)
+    chest = build_mine_outpost(ore, n)
+    status.log(f"ensure_ore_supply({ore}): rebuilt outpost @ {fx},{fy} -> chest {chest}")
+    return True
+
+
+def relocate_exhausted_outposts():
+    """Each lap (main strand, when not gated): keep iron + copper supply alive by relocating any
+    outpost whose patch is exhausting. Cheap when supply is healthy (just a drill-count query)."""
+    for ore in ("iron-ore", "copper-ore"):
+        if ensure_ore_supply(ore):
+            return True          # one relocation per lap (it's a long character build)
+    return False
+
+
 # scaled chain (more cable/circuit/inserter/belt/green so green volume keeps all labs running)
 SCIENCE_CHAIN = ["iron-gear-wheel", "copper-cable", "copper-cable", "electronic-circuit",
                  "electronic-circuit", "inserter", "inserter", "transport-belt", "transport-belt",
@@ -1341,6 +1417,10 @@ def maintain(laps=0):
                 # PRIORITY override: a fuel/refill gate -> clear it before anything else
                 refill_buffers()
                 haul_ore()
+            elif i % 12 == 0 and relocate_exhausted_outposts():
+                # periodic supply self-heal (not gated): if an outpost is on a thinning patch and a
+                # richer one exists, it relocated this lap (a long character build) - that's the work
+                pass
             elif BUILD_QUEUE:
                 # not gated -> do the next pending BUILD task first (Seth's rule)
                 task = BUILD_QUEUE.pop(0)
