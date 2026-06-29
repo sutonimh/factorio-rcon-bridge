@@ -641,6 +641,30 @@ trigger computed a (0,0) centroid and would have torn down at the ORIGIN/base. L
   `FACTORIO_RCON_HOST=charon python3 ...` (Tailscale RCON); gather wood by `clear_area`, craft via
   `A.craft` (script-craft, no player=), and build with `create_entity` WITHOUT `player=`.
 
+## Relocation thrash: measure the on-patch density the SAME way as candidate patches (2026-06-29)
+
+`ensure_ore_supply` relocated the iron outpost every 12th lap for 30+ min on a FALSE "thin" signal -
+the drills were already on the richest patch (peak -75,17, 1055/tile) yet it kept reporting "patch
+under drills thin (494/tile) ... a richer patch exists (1055/tile @ -75,17) -> relocating", then
+build_mine_outpost's idempotency made each "rebuild" a no-op (existing belt within radius 22 -> it
+returns the existing chest without building), so it never converged. Pure churn: log spam, a
+`_sweep_iron_plates` + reaper-pause every cycle, a wasted maintain lap each time.
+
+Root cause: APPLES-TO-ORANGES density measurement. `_ore_under_drills` summed each drill's single
+actively-depleting `mining_target.amount` tile (reads low, ~494) while `richest_spot` sums ore over
+a 5x5 neighbourhood and divides by 25 (~1055 on the SAME patch). So a freshly-relocated outpost ON
+the best patch always read "thin + richer patch elsewhere". The 6 drills' true 5x5-average density
+was 532/tile - just ABOVE the 500 thin_tile threshold - so it should never have triggered.
+
+Fix: `_ore_under_drills` now measures the patch the SAME way `richest_spot` measures candidates -
+ore summed over each drill's 5x5 footprint, averaged, /25 for per-tile - so on-patch vs best-patch
+is apples-to-apples (same patch -> ratio ~1 -> no relocate). Verified live: now reads 532/tile (not
+494); both gates (`thin` 532<500=False, `richer` 1055>=532*2=False) go False -> no relocation. A
+GENUINE drought still fires: a sparse edge reads low (425/tile) vs a dense field (1071/tile), >2x.
+RULE: any "is the patch we're on thin?" check must use the SAME metric as the candidate-patch check,
+never the depleting single-tile `mining_target.amount`. (Latent follow-up: build_mine_outpost's
+radius-22 idempotency makes an edge->dense-core relocation WITHIN one patch a no-op; not biting now.)
+
 ## Steam plant: Seth's SCALABLE design (verified from his hand-build 2026-06-29)
 
 Fluid ratios (read from prototypes): boiler 1.8 MW = 60 water/s -> 60 steam/s; engine 900 kW =
