@@ -72,11 +72,21 @@ Seth's directives. Priority: HIGH (do next) / MED / LOW. Mark `[x]` when done.
         drills reading `no_minable_resources` — they produce nothing and litter the map (the
         architect found 19 dead drills @ -46,-12 feeding the iron drought). Touches ONLY
         engine-confirmed-exhausted drills, never working drills or operator base/power/poles.
-  - [ ] `ensure_ore_supply(ore, min_live)`: when too few drills are actively mining `ore`, set
-        STATE[ore]=richest fresh patch (`richest_spot`) and `build_mine_outpost` there (reusing
-        the reaped drills) so the supply self-relocates as patches deplete. THIS fixes the iron
-        drought autonomously (fresh iron patch live @ -68,22 density 26776). Must run through
-        BUILD_QUEUE (character-driven), not the science strand.
+  - [x] `ensure_ore_supply(ore)` + `relocate_exhausted_outposts()` (wired into the maintain main
+        loop, every 12th lap when not gated): re-anchors a mine onto the densest patch when the ore
+        UNDER its drills goes thin (per-tile signal, not drill count) and a >=2x-richer patch exists.
+        Fixes the iron drought (11 drills on a 425/tile sparse edge while the 1071/tile field sat
+        14 tiles away). Healthy patches (copper ~1054/tile) never relocate -> no thrash. Tears down
+        the failing outpost (refund) then `build_mine_outpost` on the fresh patch; off-ore drills get
+        reaped, so placement self-corrects.
+
+- AUTO-UPGRADE TO CURRENT TECH (Seth's standing directive; build toward replacing old tier):
+  - [ ] FURNACES: a steel-furnace crafter (craft when steel-smelting researched + steel plates
+        available) + wire `upgrade_furnaces_to_steel()` into the maintain science strand (it already
+        does the in-place stone->steel swap and self-gates). Steel is strictly better -> always upgrade.
+  - [ ] ASSEMBLERS: throughput/complexity-gated upgrade a-m-1 -> 2 -> 3. Upgrade a line's assemblers
+        only when (a) a recipe needs a higher tier, or (b) that line is the throughput bottleneck.
+        Needs a per-line throughput/bottleneck metric; do NOT blanket-upgrade for speed.
   - [ ] Consolidate the sprawled logistic-science assembler line (x=8..103) into one compact
         cluster near the gear/circuit feeders (`SCIENCE_COLS` grid already in `setup_science_io`).
   - [ ] VERIFY the boiler coal-feed inserter (43.5,-2.5) is burner before any power change
