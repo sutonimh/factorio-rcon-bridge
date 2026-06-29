@@ -693,10 +693,43 @@ def build_ghosts(cadence=0.35, batch=2):
     return f"built {n} entities in cadence"
 
 
+NOTE_ANCHOR = (-10, -30)   # world tile NW of + above the base furnaces (clear space); panel grows down
+
+
+def _render_notes(lines):
+    """Draw a vertical task panel in WORLD-SPACE near the base via the rendering API, replacing the
+    previous one each call. WHY world-space, not a GUI: derpface is a PLAYER-LESS character (no
+    `.gui`), and the autopilot runs 24/7 with NO connected player, so the old GUI panel
+    (`storage.derpface.gui.screen`) crashed every lap ('LuaEntity doesn't contain key gui') and the
+    on-screen note never showed. Rendering needs no player and persists across saves. `lines` is a
+    list of (text, bold) tuples. The render objects are stored in `storage.autopilot_notes` so each
+    update destroys exactly the prior panel - no leak, and no `rendering.clear()` that would also
+    wipe unrelated renders. Anchored at the base so anyone who connects to watch sees it there."""
+    ax, ay = NOTE_ANCHOR
+    safe = lambda s: str(s).replace("'", "").replace("\\", "")[:90]
+    parts = []
+    for i, (txt, bold) in enumerate(lines):
+        color = "{1,0.85,0.3}" if bold else "{0.72,0.78,0.85}"
+        scale = "1.5" if bold else "1.1"
+        parts.append(
+            "r=rendering.draw_text{text='" + safe(txt) + "', surface=s, target={" + str(ax) + "," + str(ay) + "+" + str(i) + "*0.95}, "
+            "color=" + color + ", scale=" + scale + ", alignment='left', scale_with_zoom=false}; "
+            "storage.autopilot_notes[#storage.autopilot_notes+1]=r; "
+        )
+    lua = (
+        "/sc if storage.autopilot_notes then for _,id in pairs(storage.autopilot_notes) do if id and id.valid then id.destroy() end end end; "
+        "storage.autopilot_notes={}; local s=game.surfaces[1]; local r; "
+        + "".join(parts) +
+        "rcon.print('notes: " + safe(lines[0][0] if lines else "") + "')"
+    )
+    return _print(lua)
+
+
 def now(action, plan=None):
-    """Update the on-screen note. Structure (Seth's rule): the FIRST line is always the live
-    pending task / thing being waited on (bold, highlighted); below it is the task QUEUE. Keep
-    it current - call this at every action and each maintenance lap so it never goes stale."""
+    """Update the on-screen note (world-space rendering near the base; see `_render_notes`).
+    Structure (Seth's rule): the FIRST line is always the live pending task / thing being waited on
+    (bold, highlighted); below it is the task QUEUE. Keep it current - call this at every action and
+    each maintenance lap so it never goes stale."""
     plan = plan if plan is not None else [
         "Supply: iron/copper/coal mines -> base smelters",
         "Red + green science (assemblers -> labs)",
@@ -705,37 +738,15 @@ def now(action, plan=None):
         "construction-robotics -> robot factory",
         "(biters OFF, crash debris cleared)",
     ]
-    safe = lambda s: str(s).replace("'", "").replace("\\", "")[:90]
-    plan_lua = "{" + ",".join("'" + safe(s) + "'" for s in plan) + "}"
-    lua = (
-        "/sc local p=storage.derpface; local g=p.gui.screen;"
-        "if g.autopilot_notepad then g.autopilot_notepad.destroy() end;"
-        "local f=g.add{type='frame', name='autopilot_notepad', direction='vertical'}; f.location={4,44};"
-        "local nl=f.add{type='label', caption='> " + safe(action) + "'}; nl.style.single_line=false; nl.style.maximal_width=340; nl.style.font='default-bold'; nl.style.font_color={1,0.85,0.3};"
-        "local hl=f.add{type='label', caption='-- queue --'}; hl.style.font_color={0.5,0.55,0.6};"
-        "local pl=" + plan_lua + "; for _,t in ipairs(pl) do local l=f.add{type='label', caption=t}; l.style.single_line=false; l.style.maximal_width=340; l.style.font_color={0.7,0.75,0.8} end;"
-        "rcon.print('now: '..'" + safe(action) + "')"
-    )
-    return _print(lua)
+    lines = [("> " + str(action), True), ("-- queue --", False)] + [(t, False) for t in plan]
+    return _render_notes(lines)
 
 
 def notepad(lines):
-    """Persistent on-screen 'notepad' GUI anchored to the SCREEN top-left corner
-    (not world-space, so it never moves or clips). Each queue entry word-wraps."""
-    rendering_clear = "rendering.clear();"  # remove any old world-space notepad
-    items = ["AUTOPILOT QUEUE"] + list(lines)
-    lua_list = "{" + ",".join("'" + s.replace("'", "").replace("\\", "") + "'" for s in items) + "}"
-    lua = (
-        "/sc " + rendering_clear +
-        "local p=storage.derpface; local g=p.gui.screen;"
-        "if g.autopilot_notepad then g.autopilot_notepad.destroy() end;"
-        "local f=g.add{type='frame', name='autopilot_notepad', direction='vertical'};"
-        "f.location={4,44};"
-        "local L=" + lua_list + ";"
-        "for i,t in ipairs(L) do local lbl=f.add{type='label', caption=t}; lbl.style.single_line=false; lbl.style.maximal_width=300; if i==1 then lbl.style.font='default-bold' end end;"
-        "rcon.print('notepad GUI updated (top-left, wrapping)')"
-    )
-    return _print(lua)
+    """Persistent on-screen 'notepad' (world-space rendering near the base; see `_render_notes`).
+    The first line is the bold header; each queue entry is its own line."""
+    items = [("AUTOPILOT QUEUE", True)] + [(s, False) for s in lines]
+    return _render_notes(items)
 
 
 def snapshot(path=None):

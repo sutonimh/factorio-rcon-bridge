@@ -299,8 +299,18 @@ Recent lessons codified:
 - **Defenses:** turrets start full (100 mags) on deploy when ammo allows, refill at
   <50%, and `produce_ammo` ramps when low. `fortify` auto-scales the ring to nearby
   nest count and weights toward the nearest nest (even ring if none).
-- **In-game notepad:** keep the task queue on-screen via `notepad()` (rendering API),
+- **In-game notepad:** keep the task queue on-screen via `notepad()`/`now()` (rendering API),
   not just `game.print` (which scrolls away).
+- **The notepad must use WORLD-SPACE rendering, NEVER a player GUI (2026-06-29).** `now()`/`notepad()`
+  originally wrote to `storage.derpface.gui.screen`, but derpface is a PLAYER-LESS character (no
+  `.gui` -> 'LuaEntity doesn't contain key gui') AND the autopilot runs 24/7 with NO connected
+  player, so every `now()` call crashed silently (swallowed by the loop's except) and the on-screen
+  note never appeared. FIX: `_render_notes()` draws a vertical panel via `rendering.draw_text` at a
+  fixed world tile near the base (`NOTE_ANCHOR`), storing the LuaRenderObjects in
+  `storage.autopilot_notes` so each update destroys exactly the prior panel (no leak; never
+  `rendering.clear()`, which would wipe unrelated renders). Render objects persist in `storage`
+  across saves + RCON calls. RULE: anything "on-screen" for the autopilot is world-space rendering,
+  never a GUI - there is usually no player to own a GUI.
 
 ## Achievements
 - Hosting a save as multiplayer (required for RCON) disables Steam achievements.
