@@ -814,27 +814,22 @@ def refill_buffers(threshold=0.2):
 
 
 def restock_coal(low=40, target=150):
-    """Keep 6-12 stacks of coal in the character's inventory (Seth's rule) by hauling from the
-    COAL MINE output chest, so refueling everything is one local insert (no per-refuel trip).
-    Falls back to hand-mining only if there's no coal mine chest yet."""
-    # visit if the character is low on coal OR the coal mine's own drills are low on fuel
-    need = _outpost_needs("coal")
-    coal_drills_low = need and need[3] < 8
-    if _count("coal") >= low and not coal_drills_low:
+    """Keep derpface stocked with coal so fuel_drills/fuel_arrays/keep_power can refuel the mine
+    drills, furnaces, and boiler. Pulls coal SERVER-SIDE (NO walk, NO building) from the richest coal
+    chest in the base (the operator's coal stock chest, kept full by the self-feeding coal mine),
+    then falls back to lifting coal off transport belts near derpface (it parks in the coal). The old
+    version walked to a hardcoded coal-mine chest that no longer exists after the operator rebuilt
+    the mine, so derpface never restocked and every distant drill ran dry."""
+    if _count("coal") >= target:
         return
-    mc = mine_chest("coal")
-    if mc and mc[2] > 0:
-        cx, cy, _ = mc
-        rx, ry = STATE["coal"][0], STATE["coal"][1]
-        A.now(f"Restock: ALL coal from coal mine chest @{cx},{cy} (+refuel coal drills)")
-        A.stop(); A.walk(cx, cy + 1, tol=3.0)
-        # take ALL the coal in the chest (Seth: minimize trips back), AND refuel the coal mine's
-        # own drills (they don't self-fuel reliably)
-        A._print(f"/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); "
-                 f"local c=s.find_entities_filtered{{name='wooden-chest',position={{{cx},{cy}}},radius=1}}[1]; if c then local ci=c.get_inventory(defines.inventory.chest); local n=ci.get_item_count('coal'); if n>0 then local g=inv.insert{{name='coal',count=n}}; ci.remove{{name='coal',count=g}} end end; "
-                 f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=24,name={{'burner-mining-drill','burner-inserter'}}}}) do local fb=d.get_fuel_inventory(); local need=25-(fb and fb.get_item_count('coal') or 0); local k=math.min(need,inv.get_item_count('coal')); if k>0 then d.insert{{name='coal',count=k}}; inv.remove{{name='coal',count=k}} end end")
-    else:
-        ensure("coal", target)
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+        "local want=" + str(target) + "-inv.get_item_count('coal'); if want<=0 then return end;"
+        # richest coal chest anywhere (the operator's stock chest)
+        "local best,bn=nil,0; for _,c in pairs(s.find_entities_filtered{name={'wooden-chest','steel-chest','iron-chest'}}) do local ci=c.get_inventory(defines.inventory.chest); local n=ci and ci.get_item_count('coal') or 0; if n>bn then bn=n; best=c end end;"
+        "if best then local ci=best.get_inventory(defines.inventory.chest); local k=math.min(want,ci.get_item_count('coal')); if k>0 then local g=inv.insert{name='coal',count=k}; ci.remove{name='coal',count=g}; want=want-g end end;"
+        # fallback: lift coal off belts within reach (derpface parks at the coal mine)
+        "if want>0 then for _,b in pairs(s.find_entities_filtered{name='transport-belt',position=p.position,radius=10}) do for ln=1,2 do local line=b.get_transport_line(ln); local n=line.get_item_count('coal'); if n>0 then local k=math.min(want,n); line.remove_item{name='coal',count=k}; inv.insert{name='coal',count=k}; want=want-k end end; if want<=0 then break end end end")
 
 
 def _outpost_needs(ore):
@@ -1271,6 +1266,7 @@ def maintain(laps=0):
         while flag["run"]:
             try:
                 keep_power()                  # TOP PRIORITY: keep the steam plant fueled (server-side)
+                restock_coal()                # keep derpface stocked with coal (server-side, from the stock chest/belts)
                 fuel_arrays()                 # keep the belt-fed smelter array furnaces fueled (server-side)
                 # ensure_coal_restock()       # DISABLED: the coal mine is human-built (self-feeding). The autopilot must NOT
                 #                               rebuild base layout the operator manages - it kept rebuilding Seth's coal
