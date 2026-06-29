@@ -604,3 +604,39 @@ logic ARE safe to build blind; fluids are not.
 **4. Either power-loss OR coal-starvation cascades to a FULL base stall** (everything idle, looks
 identical). When the base freezes, check BOTH: engine buffer (power_ok) AND the coal restock chain.
 Harden both before scaling production again.
+
+## create_entity{player=p} FAILS for the player-less derpface - it broke ALL autopilot builds (2026-06-29)
+
+THE big one. `A.place` / `A.build` (and a few other builders) called
+`s.create_entity{..., player=p}` where `p=storage.derpface`. derpface is a PLAYER-LESS character
+(`derpface.player == nil`, since CHARON Phase 3 made it a 24/7 autonomous character, not a connected
+player's body). `create_entity`'s `player=` field expects a LuaPlayer/index/name - a character entity
+is not one - so the whole RCON command errored: `Invalid PlayerIdentification. Expected LuaPlayer,
+index or name.` EVERY build placement silently failed (returned the error string, not 'BUILT'), so
+`build_mine_outpost` placed nothing and returned None. The base only ever got built earlier, when
+derpface WAS a connected player's character (player != nil); since going player-less, autonomous
+building was dead and nobody noticed until a build was actually triggered (the relocation feature).
+FIX: drop `player=` entirely (it only sets build attribution/undo, which we don't need). Verified:
+`A.place` returns 'BUILT' again. This unblocks ALL autonomous building - the enabler for a fresh map
+driving itself to robots. RULE: never pass `player=` a character entity in create_entity; omit it.
+
+## Relocation must be SAFE: build-first, never strand the base (2026-06-29)
+
+The first auto-relocation (`ensure_ore_supply`) tore down the failing iron outpost, then the rebuild
+failed (the player=p bug above) -> 0 iron drills, WORSE than before. And with 0 live drills the next
+trigger computed a (0,0) centroid and would have torn down at the ORIGIN/base. Lessons codified:
+- BUILD FIRST, commit only on success. Don't tear the old outpost down before the new one verifies
+  (`chest` not None). On failure REVERT `STATE[ore]` and set a cooldown so it doesn't retry-spam.
+- PAUSE the reaper during a relocation build (`_REAP_PAUSE`): the science strand's `reap_dead_drills`
+  runs concurrently and will kill freshly-placed drills (which momentarily read no_minable_resources)
+  mid-build.
+- SWEEP stranded iron-plate into the inventory before building (`_sweep_iron_plates`): the build
+  needs to craft a burner-inserter, and the relocate-while-iron-starved trap is real (plates sit in
+  base chests while the inventory has 0). Pull them first.
+- Never teardown at a (0,0) centroid (the live==0 case): guard it.
+- Trigger on per-tile ore UNDER the drills (thin) + a >=2x richer patch, not drill count - the iron
+  outpost had 11 live drills on a 425/tile sparse edge while the dense 1071/tile field sat 14 tiles
+  away. Healthy patches (copper ~1054/tile) must never relocate (no thrash).
+- EMERGENCY RECOVERY pattern (autopilot stopped): drive the game from the Mac with
+  `FACTORIO_RCON_HOST=charon python3 ...` (Tailscale RCON); gather wood by `clear_area`, craft via
+  `A.craft` (script-craft, no player=), and build with `create_entity` WITHOUT `player=`.

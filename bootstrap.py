@@ -212,7 +212,7 @@ def power():
         "  local x,y=math.floor(wt.position.x),math.floor(wt.position.y);"
         "  for _,nb in ipairs({{x,y-1,8},{x,y+1,0},{x-1,y,4},{x+1,y,12}}) do local lx,ly,d=nb[1],nb[2],nb[3];"
         "    if not g and not iw(lx,ly) and s.can_place_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d,force=p.force} then"
-        "      local e=s.create_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d,force=p.force,player=p};"
+        "      local e=s.create_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d,force=p.force};"
         "      if e then inv.remove{name='offshore-pump',count=1}; g={x=lx,y=ly,d=d} end end end end;"
         "if g then rcon.print(g.x..','..g.y..','..g.d) else rcon.print('none') end").strip()
     px, py, pd = map(int, pump.split(","))
@@ -892,6 +892,10 @@ def haul_ore(min_trip=30, per_trip=600, low_fuel=8):
                  f"local o=math.min(50,inv.get_item_count('{ore}')); if o>0 then fu.insert{{name='{ore}',count=o}}; inv.remove{{name='{ore}',count=o}} end end")
 
 
+_REAP_PAUSE = False        # set True during a relocation build so the reaper doesn't kill new drills
+_relocate_cooldown = {}    # ore -> lap index until which not to retry (set after a failed build)
+
+
 def _ore_under_drills(ore):
     """(avg_per_tile, live_count, cx, cy): average ore remaining per tile UNDER the drills
     currently mining `ore`, the count of those drills, and their centroid. avg_per_tile is the
@@ -909,7 +913,7 @@ def _ore_under_drills(ore):
         return 0, 0, 0, 0
 
 
-def ensure_ore_supply(ore, n=10, thin_tile=500, min_ratio=2.0, min_fresh_tile=400):
+def ensure_ore_supply(ore, lap=0, n=10, thin_tile=500, min_ratio=2.0, min_fresh_tile=400):
     """ARCHITECT-DERIVED self-relocation: when the patch UNDER the `ore` drills is thin AND a
     clearly richer patch exists, tear down the failing outpost and rebuild a fresh `n`-drill
     outpost on the DENSEST patch (`richest_spot`), updating STATE[ore] so haul_ore follows. This
@@ -924,6 +928,9 @@ def ensure_ore_supply(ore, n=10, thin_tile=500, min_ratio=2.0, min_fresh_tile=40
     outpost is torn down (refunded) before the rebuild so build_mine_outpost won't see the old belt
     and skip; drills landing off-ore get reaped next lap (reap_dead_drills), so placement
     self-corrects. Touches only mine outposts, never operator base/power/pole layout."""
+    global _REAP_PAUSE
+    if lap < _relocate_cooldown.get(ore, 0):
+        return False                                   # backed off after a recent failed attempt
     avg, live, cx, cy = _ore_under_drills(ore)
     best = A.richest_spot(ore, 0, 0, radius=240)
     if not best:
@@ -936,34 +943,62 @@ def ensure_ore_supply(ore, n=10, thin_tile=500, min_ratio=2.0, min_fresh_tile=40
     richer = fresh_tile >= max(min_fresh_tile, int(avg * min_ratio))
     if not (thin and richer):
         return False
-    dens = sum5
+    if live and abs(fx - cx) < 6 and abs(fy - cy) < 6:
+        return False                                   # best patch is where we already mine - no churn
     status.log(f"ensure_ore_supply({ore}): patch under drills thin ({avg}/tile, {live} drills) and "
                f"a richer patch exists ({fresh_tile}/tile @ {fx},{fy}) -> relocating")
     _note(f"relocating {ore} outpost -> {fx},{fy}")
-    # 1. tear down the FAILING outpost (refund drills/belt/inserter/chest) so the rebuild is clean
-    #    and build_mine_outpost won't see an old belt within 22 tiles and skip. The failing drills
-    #    are at the live centroid; if all drills are already dead/reaped (live==0) there's nothing
-    #    to tear down (cleanup_infra sweeps any orphan belt/chest).
-    ox, oy = cx, cy
-    if live:
-        A._print(
+    # SAFETY (learned the hard way 2026-06-29): build FIRST and only commit if it succeeds; never
+    # leave the base with zero supply on a failed build. (a) sweep stranded iron plates into the
+    # inventory so build_mine_outpost can craft its burner-inserter even while iron is tight;
+    # (b) pause the reaper so the science strand doesn't kill freshly-placed drills mid-build;
+    # (c) build on the fresh patch (build_mine_outpost clean-slates it, which also clears an
+    # overlapping old sparse outpost); (d) on failure revert STATE + back off; on success tear down
+    # any FAR old outpost (an overlapping one was already cleared by the clean-slate).
+    _sweep_iron_plates()
+    old_state = STATE.get(ore)
+    STATE[ore] = (fx, fy, sum5)
+    _REAP_PAUSE = True
+    try:
+        chest = build_mine_outpost(ore, n)
+    except Exception as e:
+        chest = None
+        status.log(f"ensure_ore_supply({ore}): build raised {e}")
+    finally:
+        _REAP_PAUSE = False
+    if not chest:
+        STATE[ore] = old_state                         # revert: leave the old outpost as it was
+        _relocate_cooldown[ore] = lap + 60             # ~20 min before retrying (don't spam)
+        status.log(f"ensure_ore_supply({ore}): build failed, reverted + backing off")
+        return False
+    if old_state and (abs(old_state[0] - fx) > 30 or abs(old_state[1] - fy) > 30):
+        A._print(                                      # remove the now-orphaned FAR old outpost
             "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
-            f"for _,e in pairs(s.find_entities_filtered{{position={{{ox},{oy}}},radius=26,name={{'burner-mining-drill','transport-belt','underground-belt','burner-inserter','wooden-chest'}}}}) do "
+            f"for _,e in pairs(s.find_entities_filtered{{position={{{old_state[0]},{old_state[1]}}},radius=26,name={{'burner-mining-drill','transport-belt','underground-belt','burner-inserter','wooden-chest'}}}}) do "
             "local fb=e.get_fuel_inventory(); if fb then for _,c in pairs(fb.get_contents()) do inv.insert{name=c.name,count=c.count} end end; "
             "local oi=e.get_output_inventory(); if oi then for _,c in pairs(oi.get_contents()) do inv.insert{name=c.name,count=c.count} end end; "
             "inv.insert{name=e.name,count=1}; e.destroy() end")
-    # 2. point STATE at the fresh patch and build the new outpost there
-    STATE[ore] = (fx, fy, dens)
-    chest = build_mine_outpost(ore, n)
     status.log(f"ensure_ore_supply({ore}): rebuilt outpost @ {fx},{fy} -> chest {chest}")
     return True
 
 
-def relocate_exhausted_outposts():
+def _sweep_iron_plates():
+    """Pull stranded iron-plate from base containers + furnace/assembler outputs into derpface's
+    inventory, so a build that needs to craft (e.g. a burner-inserter) isn't blocked while iron is
+    tight (the relocate-while-starved trap). Server-side, no walk."""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+        "for _,e in pairs(s.find_entities_filtered{force='player'}) do local ivs={};"
+        "  if e.type=='container' or e.type=='logistic-container' then ivs[#ivs+1]=e.get_inventory(defines.inventory.chest) end;"
+        "  if e.type=='furnace' or e.type=='assembling-machine' then ivs[#ivs+1]=e.get_output_inventory() end;"
+        "  for _,iv in pairs(ivs) do if iv then local c=iv.get_item_count('iron-plate'); if c>0 then local g=inv.insert{name='iron-plate',count=c}; iv.remove{name='iron-plate',count=g} end end end end")
+
+
+def relocate_exhausted_outposts(lap=0):
     """Each lap (main strand, when not gated): keep iron + copper supply alive by relocating any
-    outpost whose patch is exhausting. Cheap when supply is healthy (just a drill-count query)."""
+    outpost whose patch is exhausting. Cheap when supply is healthy (just a density query)."""
     for ore in ("iron-ore", "copper-ore"):
-        if ensure_ore_supply(ore):
+        if ensure_ore_supply(ore, lap=lap):
             return True          # one relocation per lap (it's a long character build)
     return False
 
@@ -1307,6 +1342,8 @@ def reap_dead_drills():
     as out of ore, so it can never hit a working drill or any operator-built base/power/pole.
     Refunded drills + coal are reused by the relocation pass (ensure_ore_supply) on a fresh patch.
     Returns the number reaped."""
+    if _REAP_PAUSE:
+        return 0                   # a relocation build is placing drills; don't reap them mid-build
     out = A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then rcon.print('0'); return end;"
         "local s=p.surface; local inv=p.get_main_inventory(); local n=0;"
@@ -1417,7 +1454,7 @@ def maintain(laps=0):
                 # PRIORITY override: a fuel/refill gate -> clear it before anything else
                 refill_buffers()
                 haul_ore()
-            elif i % 12 == 0 and relocate_exhausted_outposts():
+            elif i % 12 == 0 and relocate_exhausted_outposts(i):
                 # periodic supply self-heal (not gated): if an outpost is on a thinning patch and a
                 # richer one exists, it relocated this lap (a long character build) - that's the work
                 pass

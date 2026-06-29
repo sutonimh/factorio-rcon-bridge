@@ -455,7 +455,7 @@ def build_belt(sx, sy, gx, gy, item='transport-belt', ug='underground-belt', tag
         else:
             spec = "name='%s',position={%g,%g},direction=%d,force=f" % (nm, cx, cy, di)
         cmds.append(
-            "do local it='%s'; if inv.get_item_count(it)>0 and s.can_place_entity{%s} then local e=s.create_entity{%s,player=p}; if e then inv.remove{name=it,count=1}; n=n+1; pl[#pl+1]=string.format('%%s|%%g|%%g',e.name,e.position.x,e.position.y) end end end"
+            "do local it='%s'; if inv.get_item_count(it)>0 and s.can_place_entity{%s} then local e=s.create_entity{%s}; if e then inv.remove{name=it,count=1}; n=n+1; pl[#pl+1]=string.format('%%s|%%g|%%g',e.name,e.position.x,e.position.y) end end end"
             % (nm, spec, spec)
         )
     lua = (
@@ -593,7 +593,7 @@ def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0, clear=10):
         "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
         "local proto=prototypes.item[item]; local ename=proto and proto.place_result and proto.place_result.name or item;"
         "if not s.can_place_entity{name=ename,position=pos,direction=dir,force=p.force} then rcon.print('CANT_PLACE '..item..' at '..pos[1]..','..pos[2]) return end;"
-        "local e=s.create_entity{name=ename,position=pos,direction=dir,force=p.force,player=p};"
+        "local e=s.create_entity{name=ename,position=pos,direction=dir,force=p.force};"
         "if e then inv.remove{name=item,count=1}; rcon.print('BUILT '..ename..' at '..math.floor(e.position.x)..','..math.floor(e.position.y)) else rcon.print('CREATE_FAILED '..item) end"
     )
     return _print(lua)
@@ -646,7 +646,7 @@ def place(name, tile_x, tile_y, direction=0, clear=10):
         "local ep=prototypes.entity[ename]; local cx=tx+ep.tile_width/2; local cy=ty+ep.tile_height/2;"
         "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
         "if not s.can_place_entity{name=ename,position={cx,cy},direction=dir,force=p.force} then rcon.print('CANT_PLACE '..ename..' @tile('..tx..','..ty..')') return end;"
-        "local e=s.create_entity{name=ename,position={cx,cy},direction=dir,force=p.force,player=p};"
+        "local e=s.create_entity{name=ename,position={cx,cy},direction=dir,force=p.force};"
         "if e then inv.remove{name=item,count=1}; rcon.print('BUILT '..ename..' @('..e.position.x..','..e.position.y..')') else rcon.print('CREATE_FAILED '..item) end"
     )
     return _print(lua)
@@ -1181,7 +1181,7 @@ def fortify(cx, cy, count=16, radius=13, detect_range=90, ammo_each=10, base=6, 
         "  for i=0,front-1 do local a=a0+(-0.85+1.7*(front>1 and i/(front-1) or 0)); pos[#pos+1]={cx+R*math.cos(a), cy+R*math.sin(a)} end;"
         "  for i=0,rear-1 do local a=a0+pi+(-1.3+2.6*(rear>1 and i/(rear-1) or 0)); pos[#pos+1]={cx+R*math.cos(a), cy+R*math.sin(a)} end;"
         "else for i=0,count-1 do local a=2*pi*i/count; pos[#pos+1]={cx+R*math.cos(a), cy+R*math.sin(a)} end end;"
-        "local placed=0; for _,pp in ipairs(pos) do if inv.get_item_count('gun-turret')>0 then local np=s.find_non_colliding_position('gun-turret', pp, 6, 1); if np then local t=s.create_entity{name='gun-turret',position=np,force=p.force,player=p}; if t then inv.remove{name='gun-turret',count=1}; placed=placed+1; local mag=math.min(" + str(ammo_each) + ", inv.get_item_count('firearm-magazine')); if mag>0 then t.insert{name='firearm-magazine',count=mag}; inv.remove{name='firearm-magazine',count=mag} end end end end end;"
+        "local placed=0; for _,pp in ipairs(pos) do if inv.get_item_count('gun-turret')>0 then local np=s.find_non_colliding_position('gun-turret', pp, 6, 1); if np then local t=s.create_entity{name='gun-turret',position=np,force=p.force}; if t then inv.remove{name='gun-turret',count=1}; placed=placed+1; local mag=math.min(" + str(ammo_each) + ", inv.get_item_count('firearm-magazine')); if mag>0 then t.insert{name='firearm-magazine',count=mag}; inv.remove{name='firearm-magazine',count=mag} end end end end end;"
         "rcon.print('fortify ('..cx..','..cy..'): '..placed..'/'..count..' turrets ('..nnests..' nests in range); '..(nest and ('nearest@('..math.floor(nest.position.x)..','..math.floor(nest.position.y)..') -> WEIGHTED') or 'no nest -> EVEN')..'; turrets in hand='..inv.get_item_count('gun-turret'))"
     )
     return _print(lua)
