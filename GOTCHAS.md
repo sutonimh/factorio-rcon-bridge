@@ -474,6 +474,23 @@ Recent lessons codified:
   name->count map. Iterating `for n,c in pairs(...)` gives c as a TABLE and crashes
   on concat. Use `inv.get_item_count('name')` for specific items, or index the
   entry fields.
+- **`inv.remove{count=0}` THROWS "count must be positive" - guard EVERY remove whose count is an
+  insert's return (2026-06-29, froze the whole base).** The servicers move items as
+  `local g=dst.insert{...}; src.remove{count=g}`. When the destination is FULL, `insert` returns 0,
+  so `remove{count=0}` errors and ABORTS THE ENTIRE `/sc` command. `trim_inventory`'s lab-feed loop
+  hit this every lap (labs' input fills -> g=0 -> crash) BEFORE its `trim('copper-cable',200)` ran,
+  so the cable clog (8400, over-produced by the green chain) was never trimmed -> derpface inventory
+  hit free=0 -> `_collect_plates_all` could no longer pull plates from the furnaces (insert returns
+  0) -> furnaces stuck `full_output` -> assemblers `item_ingredient_shortage` -> labs
+  `missing_science_packs` -> research stalled. Power was fine the whole time; the symptom looked
+  like a supply problem but was a 1-line crash. RULE: any `target.remove{count=X}` where X came from
+  an `insert` MUST be `if X>0 then target.remove{...} end`. Fixed at all sites (trim_inventory,
+  service_science, _collect_plates/_collect_plates_all, restock_coal, _sweep_iron_plates,
+  harvest_array_plates). Diagnose a base-wide freeze by the entity STATUS histogram
+  (`find_entities_filtered{type=...}` -> tally `e.status`): full_output + item_ingredient_shortage +
+  missing_science_packs with power OK = a material-flow break, and check derpface `free` slots FIRST.
+  (Follow-up: the green chain over-produces copper-cable; cap the cable assembler or it just gets
+  deleted by trim every lap - wasteful but not fatal once trim runs.)
 
 ## Megabase ghost placement (Nilaus/factoriobin blueprints over RCON)
 - Endgame blueprints can be placed as GHOSTS regardless of tech (no research/bots
