@@ -665,6 +665,18 @@ def build_mine_outpost(ore, n=8):
     if not spot:
         return None
     rx, ry, _ = spot
+    # GUARD (Seth, 2026-06-29): never re-cap a BELT-FED mine. build_mine_outpost ALWAYS terminates
+    # the ore belt with an inserter+wooden-chest (for character hauling). When a human belt-connects
+    # the mine to the base smelters, they REMOVE that terminal chest and run the belt through. So
+    # "ore belts present but NO terminal chest" == belt-fed: rebuilding/clean-slating it here would
+    # destroy the through-belt and re-cap it with a dead-end chest, draining the belt and starving
+    # the base (the exact iron-mine bug Seth caught). Leave a belt-fed mine completely untouched.
+    bf = A._print(f"/sc local s=game.surfaces[1]; local b=#s.find_entities_filtered{{name={{'transport-belt','underground-belt'}},position={{{rx},{ry}}},radius=30}}; local c=#s.find_entities_filtered{{name='wooden-chest',position={{{rx},{ry}}},radius=30}}; rcon.print(b..','..c)").strip()
+    nb, nc = (int(bf.split(",")[0]), int(bf.split(",")[1])) if "," in bf else (0, 1)
+    if nb >= 4 and nc == 0:
+        A.now(f"Supply: {ore} mine is BELT-FED (belts, no terminal chest) @{rx},{ry} - leaving it intact")
+        status.log(f"build_mine_outpost({ore}): mine is belt-fed (no terminal chest) - skipped to avoid re-capping")
+        return (rx, ry)        # truthy 'already connected' sentinel; haul_ore no-ops with no chest
     # Already a CLEAN outpost (belt + chest, and NO furnaces - smelting is base-only)? then skip.
     state = A._print(f"/sc local s=game.surfaces[1]; rcon.print(#s.find_entities_filtered{{name='transport-belt',position={{{rx},{ry}}},radius=22}}..','..#s.find_entities_filtered{{name='stone-furnace',position={{{rx},{ry}}},radius=22}})").strip()
     nbelt, nfurn = (int(state.split(",")[0]), int(state.split(",")[1])) if "," in state else (0, 1)

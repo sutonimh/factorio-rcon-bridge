@@ -470,8 +470,11 @@ Recent lessons codified:
   rebuilds (`build_mine_outpost`) keep re-placing the terminal chest, and the belt-connect step
   (`build_belt_supply`/`connect_mine_to_array`) never ran. So a relocated mine is left chest-capped.
 - RULE: a mine is EITHER character-hauled (terminal chest, no belt to base) OR belt-fed (no terminal
-  chest, continuous belt to base) - never both at the same belt end. If you relocate/rebuild a
-  belt-fed mine, re-run the chest removal + belt-through, or `build_mine_outpost` silently re-caps it.
+  chest, continuous belt to base) - never both at the same belt end.
+- GUARD (implemented): `build_mine_outpost` now bails at the top if the patch has ore belts but NO
+  terminal wooden-chest (`nb>=4 and nc==0` within radius 30) - that signature == a human belt-fed
+  the mine, so it returns a sentinel and leaves the through-belt intact instead of clean-slating +
+  re-capping. A fresh patch (0 belts) and a normal char-haul outpost (has a chest) are unaffected.
 
 ## Smelter ore feed: two storage chests (Seth's layout)
 - Seth set up ONE storage chest per smelter stack, each with a loader inserter that
