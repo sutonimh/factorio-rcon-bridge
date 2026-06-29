@@ -656,6 +656,21 @@ def upgrade_furnaces_to_steel():
         "      if nf then for it,c in pairs(keep) do pcall(function() nf.insert{name=it,count=c} end) end; inv.remove{name='steel-furnace',count=1} end end end end")
 
 
+def _mine_is_belt_fed(x, y):
+    """True if the mine around (x,y) has ore belts but NO terminal wooden-chest within radius 30.
+    build_mine_outpost ALWAYS leaves a terminal chest (for character hauling), so "belts present, no
+    terminal chest" is the signature of a human-laid BELT-FED mine (the operator removed the chest
+    and ran the belt through to base). Such a mine is operator-managed: never relocate, rebuild, or
+    re-cap it (any of those destroy the through-belt and starve the base - the iron-mine bug Seth
+    caught 2026-06-29)."""
+    out = A._print(f"/sc local s=game.surfaces[1]; local b=#s.find_entities_filtered{{name={{'transport-belt','underground-belt'}},position={{{x},{y}}},radius=30}}; local c=#s.find_entities_filtered{{name='wooden-chest',position={{{x},{y}}},radius=30}}; rcon.print(b..','..c)").strip()
+    try:
+        nb, nc = int(out.split(",")[0]), int(out.split(",")[1])
+    except (ValueError, IndexError):
+        return False
+    return nb >= 4 and nc == 0
+
+
 def build_mine_outpost(ore, n=8):
     """Seth's supply architecture: a SCALED row of `n` burner drills all dropping onto ONE belt
     that runs east to a single OUTPUT CHEST loaded by a burner inserter. NO furnaces here -
@@ -671,9 +686,7 @@ def build_mine_outpost(ore, n=8):
     # "ore belts present but NO terminal chest" == belt-fed: rebuilding/clean-slating it here would
     # destroy the through-belt and re-cap it with a dead-end chest, draining the belt and starving
     # the base (the exact iron-mine bug Seth caught). Leave a belt-fed mine completely untouched.
-    bf = A._print(f"/sc local s=game.surfaces[1]; local b=#s.find_entities_filtered{{name={{'transport-belt','underground-belt'}},position={{{rx},{ry}}},radius=30}}; local c=#s.find_entities_filtered{{name='wooden-chest',position={{{rx},{ry}}},radius=30}}; rcon.print(b..','..c)").strip()
-    nb, nc = (int(bf.split(",")[0]), int(bf.split(",")[1])) if "," in bf else (0, 1)
-    if nb >= 4 and nc == 0:
+    if _mine_is_belt_fed(rx, ry):
         A.now(f"Supply: {ore} mine is BELT-FED (belts, no terminal chest) @{rx},{ry} - leaving it intact")
         status.log(f"build_mine_outpost({ore}): mine is belt-fed (no terminal chest) - skipped to avoid re-capping")
         return (rx, ry)        # truthy 'already connected' sentinel; haul_ore no-ops with no chest
@@ -988,6 +1001,11 @@ def ensure_ore_supply(ore, lap=0, n=10, thin_tile=500, min_ratio=2.0, min_fresh_
     if lap < _relocate_cooldown.get(ore, 0):
         return False                                   # backed off after a recent failed attempt
     avg, live, cx, cy = _ore_under_drills(ore)
+    if live and _mine_is_belt_fed(cx, cy):
+        return False                                   # operator-managed belt-fed mine: never relocate
+                                                       # (tears down the belt feed; also stops the no-op
+                                                       # thrash when the patch dips below thin_tile but
+                                                       # the best patch is its own peak)
     best = A.richest_spot(ore, 0, 0, radius=240)
     if not best:
         return False
