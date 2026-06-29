@@ -58,3 +58,20 @@ Seth's directives. Priority: HIGH (do next) / MED / LOW. Mark `[x]` when done.
 - [ ] Research driver to `construction-robotics`, then STAMP the robot-factory blueprint and let
       bots build it (`stamp_blueprint`/`build_ghosts` + `blueprints/` already exist; wire them).
 - [ ] Top-level `play()` that sequences bootstrap → research → oil → blue → robotics → factory.
+
+## Architect (Claude-API strategic layer)
+- [x] `architect.py`: rich live snapshot (positions/dir/status/recipe/fuel/power/chests, chunked
+      truncation-proof RCON read) → Claude (Opus 4.8, adaptive thinking) → structured report
+      (bottlenecks/messes/layout-recs/prioritized-actions), with all GOTCHAS/BUILD-CONVENTIONS
+      rules + the coordinate map encoded in the system prompt so every rec stays legal. Snapshot
+      (container, no deps) and API call (Mac venv + key) are decoupled via `--snapshot-only` /
+      `--from-snapshot` so the key never touches the server.
+- [ ] **Act on the 2026-06-29 architect report (iron drought is the root gate):** stand up a fresh
+      iron mining outpost on a dense live patch (both current iron fields mined out → iron furnaces
+      `no_ingredients` → gears/circuits/science starved); then consolidate the sprawled
+      logistic-science assembler line (x=8..103) into one compact cluster near the gear/circuit
+      feeders. Surgically mine ONLY the depleted drills (never area-delete). VERIFY the boiler
+      coal-feed inserter (43.5,-2.5) is burner before any power change (human/live-supervised).
+- [ ] Make the architect runnable server-side too (add `anthropic` to the autopilot container +
+      an `ANTHROPIC_API_KEY` in its env) so it can run unattended; optionally feed its
+      `prioritized_actions` back into a guarded execution pass.
