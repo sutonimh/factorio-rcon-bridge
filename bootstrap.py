@@ -824,7 +824,10 @@ def trim_inventory():
         "/sc local s=game.surfaces[1]; local d=storage.derpface; if not (d and d.valid) then return end; local inv=d.get_main_inventory();"
         "for _,pk in ipairs({'automation-science-pack','logistic-science-pack'}) do for _,l in pairs(s.find_entities_filtered{name='lab'}) do local li=l.get_inventory(defines.inventory.lab_input); if li then local have=inv.get_item_count(pk); if have>0 then local g=li.insert{name=pk,count=math.min(have,20)}; inv.remove{name=pk,count=g} end end end end;"
         "local function trim(item,keep) local have=inv.get_item_count(item); if have>keep then inv.remove{name=item,count=have-keep} end end;"
-        "trim('copper-cable',200); trim('electronic-circuit',200); trim('iron-ore',0); trim('copper-ore',0); trim('automation-science-pack',100); trim('logistic-science-pack',100)")
+        "trim('copper-cable',200); trim('electronic-circuit',200); trim('iron-ore',0); trim('copper-ore',0); trim('automation-science-pack',100); trim('logistic-science-pack',100);"
+        # copper-plate over-supplies (it hoarded 6200, jamming out the IRON-plate the green chain needs);
+        # cap it so iron-plate always has room. Iron is the chain's limiting input, so keep iron generous.
+        "trim('copper-plate',400)")
 
 
 def restock_coal(low=40, target=150):
