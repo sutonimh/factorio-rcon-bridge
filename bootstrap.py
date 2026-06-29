@@ -1173,6 +1173,20 @@ def fuel_arrays():
         "    if c>0 then fi.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end")
 
 
+def fuel_drills():
+    """Keep all BURNER mining drills fueled SERVER-SIDE from derpface's carried coal. The mine drills
+    are burner-powered and derpface can't be everywhere; when it parks at the coal mine the distant
+    iron/copper drills run dry, the mines STOP, and the whole chain starves (furnaces no_ingredients
+    -> labs missing_science_packs -> research stalls - the exact stall that froze the base). Like
+    fuel_arrays for furnaces: tops each burner drill to ~5 coal, no walk. (Electrifying the drills is
+    the eventual upgrade; this is the reliable mechanism meanwhile.)"""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+        "for _,d in pairs(s.find_entities_filtered{name='burner-mining-drill'}) do local fb=d.get_fuel_inventory();"
+        "  if fb then local need=5-fb.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal'));"
+        "    if c>0 then fb.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end")
+
+
 def harvest_array_plates():
     """Move smelted plates from the belt-fed array DRAIN chests into DERPFACE's inventory (the
     conduit service_science feeds the science assemblers from). Without this the arrays produce
@@ -1239,6 +1253,7 @@ def maintain(laps=0):
             try:
                 keep_power()                  # TOP PRIORITY: keep the steam plant fueled (server-side)
                 fuel_arrays()                 # keep the belt-fed smelter array furnaces fueled (server-side)
+                fuel_drills()                 # keep all burner mining drills fueled (server-side) so mines never stall
                 harvest_array_plates()        # array drain chests -> science buffer chests
                 _collect_plates_all()         # furnace plates -> inventory
                 _service_assembler_chests()   # fill assembler INPUT chests, empty OUTPUT chests
