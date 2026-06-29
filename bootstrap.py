@@ -1173,6 +1173,24 @@ def fuel_arrays():
         "    if c>0 then fi.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end")
 
 
+def ensure_coal_restock():
+    """Guarantee derpface can ALWAYS restock coal, preventing the coal death spiral. The coal mine's
+    burner drills output to a BELT (there's no power line that far north for an electric inserter),
+    so a self-fueling BURNER inserter must move coal belt -> chest for restock_coal to pull. Without
+    it, derpface eventually hits 0 coal -> can't fuel the coal mine's OWN burner drills -> the coal
+    mine stops -> nothing can be fueled -> total deadlock (the spiral that froze the whole base).
+    Idempotent: builds the burner-inserter + chest at the coal belt's east end if missing, keeps the
+    burner inserter lit. NOTE: never use an ELECTRIC inserter here (no power at the coal mine)."""
+    A._print(
+        "/sc local s=game.surfaces[1]; local f=game.forces.player;"
+        "local mx=-1e9; local belt; for _,b in pairs(s.find_entities_filtered{name='transport-belt',area={{-18,-93},{-2,-88}}}) do if b.position.x>mx then mx=b.position.x; belt=b end end;"
+        "if not belt then return end; local bx,by=math.floor(belt.position.x),math.floor(belt.position.y);"
+        "local bi=s.find_entities_filtered{name='burner-inserter',area={{bx,by-2},{bx+3,by+2}}}[1];"
+        "if not bi then if not s.find_entities_filtered{name='wooden-chest',area={{bx+1,by-1},{bx+4,by+1}}}[1] then s.create_entity{name='wooden-chest',position={bx+2.5,by+0.5},force=f} end;"
+        "  bi=s.create_entity{name='burner-inserter',position={bx+1.5,by+0.5},direction=12,force=f}; bi.pickup_position={bx+0.5,by+0.5}; bi.drop_position={bx+2.5,by+0.5} end;"
+        "if bi and bi.get_fuel_inventory().get_item_count('coal')<1 then bi.get_fuel_inventory().insert{name='coal',count=2} end")
+
+
 def fuel_drills():
     """Keep all BURNER mining drills fueled SERVER-SIDE from derpface's carried coal. The mine drills
     are burner-powered and derpface can't be everywhere; when it parks at the coal mine the distant
@@ -1253,6 +1271,7 @@ def maintain(laps=0):
             try:
                 keep_power()                  # TOP PRIORITY: keep the steam plant fueled (server-side)
                 fuel_arrays()                 # keep the belt-fed smelter array furnaces fueled (server-side)
+                ensure_coal_restock()         # burner inserter coal belt->chest so derpface can always restock (no death spiral)
                 fuel_drills()                 # keep all burner mining drills fueled (server-side) so mines never stall
                 harvest_array_plates()        # array drain chests -> science buffer chests
                 _collect_plates_all()         # furnace plates -> inventory

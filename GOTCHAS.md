@@ -544,3 +544,26 @@ furnaces: never rely on derpface WALKING to a distant consumer to fuel it; do it
 Watch derpface's coal budget - it now fuels the boiler + ~12 furnaces + ~18 drills, so restock_coal
 must keep it topped (derpface parks at the coal mine for this). Electrifying the drills is the
 eventual upgrade.
+
+## Coal death spiral + Seth's furnace-design rules (2026-06-29)
+
+**Coal death spiral (froze the whole base):** the coal mine's drills are BURNER (need coal to mine
+coal). After connect_mine removed the coal mine's output chest, coal went to a belt with no consumer
+-> belt backed up -> derpface couldn't restock (restock_coal pulls from a CHEST, not a belt) ->
+derpface hit 0 coal -> fuel_drills couldn't fuel the coal mine's own burner drills -> coal mine
+stopped -> nothing could be fueled -> total deadlock. Fix: `ensure_coal_restock()` puts a self-
+fueling BURNER inserter (NOT electric - there's no power that far north) moving coal belt -> chest,
+so restock_coal always has a source. Wired into the science strand. The coal belt being backed up to
+the mine is GOOD (= full supply); the bug was the missing belt->chest hop for restock.
+
+**Furnace-stack design rules (Seth fixed these by hand; learn them):**
+- Do NOT mix ores - keep the iron ore belt and copper ore belt strictly separate. A shared/crossed
+  ore belt feeds copper into iron furnaces (wrong product).
+- Coal goes on a SEPARATE LANE from ore, never the same lane. Coal + ore on one lane jams the belt
+  ("iron block"). Two-lane belt: ore on one lane, coal on the other; the loader inserter grabs both.
+- EVERY furnace stack needs coal, including the COPPER furnaces. Don't fuel only iron.
+- Keep coal always flowing on the belts, or backed up all the way to the mine (= full supply).
+
+(Server-side fuel_arrays is the current fueling mechanism and works WHEN derpface has coal; the
+above are the belt-fed design Seth wants. Either way: never route coal onto an ore lane, never cross
+ore belts, and keep the coal restock (burner inserter -> chest) alive so derpface never runs dry.)
