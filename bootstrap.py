@@ -565,7 +565,7 @@ def build_belt_supply():
     a plate belt from the arrays to a science feed chest. Large; runs as a queued build task on
     Charon so derpface builds it. Iron array may already exist (built + validated by hand)."""
     build_smelter_array("iron-ore", 16)
-    build_smelter_array("copper-ore", 4)
+    build_smelter_array("copper-ore", 12)
     connect_mine_to_array("iron-ore")
     connect_mine_to_array("copper-ore")
     # coal belt from the coal mine down to the arrays (codified layer, not build_belt)
@@ -1166,8 +1166,8 @@ def fuel_arrays():
     re-spaced for coal inserters.)"""
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
-        # iron array (extended to 16 furnaces, x-5..25) + copper array
-        "for _,z in ipairs({{-8,4,27,7},{-8,13,12,16}}) do"
+        # iron array (16 furnaces, x-5..25) + copper array (12 furnaces, x-5..17)
+        "for _,z in ipairs({{-8,4,27,7},{-8,13,20,16}}) do"
         "  for _,fc in pairs(s.find_entities_filtered{name={'stone-furnace','steel-furnace'},area={{z[1],z[2]},{z[3],z[4]}}}) do"
         "    local fi=fc.get_fuel_inventory(); if fi then local need=5-fi.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal'));"
         "    if c>0 then fi.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end")
@@ -1200,7 +1200,7 @@ def harvest_array_plates():
         "  for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do local si=src.get_inventory(defines.inventory.chest);"
         "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n}; si.remove{name=item,count=ins}; have=have+ins end end end;"
         # iron + copper plates for science; steel plates (steel stack drain ~x26,y6) for steel-furnace builds + recipes
-        "move('iron-plate',{{10,1},{28,6}},300); move('copper-plate',{{2,10},{8,16}},300)")
+        "move('iron-plate',{{10,1},{28,6}},300); move('copper-plate',{{2,10},{22,16}},300)")
 
 
 def _gated():
