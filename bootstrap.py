@@ -1218,6 +1218,36 @@ def fuel_drills():
         "    if c>0 then fb.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end")
 
 
+def reap_dead_drills():
+    """Surgically remove burner mining drills that have EXHAUSTED their patch (status
+    no_minable_resources - mining nothing), refunding the drill + its leftover coal to derpface's
+    inventory. Server-side, no walk; a no-op when nothing is exhausted.
+
+    WHY (architect, 2026-06-29): a depleted patch leaves its drills standing producing zero, so
+    the outpost silently starves the base (the iron drought: iron furnaces went no_ingredients,
+    19 dead drills sat at one old patch) AND it litters the map. This is the safe half of
+    Seth's 'patrol removes unneeded infrastructure' rule + the architect's 'mine ONLY the
+    depleted drills, never area-delete' cleanup: it touches ONLY drills the engine itself reports
+    as out of ore, so it can never hit a working drill or any operator-built base/power/pole.
+    Refunded drills + coal are reused by the relocation pass (ensure_ore_supply) on a fresh patch.
+    Returns the number reaped."""
+    out = A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then rcon.print('0'); return end;"
+        "local s=p.surface; local inv=p.get_main_inventory(); local n=0;"
+        "for _,d in pairs(s.find_entities_filtered{type='mining-drill'}) do"
+        "  if d.status==defines.entity_status.no_minable_resources then"
+        "    local fb=d.get_fuel_inventory(); if fb then for _,c in pairs(fb.get_contents()) do inv.insert{name=c.name,count=c.count} end end;"
+        "    inv.insert{name=d.name,count=1}; d.destroy(); n=n+1 end end;"
+        "rcon.print(tostring(n))").strip()
+    try:
+        n = int(out)
+    except ValueError:
+        n = 0
+    if n:
+        status.log(f"reaped {n} exhausted mining drill(s) (no_minable_resources)")
+    return n
+
+
 def harvest_array_plates():
     """Move smelted plates from the belt-fed array DRAIN chests into DERPFACE's inventory (the
     conduit service_science feeds the science assemblers from). Without this the arrays produce
@@ -1290,6 +1320,7 @@ def maintain(laps=0):
                 #                               rebuild base layout the operator manages - it kept rebuilding Seth's coal
                 #                               buffer/inserter. Autopilot = fuel/harvest/research ONLY, never auto-build layout.
                 fuel_drills()                 # keep all burner mining drills fueled (server-side) so mines never stall
+                reap_dead_drills()            # remove EXHAUSTED drills (no_minable_resources) - they produce nothing + litter
                 harvest_array_plates()        # array drain chests -> science buffer chests
                 _collect_plates_all()         # furnace plates -> inventory
                 _service_assembler_chests()   # fill assembler INPUT chests, empty OUTPUT chests

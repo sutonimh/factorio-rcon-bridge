@@ -66,12 +66,21 @@ Seth's directives. Priority: HIGH (do next) / MED / LOW. Mark `[x]` when done.
       rules + the coordinate map encoded in the system prompt so every rec stays legal. Snapshot
       (container, no deps) and API call (Mac venv + key) are decoupled via `--snapshot-only` /
       `--from-snapshot` so the key never touches the server.
-- [ ] **Act on the 2026-06-29 architect report (iron drought is the root gate):** stand up a fresh
-      iron mining outpost on a dense live patch (both current iron fields mined out → iron furnaces
-      `no_ingredients` → gears/circuits/science starved); then consolidate the sprawled
-      logistic-science assembler line (x=8..103) into one compact cluster near the gear/circuit
-      feeders. Surgically mine ONLY the depleted drills (never area-delete). VERIFY the boiler
-      coal-feed inserter (43.5,-2.5) is burner before any power change (human/live-supervised).
+- ARCHITECT-DERIVED CODE (the standing goal: distill API findings into autopilot code so a fresh
+  map drives to robots with the API run only occasionally to find blind spots, never in the loop):
+  - [x] `reap_dead_drills()` (in the maintain science strand): surgically refund+remove burner
+        drills reading `no_minable_resources` — they produce nothing and litter the map (the
+        architect found 19 dead drills @ -46,-12 feeding the iron drought). Touches ONLY
+        engine-confirmed-exhausted drills, never working drills or operator base/power/poles.
+  - [ ] `ensure_ore_supply(ore, min_live)`: when too few drills are actively mining `ore`, set
+        STATE[ore]=richest fresh patch (`richest_spot`) and `build_mine_outpost` there (reusing
+        the reaped drills) so the supply self-relocates as patches deplete. THIS fixes the iron
+        drought autonomously (fresh iron patch live @ -68,22 density 26776). Must run through
+        BUILD_QUEUE (character-driven), not the science strand.
+  - [ ] Consolidate the sprawled logistic-science assembler line (x=8..103) into one compact
+        cluster near the gear/circuit feeders (`SCIENCE_COLS` grid already in `setup_science_io`).
+  - [ ] VERIFY the boiler coal-feed inserter (43.5,-2.5) is burner before any power change
+        (human/live-supervised; never blind-edit the fluid/power build).
 - [ ] Make the architect runnable server-side too (add `anthropic` to the autopilot container +
       an `ANTHROPIC_API_KEY` in its env) so it can run unattended; optionally feed its
       `prioritized_actions` back into a guarded execution pass.
