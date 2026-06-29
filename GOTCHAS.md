@@ -567,3 +567,33 @@ the mine is GOOD (= full supply); the bug was the missing belt->chest hop for re
 (Server-side fuel_arrays is the current fueling mechanism and works WHEN derpface has coal; the
 above are the belt-fed design Seth wants. Either way: never route coal onto an ore lane, never cross
 ore belts, and keep the coal restock (burner inserter -> chest) alive so derpface never runs dry.)
+
+## Scaling discipline + self-feeding coal mine (2026-06-29, learned from Seth's hands-on fixes)
+
+I scaled smelting aggressively (iron 8->16 furnaces, copper 4->12) WITHOUT first scaling power or
+hardening the coal supply. Result: cascade failures that froze the whole base, which Seth fixed by
+hand. The hard lessons, codified:
+
+**1. Scale POWER before production.** More furnaces = more electric inserters. The single
+boiler+engine (~900 kW) was fine at 8+4 furnaces but the 16+12 scale-up pushed it to 0% buffer ->
+every electric inserter browned out -> furnaces couldn't be loaded -> total stall. ALWAYS add
+boiler+engine capacity to match new inserter load FIRST. Rule of thumb: ~1 boiler+engine pair per
+~8-10 furnaces of inserter load; build them on a lake (offshore pump -> boilers -> engines).
+
+**2. Self-feeding coal mine (Seth's design).** The coal mine's drills are BURNER (need coal to mine
+coal). The robust design Seth built: inserters loop coal from the mine's own output belt back INTO
+the drills (self-sustaining, never dies), AND the output belt is connected to deliver coal to the
+base, AND a coal stock chest sits at the mine for derpface to restock from. My version left the
+output dead-ended and relied on derpface server-side fueling -> death spiral when derpface hit 0.
+Never leave the coal mine dependent on derpface; make it self-feed + deliver.
+
+**3. Do NOT build power plants (or any multi-entity FLUID build) blind via RCON.** The
+pump->boiler->engine water/steam connections and boiler-row water sharing are too finicky to place
+reliably without seeing the fluid network; I failed 4 straight attempts. Seth placed a correct
+boiler+engine column on the lake in seconds. Defer power-plant + pipe/fluid builds to a human with
+eyes on the game, or only attempt with live supervision. Poles, belts, inserters, and server-side
+logic ARE safe to build blind; fluids are not.
+
+**4. Either power-loss OR coal-starvation cascades to a FULL base stall** (everything idle, looks
+identical). When the base freezes, check BOTH: engine buffer (power_ok) AND the coal restock chain.
+Harden both before scaling production again.

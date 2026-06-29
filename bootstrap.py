@@ -1137,7 +1137,8 @@ def keep_power():
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local b=s.find_entities_filtered{name='boiler'}[1]; if b then local need=5-b.get_fuel_inventory().get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end;"
         "local bc=s.find_entities_filtered{name='wooden-chest',position={45,-2},radius=6}[1]; if bc then local ci=bc.get_inventory(defines.inventory.chest); local need=120-ci.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then ci.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
-    ensure_grid_connected()
+    # ensure_grid_connected() DISABLED: it adds bridge poles -> modifies the operator's hand-built power layout.
+    # Power is human-managed now; the autopilot must not auto-place poles.
 
 
 def ensure_grid_connected():
@@ -1271,7 +1272,9 @@ def maintain(laps=0):
             try:
                 keep_power()                  # TOP PRIORITY: keep the steam plant fueled (server-side)
                 fuel_arrays()                 # keep the belt-fed smelter array furnaces fueled (server-side)
-                ensure_coal_restock()         # burner inserter coal belt->chest so derpface can always restock (no death spiral)
+                # ensure_coal_restock()       # DISABLED: the coal mine is human-built (self-feeding). The autopilot must NOT
+                #                               rebuild base layout the operator manages - it kept rebuilding Seth's coal
+                #                               buffer/inserter. Autopilot = fuel/harvest/research ONLY, never auto-build layout.
                 fuel_drills()                 # keep all burner mining drills fueled (server-side) so mines never stall
                 harvest_array_plates()        # array drain chests -> science buffer chests
                 _collect_plates_all()         # furnace plates -> inventory
@@ -1306,8 +1309,9 @@ def maintain(laps=0):
                 # nothing gated, nothing to build -> light upkeep; science strand drives research
                 refill_buffers()
                 haul_ore()
-            if i % 15 == 0:
-                dedupe_poles()
+            # if i % 15 == 0:
+            #     dedupe_poles()             # DISABLED: removes poles -> fights the operator's hand-built power/pole layout.
+            #                                  Pole cleanup is a human decision now.
             if i % 10 == 0:
                 gamedb.dump_excess()   # overflow inventory -> buffer chests (server-side)
                 gamedb.snapshot()      # refresh the structures + chest-inventory DB
