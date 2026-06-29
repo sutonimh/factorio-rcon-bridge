@@ -640,3 +640,32 @@ trigger computed a (0,0) centroid and would have torn down at the ORIGIN/base. L
 - EMERGENCY RECOVERY pattern (autopilot stopped): drive the game from the Mac with
   `FACTORIO_RCON_HOST=charon python3 ...` (Tailscale RCON); gather wood by `clear_area`, craft via
   `A.craft` (script-craft, no player=), and build with `create_entity` WITHOUT `player=`.
+
+## Steam plant: Seth's SCALABLE design (verified from his hand-build 2026-06-29)
+
+Fluid ratios (read from prototypes): boiler 1.8 MW = 60 water/s -> 60 steam/s; engine 900 kW =
+30 steam/s; so 1 boiler : 2 engines. Offshore pump = 1200 water/s = 20 boilers = 40 engines.
+Steam unit energy = (165-15)*200 = 30 kJ.
+
+Layout = a repeating COLUMN (pitch 4 tiles in X) tapping two shared horizontal backbones, plus one
+pump. All boilers dir0 (steam exits NORTH), engines chained north, character builds northward from
+a water-south shore. Per-column entities (bx = boiler centre x; rows are FIXED relative to the
+boiler row by = -18 in his build, i.e. offsets from by):
+  - boiler        @ (bx, by)        d0          [A.place tile (bx-1.5, by-1)]
+  - engine 1      @ (bx, by-3.5)    d0          [stacked north, 5 tall]
+  - engine 2      @ (bx, by-8.5)    d0
+  - burner-inserter @ (bx, by+1.5)  d8          picks coal off the belt (south), drops into boiler
+  - water crossing: pipe-to-ground @ (bx+2, by+3.5) d8  +  (bx+2, by+1.5) d0, then pipe (bx+2, by+0.5)
+                    -> ducks water UNDER the coal belt into the boiler's EAST input. The 4-tile
+                       column pitch EXISTS so this crossing fits (Seth: intentional gap).
+Shared backbones (extend by 4 tiles per added column):
+  - WATER MANIFOLD: a pipe row at y = by+4.5 (boilers tap it via the crossing above).
+  - COAL BELT:      a transport-belt row at y = by+2.5 (dir4, east), feeding every burner inserter;
+                    coal enters from the WEST end (from the base coal supply).
+Pump (1 per 20 columns / 40 engines): place in OPTIMAL CLEAR water space (not necessarily at the
+manifold) and route a pipe from it into the manifold's intake. To scale past 40 engines, add ANOTHER
+source pump and plumb it into the same manifold intake pipe (don't re-architect). The manifold is
+the scalable backbone; columns and the two backbones just extend east.
+`build_power_plant(n_engines)` replicates this: pump+route once, columns = ceil(n_engines/2)
+stamped at bx0+4k, extend the manifold + coal belt, +1 pump per 20 columns. Verify with
+get_fluid_count (pump 100, boiler 200/200) + engine energy > 0.
