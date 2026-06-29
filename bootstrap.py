@@ -204,28 +204,33 @@ def power():
         if _count(item) < c:
             _craft_wait(r, c)
     A.stop(); A.walk(wx - 4, wy, tol=3.0)
-    # 1) PUMP: place on a land tile adjacent to water, intake facing the water; verify by a pipe.
+    # 1) PUMP: place on a land tile adjacent to water, intake dir facing the water. NOTE: do NOT
+    #    "verify" the bare pump by get_fluid_count - an UNCONNECTED offshore pump reads 0 (it has no
+    #    buffer; it only pumps into connected pipes). Verification happens DOWNSTREAM at the boiler.
     pump = A._print(
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local g;"
         "local function iw(x,y) return string.find(s.get_tile(x,y).name,'water')~=nil end;"
-        f"for _,wt in pairs(s.find_tiles_filtered{{position={{{wx},{wy}}},radius=10,name={{'water','deepwater'}}}}) do if g then break end;"
+        f"for _,wt in pairs(s.find_tiles_filtered{{position={{{wx},{wy}}},radius=12,name={{'water','deepwater'}}}}) do if g then break end;"
         "  local x,y=math.floor(wt.position.x),math.floor(wt.position.y);"
         "  for _,nb in ipairs({{x,y-1,8},{x,y+1,0},{x-1,y,4},{x+1,y,12}}) do local lx,ly,d=nb[1],nb[2],nb[3];"
-        "    if not g and not iw(lx,ly) and s.can_place_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d,force=p.force} then"
+        "    if not g and not iw(lx,ly) and s.can_place_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d} then"
         "      local e=s.create_entity{name='offshore-pump',position={lx+0.5,ly+0.5},direction=d,force=p.force};"
         "      if e then inv.remove{name='offshore-pump',count=1}; g={x=lx,y=ly,d=d} end end end end;"
         "if g then rcon.print(g.x..','..g.y..','..g.d) else rcon.print('none') end").strip()
+    if pump == "none" or "," not in pump:
+        A.now("power: no placeable shore tile for the pump")
+        return None
     px, py, pd = map(int, pump.split(","))
-    # output tile is opposite the intake direction; build boiler so an END input meets pump water.
-    # Place boiler just past the pump output, then bridge water via pipes on its ends until it gets water.
-    A._build_boiler_engine(px, py, pd)
+    # output tile is opposite the intake direction; build boiler so an END input meets pump water,
+    # bridging with pipes; verify the BOILER gets water + the ENGINE gets energy (downstream).
+    return _build_boiler_engine(px, py, pd)
 
 
 def _build_boiler_engine(px, py, pd):
     """Place a boiler near the pump, bridge water to whichever side actually feeds it
     (probed live), fuel it, then seat a steam engine on the steam output - all verified."""
-    # output of pump is opposite intake dir; put boiler a couple tiles out along that axis
-    dirvec = {0: (0, -1), 8: (0, 1), 4: (1, 0), 12: (-1, 0)}[pd]
+    # output of pump is OPPOSITE its intake dir (pd points at the water); build on the land side.
+    dirvec = {0: (0, 1), 8: (0, -1), 4: (-1, 0), 12: (1, 0)}[pd]   # = output direction (away from water)
     ox, oy = px + dirvec[0], py + dirvec[1]      # pump output tile (gets water)
     # bridge: ensure a water pipe at the output tile
     A.place("pipe", ox, oy, clear=0)
