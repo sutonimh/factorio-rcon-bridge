@@ -456,6 +456,23 @@ Recent lessons codified:
   use an inserter where you must cross OFF a belt into a machine/chest (belt->chest
   load still needs an inserter).
 
+## A belt-fed mine must NOT keep build_mine_outpost's terminal chest+inserter (2026-06-29, Seth)
+- `build_mine_outpost` ALWAYS ends the ore belt with `[belt][burner-inserter][wooden-chest]` - the
+  inserter pulls ore OFF the belt into a terminal chest for CHARACTER HAULING. If that mine is then
+  meant to BELT-FEED the base, leaving the chest+inserter in place is the bug Seth caught at the
+  iron mine: the inserter drains the belt into the dead-end chest, so the belt segment continuing
+  toward base stays EMPTY and no iron ever reaches the smelters. The drills look fine (belt full to
+  the chest), but downstream is starved.
+- FIX (what Seth did by hand): REMOVE the terminal inserter+chest and bridge the gap with a belt
+  tile so the lane runs continuous mine -> base. `connect_mine_to_array(ore)` already does exactly
+  this (refunds the burner-inserter/inserter/wooden-chest within radius 26 of STATE[ore], then
+  `lay_belt_path` runs the belt through) - but it was NEVER applied to this mine: the relocation
+  rebuilds (`build_mine_outpost`) keep re-placing the terminal chest, and the belt-connect step
+  (`build_belt_supply`/`connect_mine_to_array`) never ran. So a relocated mine is left chest-capped.
+- RULE: a mine is EITHER character-hauled (terminal chest, no belt to base) OR belt-fed (no terminal
+  chest, continuous belt to base) - never both at the same belt end. If you relocate/rebuild a
+  belt-fed mine, re-run the chest removal + belt-through, or `build_mine_outpost` silently re-caps it.
+
 ## Smelter ore feed: two storage chests (Seth's layout)
 - Seth set up ONE storage chest per smelter stack, each with a loader inserter that
   drops onto that stack's distribution belt (iron belt y=-28 runs E; copper belt
