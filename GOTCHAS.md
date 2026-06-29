@@ -530,3 +530,17 @@ Rules now codified:
 - find_entities{position=p, radius=0.4} can MISS an entity whose center is >0.4 from p even if p is
   inside its bbox (e.g. a furnace center 0.58 from an inserter drop) - a query artifact, not a real
   misalignment. Use the bbox or a larger radius to confirm.
+
+## Burner mine drills starve when derpface parks away (2026-06-29)
+
+Symptom: the whole base froze - all furnaces no_ingredients, labs missing_science_packs, research
+stuck - while power was fine (93% buffer) and status.json stayed fresh. Root cause: the iron/copper
+MINE drills are burner-mining-drills (coal-fueled), and derpface had parked at the coal mine far
+away, so the distant drills ran dry, the mines stopped, and the ore supply collapsed up the chain.
+
+Fix: `fuel_drills()` tops every burner mining drill from derpface's carried coal SERVER-SIDE each
+maintenance lap (wired into the science strand next to fuel_arrays). Same pattern as fueling the
+furnaces: never rely on derpface WALKING to a distant consumer to fuel it; do it server-side.
+Watch derpface's coal budget - it now fuels the boiler + ~12 furnaces + ~18 drills, so restock_coal
+must keep it topped (derpface parks at the coal mine for this). Electrifying the drills is the
+eventual upgrade.
