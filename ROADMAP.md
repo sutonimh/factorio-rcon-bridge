@@ -31,6 +31,14 @@ Ordered work:
       autonomously from zero, especially since the build fix.
 
 ## Now / in progress
+- [x] FIXED 2026-06-29 base-wide freeze: `inv.remove{count=0}` ("count must be positive") aborted
+      `trim_inventory` before it trimmed the copper-cable clog -> derpface inventory free=0 ->
+      plates couldn't drain from furnaces -> assemblers/labs starved. Guarded every insert-return
+      remove (`if g>0`). See GOTCHAS.
+- [ ] **Cap green-chain copper-cable over-production.** The cable assembler ran the inventory to
+      8400 cable; `trim_inventory` just DELETES the excess each lap (wasteful, ~4200 copper-plate
+      lost). Cap the cable assembler (circuit-limited) or offload excess to a buffer chest instead
+      of deleting it.
 - [ ] **Redeploy science as a COMPACT GRID** (code fixed: `SCIENCE_COLS` grid in `setup_science_io`).
       The live cells are still a ~100-tile row; re-run `setup_science_io` once the base is stable.
 - [x] Scale green science (4 green-pack assemblers + extra inserter/belt).

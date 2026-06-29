@@ -184,7 +184,7 @@ def _smelt_rows():
         time.sleep(6)
         A._print("/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); "
                  "for _,fu in pairs(s.find_entities_filtered{area={{-1,-18},{17,-9}},name='stone-furnace'}) do local oi=fu.get_output_inventory(); "
-                 "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; oi.remove{name=it,count=g} end end end")
+                 "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; if g>0 then oi.remove{name=it,count=g} end end end end")
         if A._print("/sc local s=game.surfaces[1]; local n=0; for _,fu in pairs(s.find_entities_filtered{area={{-1,-18},{17,-9}},name='stone-furnace'}) do if fu.status==1 then n=n+1 end end; rcon.print(n)").strip() == "0":
             break
 
@@ -286,7 +286,7 @@ def _collect_plates():
     """Sweep finished plates out of the base furnaces into inventory."""
     A._print("/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); "
              "for _,fu in pairs(s.find_entities_filtered{area={{-1,-18},{17,-9}},name='stone-furnace'}) do local oi=fu.get_output_inventory(); "
-             "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; oi.remove{name=it,count=g} end end end")
+             "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; if g>0 then oi.remove{name=it,count=g} end end end end")
 
 
 def _feed_lab_until(tech, packs=("automation-science-pack",), need_each=10, tries=12):
@@ -341,7 +341,7 @@ def _collect_plates_all():
     copper outpost pairs) into inventory, so accumulated plates are never stranded."""
     A._print("/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); "
              "for _,fu in pairs(s.find_entities_filtered{name='stone-furnace'}) do local oi=fu.get_output_inventory(); "
-             "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; oi.remove{name=it,count=g} end end end")
+             "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; if g>0 then oi.remove{name=it,count=g} end end end end")
 
 
 def mine_chest(item):
@@ -848,7 +848,7 @@ def trim_inventory():
     is safe and keeps the whole base fueled. Server-side, no walk, no building."""
     A._print(
         "/sc local s=game.surfaces[1]; local d=storage.derpface; if not (d and d.valid) then return end; local inv=d.get_main_inventory();"
-        "for _,pk in ipairs({'automation-science-pack','logistic-science-pack'}) do for _,l in pairs(s.find_entities_filtered{name='lab'}) do local li=l.get_inventory(defines.inventory.lab_input); if li then local have=inv.get_item_count(pk); if have>0 then local g=li.insert{name=pk,count=math.min(have,20)}; inv.remove{name=pk,count=g} end end end end;"
+        "for _,pk in ipairs({'automation-science-pack','logistic-science-pack'}) do for _,l in pairs(s.find_entities_filtered{name='lab'}) do local li=l.get_inventory(defines.inventory.lab_input); if li then local have=inv.get_item_count(pk); if have>0 then local g=li.insert{name=pk,count=math.min(have,20)}; if g>0 then inv.remove{name=pk,count=g} end end end end end;"
         "local function trim(item,keep) local have=inv.get_item_count(item); if have>keep then inv.remove{name=item,count=have-keep} end end;"
         "trim('copper-cable',200); trim('electronic-circuit',200); trim('iron-ore',0); trim('copper-ore',0); trim('automation-science-pack',100); trim('logistic-science-pack',100);"
         # copper-plate over-supplies (it hoarded 6200, jamming out the IRON-plate the green chain needs);
@@ -870,7 +870,7 @@ def restock_coal(low=40, target=150):
         "local want=" + str(target) + "-inv.get_item_count('coal'); if want<=0 then return end;"
         # richest coal chest anywhere (the operator's stock chest)
         "local best,bn=nil,0; for _,c in pairs(s.find_entities_filtered{name={'wooden-chest','steel-chest','iron-chest'}}) do local ci=c.get_inventory(defines.inventory.chest); local n=ci and ci.get_item_count('coal') or 0; if n>bn then bn=n; best=c end end;"
-        "if best then local ci=best.get_inventory(defines.inventory.chest); local k=math.min(want,ci.get_item_count('coal')); if k>0 then local g=inv.insert{name='coal',count=k}; ci.remove{name='coal',count=g}; want=want-g end end;"
+        "if best then local ci=best.get_inventory(defines.inventory.chest); local k=math.min(want,ci.get_item_count('coal')); if k>0 then local g=inv.insert{name='coal',count=k}; if g>0 then ci.remove{name='coal',count=g} end; want=want-g end end;"
         # fallback: lift coal off belts within reach (derpface parks at the coal mine)
         "if want>0 then for _,b in pairs(s.find_entities_filtered{name='transport-belt',position=p.position,radius=10}) do for ln=1,2 do local line=b.get_transport_line(ln); local n=line.get_item_count('coal'); if n>0 then local k=math.min(want,n); line.remove_item{name='coal',count=k}; inv.insert{name='coal',count=k}; want=want-k end end; if want<=0 then break end end end")
 
@@ -1035,7 +1035,7 @@ def _sweep_iron_plates():
         "for _,e in pairs(s.find_entities_filtered{force='player'}) do local ivs={};"
         "  if e.type=='container' or e.type=='logistic-container' then ivs[#ivs+1]=e.get_inventory(defines.inventory.chest) end;"
         "  if e.type=='furnace' or e.type=='assembling-machine' then ivs[#ivs+1]=e.get_output_inventory() end;"
-        "  for _,iv in pairs(ivs) do if iv then local c=iv.get_item_count('iron-plate'); if c>0 then local g=inv.insert{name='iron-plate',count=c}; iv.remove{name='iron-plate',count=g} end end end end")
+        "  for _,iv in pairs(ivs) do if iv then local c=iv.get_item_count('iron-plate'); if c>0 then local g=inv.insert{name='iron-plate',count=c}; if g>0 then iv.remove{name='iron-plate',count=g} end end end end end")
 
 
 def relocate_exhausted_outposts(lap=0):
@@ -1177,7 +1177,7 @@ def service_science():
         "for _,a in pairs(s.find_entities_filtered{type='assembling-machine'}) do local r=a.get_recipe();"
         "  if r then for _,ing in pairs(r.ingredients) do if ing.type=='item' then"
         "      local want=math.max(0, (ing.amount*4) - a.get_item_count(ing.name));"
-        "      local have=math.min(want, inv.get_item_count(ing.name)); if have>0 then local ins=a.insert{name=ing.name,count=have}; inv.remove{name=ing.name,count=ins} end end end;"
+        "      local have=math.min(want, inv.get_item_count(ing.name)); if have>0 then local ins=a.insert{name=ing.name,count=have}; if ins>0 then inv.remove{name=ing.name,count=ins} end end end end;"
         "    local oo=a.get_output_inventory(); if oo then for _,c in pairs(oo.get_contents()) do local g=inv.insert{name=c.name,count=c.count}; if g>0 then oo.remove{name=c.name,count=g} end end end end end;"
         # fill each lab's FEED CHEST (the chest above each lab); its inserter pushes packs into
         # the lab continuously, so all labs run evenly (hardware feed, Seth's rule). Top each
@@ -1416,7 +1416,7 @@ def harvest_array_plates():
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
         "local function move(item, area, cap) local have=inv.get_item_count(item); if have>=cap then return end;"
         "  for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do local si=src.get_inventory(defines.inventory.chest);"
-        "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n}; si.remove{name=item,count=ins}; have=have+ins end end end;"
+        "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n}; if ins>0 then si.remove{name=item,count=ins} end; have=have+ins end end end;"
         # iron + copper plates for science; steel plates (steel stack drain ~x26,y6) for steel-furnace builds + recipes
         "move('iron-plate',{{10,1},{28,6}},300); move('copper-plate',{{2,10},{22,16}},300)")
 
