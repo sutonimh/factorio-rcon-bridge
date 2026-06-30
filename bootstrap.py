@@ -344,6 +344,23 @@ def _collect_plates_all():
              "for _,it in ipairs({'iron-plate','copper-plate'}) do local a=oi.get_item_count(it); if a>0 then local g=inv.insert{name=it,count=a}; if g>0 then oi.remove{name=it,count=g} end end end end")
 
 
+def harvest_plate_belts():
+    """Pull iron/copper plates OFF the plate belts into derpface's inventory so service_science can
+    feed the assembler chain. Seth belt-fed the furnaces, so plates now flow onto a plate belt (and
+    pile at its dead-end) instead of sitting in furnace OUTPUTS - `_collect_plates_all` (which reads
+    furnace outputs) gets nothing, and the green chain starves at iron=0 (verified: feeding 12 plates
+    flipped the logistic-science-pack assembler to working). This bridges the belt->software-shuffle
+    gap. Capped at 300/plate so coal still fits; the plate belts dead-end so draining them starves no
+    downstream consumer. Insert-first/remove-actual so no plate is lost on a full inventory. Scoped to
+    the plate-belt region (the furnace output area), not every belt on the map."""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local inv=p.get_main_inventory();"
+        "for _,plate in ipairs({'iron-plate','copper-plate'}) do local room=300-inv.get_item_count(plate);"
+        "  if room>0 then for _,b in pairs(s.find_entities_filtered{type='transport-belt',area={{-10,0},{30,16}}}) do for ln=1,2 do"
+        "    if room>0 then local line=b.get_transport_line(ln); local k=math.min(line.get_item_count(plate),room);"
+        "      if k>0 then local ins=inv.insert{name=plate,count=k}; if ins>0 then line.remove_item{name=plate,count=ins}; room=room-ins end end end end end end")
+
+
 def mine_chest(item):
     """Locate the mine-outpost OUTPUT CHEST for a mineable item (a wooden chest near its richest
     patch). Returns (cx, cy, count_in_chest) or None - so the character can HAUL from the chest
@@ -1509,7 +1526,8 @@ def maintain(laps=0):
                 fuel_drills()                 # keep all burner mining drills fueled (server-side) so mines never stall
                 reap_dead_drills()            # remove EXHAUSTED drills (no_minable_resources) - they produce nothing + litter
                 harvest_array_plates()        # array drain chests -> science buffer chests
-                _collect_plates_all()         # furnace plates -> inventory
+                _collect_plates_all()         # furnace plates -> inventory (pre-belt-feed path)
+                harvest_plate_belts()         # belt-fed plates -> inventory (post-belt-feed: plates ride belts now)
                 _service_assembler_chests()   # fill assembler INPUT chests, empty OUTPUT chests
                 service_science()             # lab feed chests (+ direct-feed any chest-less asm)
                 _advance_research()           # target next fuelable tech
