@@ -131,7 +131,7 @@
     <pre id="ophist"></pre></div>
   <div class="card"><h2>Local AI — thinking &amp; learning</h2><pre id="aifeed" class="log" style="max-height:220px">…</pre></div>
   <div class="card" style="grid-column:1/-1"><h2>Live map
-    <span style="text-transform:none;letter-spacing:0;color:var(--faint)"> scroll = zoom · drag = pan · dbl-click = fit · hover = inspect · ⊙ = follow derpface</span></h2>
+    <span style="text-transform:none;letter-spacing:0;color:var(--faint)"> +/− = zoom · drag = pan · dbl-click = fit · hover = inspect · ⊙ = follow derpface</span></h2>
     <div id="mapwrap" style="position:relative">
       <div class="mapbtns">
         <button onclick="mapZoom(1.25)" title="zoom in">+</button>
@@ -282,12 +282,19 @@ function toggleFollow() {
   if (followDerp && mapData.derp) { view.ppt = Math.max(view.ppt, 4); renderMap(); }
 }
 function mapBounds() {
+  // default view = the BASE (entity bbox, outliers trimmed) - not the whole scouted world
+  const e = mapData.ents.filter(a=>!a.g);
+  if (e.length > 10) {
+    const xs = e.map(a=>a.x).sort((a,b)=>a-b), ys = e.map(a=>a.y).sort((a,b)=>a-b);
+    const q = arr2 => [arr2[Math.floor(arr2.length*0.02)], arr2[Math.ceil(arr2.length*0.98)-1]];
+    const [x1,x2] = q(xs), [y1,y2] = q(ys);
+    return {minx:x1-12, miny:y1-12, maxx:x2+12, maxy:y2+12};
+  }
   const T = terrainCache;
   if (T && T.rows && T.rows.length)
     return {minx:T.x1, miny:T.y1, maxx:T.x1+T.rows[0].length*T.step, maxy:T.y1+T.rows.length*T.step};
-  const e = mapData.ents;
-  if (!e.length) return null;
-  const xs = e.map(a=>a.x), ys = e.map(a=>a.y);
+  if (!mapData.ents.length) return null;
+  const xs = mapData.ents.map(a=>a.x), ys = mapData.ents.map(a=>a.y);
   return {minx:Math.min(...xs)-8, miny:Math.min(...ys)-8, maxx:Math.max(...xs)+8, maxy:Math.max(...ys)+8};
 }
 function fitView() {
@@ -355,14 +362,7 @@ async function drawMap() {
 (() => {
   const c = $("map"), tip = $("maptip");
   let drag = null;
-  c.addEventListener("wheel", ev => {
-    ev.preventDefault();
-    const wx = s2wx(ev.offsetX), wy = s2wy(ev.offsetY);
-    view.ppt = Math.max(0.4, Math.min(30, view.ppt * (ev.deltaY < 0 ? 1.18 : 1/1.18)));
-    view.cx = wx - (ev.offsetX - c.width/2)/view.ppt;
-    view.cy = wy - (ev.offsetY - c.height/2)/view.ppt;
-    followDerp = false; renderMap();
-  }, {passive:false});
+  // wheel-zoom disabled by request - use the +/- buttons; page scrolls normally over the map
   c.addEventListener("mousedown", ev => { drag = {x:ev.offsetX, y:ev.offsetY}; c.style.cursor="grabbing"; });
   window.addEventListener("mouseup", () => { drag = null; c.style.cursor="grab"; });
   c.addEventListener("dblclick", () => { followDerp=false; view.fitted = false; renderMap(); });

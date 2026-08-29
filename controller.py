@@ -188,8 +188,11 @@ def controller_loop(stop_flag):
                 _COOLDOWN[top.id] = time.monotonic()
                 status.log(f"issue[{top.sev}] {top.id}: {top.evidence} -> fixing")
                 A.purpose(f"fixing {top.id}: {top.evidence}")
-                if top.sev <= 1:
-                    PREEMPT["want"] = top.id          # builder pauses at its next check
+                if top.sev == 0:
+                    # sev-0 ONLY: every controller fixer is server-side, so preempting the
+                    # builder for sev-1 issues was pure harm - walks died every ~20s and the
+                    # character never got anywhere (the stuck-at-(6,-339) incident)
+                    PREEMPT["want"] = top.id
                 try:
                     top.fixer()
                 except Exception as e:
