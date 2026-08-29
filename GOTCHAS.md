@@ -794,3 +794,15 @@ force_build=true}` -> entity-GHOSTS (no materials consumed; revive with build_gh
 Upstream FLE's connect_entities places from NOTHING. Our vendored lua/fle_lib.lua routes all
 placements through `F.take(name)` (derpface inventory decrement, refund on failed create).
 Any future vendored builder gets the same treatment before first use.
+
+## Dead-end belt lanes from interrupted lays: verify continuity, self-heal (2026-08-29)
+
+Three mine-output lanes on the v2 map ended mid-route (dead-end belts at -24,-65 / 18,17 /
+26,8, all pointing east into empty tiles) -> ore piled behind the breaks and ALL 39 furnaces
+read no_ingredients while 23/30 sampled belts carried items. Cause: lay_belt_path runs
+interrupted (container restart mid-lay / out of belts) and NOTHING verified lane continuity
+afterward. Fix: `repair_belt_gaps()` (science strand, every lap): finds dead-end belts, and
+where the same lane resumes within 30 tiles in the belt's direction, bridges the span from
+inventory (script-crafting belts from plates when short). No continuation = left alone (legit
+terminus) for the architect to judge. RULE: any belt-laying routine must either verify its
+lane end-to-end or rely on this repairer running.
