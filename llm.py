@@ -37,7 +37,18 @@ MAX_PROMPT_CHARS = 40000  # ~12k tokens. halo's KV pool is SHARED (131k / 4 slot
 # never raise this without checking halo's slot budget.
 
 
-def chat(messages, model=ARCHITECT, max_tokens=2048, temperature=0.2, timeout=300, think=False):
+def _activity(tag, model, ms, text):
+    """Append one line to llm-activity.jsonl - the dashboard's realtime AI feed."""
+    try:
+        import time as _t
+        with open(HERE / "llm-activity.jsonl", "a") as f:
+            f.write(json.dumps({"ts": int(_t.time()), "tag": tag, "model": model.split("-")[0] + model.split("-")[1][:4] if "-" in model else model,
+                                "ms": ms, "out": text[:240]}) + "\n")
+    except Exception:
+        pass
+
+
+def chat(messages, model=ARCHITECT, max_tokens=2048, temperature=0.2, timeout=300, think=False, tag=None):
     """One chat completion; returns the assistant text. Raises on transport errors.
 
     think=False disables Qwen's thinking phase (chat_template_kwargs.enable_thinking) — with it
@@ -47,6 +58,8 @@ def chat(messages, model=ARCHITECT, max_tokens=2048, temperature=0.2, timeout=30
     if total > MAX_PROMPT_CHARS:
         raise ValueError("prompt too large for halo's shared KV pool: %d chars > %d"
                          % (total, MAX_PROMPT_CHARS))
+    import time as _t
+    t0 = _t.monotonic()
     body = json.dumps({
         "model": model,
         "messages": messages,
@@ -65,7 +78,11 @@ def chat(messages, model=ARCHITECT, max_tokens=2048, temperature=0.2, timeout=30
         raise RuntimeError("lemonade HTTP %s: %s" % (e.code, e.read()[:500])) from e
     if "choices" not in data:
         raise RuntimeError("lemonade error response: %s" % json.dumps(data)[:500])
-    return data["choices"][0]["message"]["content"]
+    out = data["choices"][0]["message"]["content"]
+    if tag:
+        import time as _t
+        _activity(tag, model, int((_t.monotonic() - t0) * 1000), out.strip())
+    return out
 
 
 def extract_json(text):
@@ -84,6 +101,7 @@ def extract_json(text):
 
 
 def chat_json(messages, model=ARCHITECT, retries=1, **kw):
+    """chat() that must yield JSON (kwargs incl. tag pass through)."""
     """chat() that must yield JSON; one corrective retry, then None (caller logs a lesson)."""
     for attempt in range(retries + 1):
         out = chat(messages, model=model, **kw)

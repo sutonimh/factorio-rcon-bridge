@@ -115,19 +115,21 @@
     </span></h2><pre id="log"></pre></div>
 </div>
 
-<div id="tab-live" class="grid hidden">
+<div id="tab-live" class="hidden" style="display:grid;grid-template-columns:1fr 1fr minmax(470px,auto);gap:12px">
   <div class="card"><h2>Current action</h2>
     <div class="actionbig" id="action">—</div>
-    <div id="actionmeta" style="color:var(--faint);margin-top:5px"></div></div>
+    <div id="actionwhy" style="color:var(--blue);margin-top:5px"></div>
+    <div id="actionmeta" style="color:var(--faint);margin-top:4px"></div></div>
   <div class="card"><h2>Task queue</h2><ol class="queue" id="queue" style="margin:0;padding-left:20px"></ol></div>
-  <div class="card"><h2>Instruct derpface</h2>
-    <div style="display:flex;gap:8px">
-      <input id="oprompt" onkeydown="if(event.key===&quot;Enter&quot;)sendPromptOp()" placeholder='e.g. "build a 10-drill stone mine" or "research logistics-2"' style="flex:1">
-      <button onclick="sendPromptOp()">send</button></div>
-    <div style="color:var(--faint);margin:6px 0 4px">Interpreted by the local 35B into safe autopilot commands, queued behind the current gates.</div>
-    <pre id="ophist"></pre></div>
-  <div class="card" style="grid-row:span 2"><h2>Derpface live <span id="derpstate" style="text-transform:none;letter-spacing:0"></span></h2>
+  <div class="card" style="grid-row:span 2;justify-self:end;width:100%"><h2>Derpface live <span id="derpstate" style="text-transform:none;letter-spacing:0"></span></h2>
     <canvas id="derp" width="440" height="440"></canvas></div>
+  <div class="card"><h2>Instruct derpface</h2>
+    <div style="display:flex;gap:8px;align-items:flex-start">
+      <textarea id="oprompt" rows="3" style="flex:1;height:64px" placeholder='e.g. "build a 10-drill stone mine" or "research logistics-2"'></textarea>
+      <button onclick="sendPromptOp()" style="height:64px">send</button></div>
+    <div style="color:var(--faint);margin:6px 0 4px">Interpreted by the local 35B into safe autopilot commands, queued behind the current gates. Enter sends, Shift+Enter = newline.</div>
+    <pre id="ophist"></pre></div>
+  <div class="card"><h2>Local AI — thinking &amp; learning</h2><pre id="aifeed" class="log" style="max-height:220px">…</pre></div>
   <div class="card" style="grid-column:1/-1"><h2>Live map
     <span style="text-transform:none;letter-spacing:0;color:var(--faint)"> scroll = zoom · drag = pan · dbl-click = fit · hover = inspect · ⊙ = follow derpface</span></h2>
     <div id="mapwrap" style="position:relative">
@@ -244,11 +246,15 @@ async function tick() {
       l=>`[${l.count}x] ${l.condition} -> ${l.rule}`).join("\n") || "(none yet)";
     const a = s.action||{};
     $("action").textContent = a.action || "(no action reported yet)";
+    $("actionwhy").textContent = a.why ? "why: " + a.why : "";
     const aage = a.ts ? Math.max(0, Math.floor(Date.now()/1000 - a.ts)) : null;
     $("actionmeta").textContent = (aage!==null ? `${aage}s ago · ` : "") +
       `derpface (${(st.derpface||{}).pos||"?"}) ${(st.derpface||{}).walking==="true"?"walking":"idle"} · coal ${(st.derpface||{}).coal??"?"}`;
     const q = (st.build_queue||[]).length ? st.build_queue : (a.plan||[]);
     $("queue").innerHTML = q.length ? q.map(x=>`<li>${x}</li>`).join("") : "<li>(queue empty)</li>";
+    $("aifeed").innerHTML = arr(s.ai).slice().reverse().map(r =>
+      `<span class="logline ${r.tag==="triage"?"triage":r.tag==="architect"?"gate":"trig"}">[${new Date(r.ts*1000).toLocaleTimeString()} ${r.tag} · ${r.model} · ${(r.ms/1000).toFixed(1)}s] ${String(r.out).replace(/</g,"&lt;").slice(0,220)}</span>`).join("")
+      || "(no model calls yet — triage runs every 5th maintenance lap)";
     $("ophist").innerHTML = arr(s.prompts).slice().reverse().map(pr =>
       `<span class="logline ${pr.status==="failed"?"err":pr.status==="queued"?"gate":"triage"}">[${pr.status}] ${String(pr.text).replace(/</g,"&lt;").slice(0,90)}${pr.result?` → ${String(pr.result).replace(/</g,"&lt;").slice(0,160)}`:""}</span>`).join("") || "(no instructions yet)";
   } catch(e) {}
@@ -535,6 +541,11 @@ async function submitBP() {
     loadBPs();
   } catch(e) { out.textContent = "error: "+e.message; }
 }
+document.addEventListener("DOMContentLoaded", () => {
+  $("oprompt").addEventListener("keydown", ev => {
+    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); sendPromptOp(); }
+  });
+});
 async function sendPromptOp() {
   const el = $("oprompt");
   if (!el.value.trim()) return;

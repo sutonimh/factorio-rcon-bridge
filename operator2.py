@@ -51,7 +51,7 @@ def _interpret(text):
           "autopilot. Reply with ONLY a JSON array of command objects from this catalog - "
           "nothing else. Use reject when the instruction doesn't map.\n" + CATALOG},
          {"role": "user", "content": text}],
-        model=llm.ARCHITECT, max_tokens=600)
+        model=llm.ARCHITECT, max_tokens=600, tag="operator")
     return out if isinstance(out, list) else ([out] if isinstance(out, dict) else None)
 
 

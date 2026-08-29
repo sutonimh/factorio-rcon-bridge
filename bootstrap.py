@@ -1209,6 +1209,7 @@ def power_row(x1, x2, y, spacing=5):
     """Lay a CONTINUOUS pole line from x1..x2 at row y (poles <= `spacing` apart so the wires
     always chain - the #1 cause of 'new machines unpowered'), bridge it to the base network, then
     verify and patch any still-unpowered machine nearby. Returns count of unpowered remaining."""
+    A.purpose("power poles so the new machines get electricity")
     if _count("small-electric-pole") < (x2 - x1) // spacing + 6:
         make("small-electric-pole", (x2 - x1) // spacing + 6)
     A.stop(); A.walk(x1, y + 2, tol=3.0)
@@ -1474,6 +1475,51 @@ def fix_unpowered(limit=8):
         "          break end end end end end")
 
 
+def _lane_connected(ore):
+    """BFS the mine's ore lane via belt connectivity: True if it reaches the smelter array's
+    ore-belt intake. Catches EVERY break class (gaps, misaligned rows, wrong-direction joins)
+    that tile-local checks miss."""
+    spot = STATE.get(ore) or A.richest_spot(ore, 0, 0, radius=160)
+    if not spot:
+        return True                      # nothing to verify yet
+    rx, ry = int(spot[0]), int(spot[1])
+    ox, oy = SMELT_ZONE[ore]
+    ax, ay = ox - 1, oy + 5              # the array intake corner connect_mine_to_array targets
+    out = A._print(
+        "/sc local s=game.surfaces[1]; local seen={}; local q={}; local best=1e9;"
+        f"for _,b in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='transport-belt'}}) do q[#q+1]=b end;"
+        "local n=0;"
+        "while #q>0 and n<800 do local b=table.remove(q); n=n+1;"
+        "  local k=math.floor(b.position.x)..':'..math.floor(b.position.y);"
+        "  if not seen[k] then seen[k]=true;"
+        f"    local d=math.abs(b.position.x-({ax}))+math.abs(b.position.y-({ay}));"
+        "    if d<best then best=d end;"
+        "    for _,o in pairs(b.belt_neighbours.outputs) do if o.type=='transport-belt' then q[#q+1]=o end end end end;"
+        "rcon.print(math.floor(best))").strip()
+    try:
+        return int(out) <= 6
+    except ValueError:
+        return True
+
+
+def ensure_lanes(lap=0):
+    """SOURCE-TO-DESTINATION lane law (Seth, 2026-08-29): a mine belt must reach its smelter
+    array by belt connectivity - no chest shuttles where a belt belongs, no trusting that a lay
+    finished. Verify each ore lane by BFS; a broken lane gets fully re-laid via
+    connect_mine_to_array (exact-tile path layer joins misaligned rows with a corner)."""
+    fixed = 0
+    for ore in ("iron-ore", "copper-ore"):
+        try:
+            if not _lane_connected(ore):
+                status.log(f"lane {ore}: NOT connected to array - re-laying via connect_mine_to_array")
+                A.purpose(f"re-laying the {ore} belt so it reaches the smelters")
+                connect_mine_to_array(ore)
+                fixed += 1
+        except Exception as e:
+            status.log(f"ensure_lanes({ore}): {e}")
+    return fixed
+
+
 def repair_belt_gaps(max_span=30):
     """BELT CONTINUITY self-heal: a lane with a mid-route break starves everything downstream
     (GOTCHAS: a belt lane must be CONTINUOUS). Interrupted lay_belt_path runs (restart mid-lay,
@@ -1710,8 +1756,11 @@ def maintain(laps=0, lap_hook=None):
             i += 1
             if _gated():
                 # PRIORITY override: a fuel/refill gate -> clear it before anything else
+                A.purpose("maintenance: a fuel/supply gate is blocking - clearing it")
                 refill_buffers()
                 haul_ore()
+            elif i % 10 == 5 and ensure_lanes(i):
+                pass               # a lane re-lay is this lap's work (source->destination law)
             elif i % 12 == 0 and relocate_exhausted_outposts(i):
                 # periodic supply self-heal (not gated): if an outpost is on a thinning patch and a
                 # richer one exists, it relocated this lap (a long character build) - that's the work

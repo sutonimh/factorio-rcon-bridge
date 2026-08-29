@@ -165,20 +165,32 @@ def scout_oil(p, max_radius=480):
 def phase0(p):
     """Crash site -> automated red+green science + registered mines + oil scouted.
     Every step is idempotent; failures raise (play() records the lesson and retries next pass)."""
+    A.purpose("phase 0 bootstrap: world setup + crash-site cleanup")
     B.setup_world()
+    A.purpose("phase 0: scouting the richest ore patches + water")
     _scout_guarded(p)
+    A.purpose("phase 0: first coal so smelting can start")
     B.fuel()
+    A.purpose("phase 0: starter smelting rows at spawn")
     B.smelting_base()
+    A.purpose("phase 0: steam power plant at the lake")
     if B.power() is None and not B._find("steam-engine", B.STATE["water"][0], B.STATE["water"][1], 30):
         raise RuntimeError("power(): no working steam engine after build attempt")
+    A.purpose("phase 0: lab + red science to unlock assemblers")
     B.red_science()
+    A.purpose("phase 0: drill outposts on the richest patches")
     for ore, n in (("iron-ore", 8), ("copper-ore", 6), ("coal", 6)):
         r = builds_v2.mine_outpost_v2(ore, n)
         if r.get("status") == "failed":
             raise RuntimeError(f"mine_outpost_v2({ore}): {r.get('error')}")
+    A.purpose("phase 0: belt-feeding the mines into the smelter arrays")
     B.build_belt_supply()
+    B.ensure_lanes()       # source->destination law: verify by BFS, re-lay broken lanes now
+    A.purpose("phase 0: automating green science assemblers")
     B.automate_green_science()
+    A.purpose("phase 0: science I/O cells + powering them")
     B.setup_science_io()
+    A.purpose("phase 0: locating crude oil for phase 1")
     scout_oil(p)
 
 
