@@ -675,10 +675,11 @@ def connect_mine_to_array(ore):
     A._print(f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); "
              f"for _,e in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name={{'burner-inserter','inserter','wooden-chest'}}}}) do "
              "local ci=e.get_inventory and e.get_inventory(defines.inventory.chest); if ci then for _,c in pairs(ci.get_contents()) do inv.insert{name=c.name,count=c.count} end end; inv.insert{name=e.name,count=1}; e.destroy() end")
-    # L-path: from the mine output, run to the array's column, then into the ore-belt west end.
-    # Two-segment L via the array's x just outside the array, then up/down to the ore belt row.
+    # L-path via a PER-ORE column (iron x=ox-2, copper x=ox-4, ...): both smelt zones share
+    # ox, so a single ax-1 column MERGED the ore lanes (mixed-ore law violation, 2026-08-29).
     ax, ay = ox - 1, oy + 5
-    lay_belt_path([(rx + 10, ry), (ax - 1, ry), (ax - 1, ay), (ax, ay)])
+    lane_x = ox - 2 - 2 * list(SMELT_ZONE).index(ore)
+    lay_belt_path([(rx + 10, ry), (lane_x, ry), (lane_x, ay), (ax, ay)])
 
 
 def build_belt_supply():
@@ -1497,6 +1498,24 @@ def _lane_connected(ore):
         return True
 
 
+def scrub_mixed_ore():
+    """Remove WRONG-ORE items from each smelter array's intake belts + furnace inputs (the
+    shared-column era put copper on the iron lane; a furnace fed the wrong ore mixes plates
+    on the output belt - GOTCHAS: never mix ores)."""
+    for ore, (ox, oy) in SMELT_ZONE.items():
+        A._print(
+            f"/sc local s=game.surfaces[1]; local inv=storage.derpface and storage.derpface.valid and storage.derpface.get_main_inventory(); if not inv then return end; local n=0;"
+            f"for _,b in pairs(s.find_entities_filtered{{area={{{{{ox - 3},{oy + 4}}},{{{ox + 34},{oy + 6}}}}},type='transport-belt'}}) do"
+            "  for li=1,b.get_max_transport_line_index() do local L=b.get_transport_line(li);"
+            "    for _,it in pairs(L.get_contents()) do"
+            f"      if it.name~='{ore}' and it.name~='coal' then local r=L.remove_item{{name=it.name,count=it.count}}; if r>0 then inv.insert{{name=it.name,count=r}}; n=n+r end end end end end;"
+            f"for _,fu in pairs(s.find_entities_filtered{{area={{{{{ox - 2},{oy}}},{{{ox + 34},{oy + 4}}}}},name={{'stone-furnace','steel-furnace'}}}}) do"
+            "  local fi=fu.get_inventory(defines.inventory.furnace_source);"
+            "  if fi then for _,it in pairs(fi.get_contents()) do"
+            f"    if it.name~='{ore}' then local g=inv.insert{{name=it.name,count=it.count}}; if g>0 then fi.remove{{name=it.name,count=g}}; n=n+g end end end end end;"
+            "if n>0 then game.print('scrub_mixed_ore: pulled '..n..' wrong-ore items') end")
+
+
 def fix_mine_row_flow(ore):
     """FLOW-DIRECTION self-heal for a mine's drop row (GOTCHAS: belt flow must point AT the
     consumer). The iron row was half-west half-east (drills fed both; the east half ran ore
@@ -1536,6 +1555,8 @@ def ensure_lanes(lap=0):
     finished. Verify each ore lane by BFS; a broken lane gets fully re-laid via
     connect_mine_to_array (exact-tile path layer joins misaligned rows with a corner)."""
     fixed = 0
+    scrub_mixed_ore()
+    fix_mine_row_flow("coal")               # no dedicated array lane yet; flow fix only
     for ore in ("iron-ore", "copper-ore"):
         try:
             fix_mine_row_flow(ore)
@@ -1577,7 +1598,12 @@ def repair_belt_gaps(max_span=30):
         "        local nb=s.find_entities_filtered{position={tx,ty},radius=0.4,type='transport-belt'}[1];"
         "        if nb and nb.direction==b.direction then resume=k break end;"
         "        local hard=s.find_entities_filtered{position={tx,ty},radius=0.4}; local blocked=false;"
-        "        for _,e in pairs(hard) do if e.type~='resource' and e.name~='character' and e.type~='transport-belt' then blocked=true end end;"
+        "        for _,e in pairs(hard) do"
+        "          if e.type=='item-entity' then local st=e.stack; if st and st.valid_for_read then inv.insert{name=st.name,count=st.count} end; e.destroy()"
+        "          elseif e.type=='tree' then inv.insert{name='wood',count=4}; e.destroy()"
+        "          elseif e.type=='simple-entity' then e.destroy()"
+        "          elseif e.name=='entity-ghost' then e.destroy()"
+        "          elseif e.type~='resource' and e.name~='character' and e.type~='transport-belt' then blocked=true end end;"
         "        if blocked then break end;"
         "        if string.find(s.get_tile(math.floor(tx),math.floor(ty)).name,'water') then break end end;"
         "      if resume then"

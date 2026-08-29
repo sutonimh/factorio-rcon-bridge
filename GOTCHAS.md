@@ -836,3 +836,14 @@ belts read EMPTY while drills sat waiting_for_space. A lane-connectivity BFS pas
 half IS connected) - flow DIRECTION was the break. `fix_mine_row_flow(ore)` (in ensure_lanes,
 every pass start + 10th lap): find the drop row's EXIT belt (output leaves the row) and point
 every row belt at it. Manual fix that session: reversed 16 belts by hand first.
+
+## Bottleneck-first + heals-are-lessons (Seth's directive, 2026-08-29)
+
+When triage says stall/anomaly, derpface STOPS (A.stop()) and the full heal battery runs
+immediately - fixing the base always outranks whatever routine step was in progress. Every
+heal that actually fixed something writes a lesson (lessons.jsonl), so recurring defects
+surface for promotion into real code fixes instead of being silently re-repaired forever.
+Also learned today: a single item-on-ground blocked a belt-gap bridge for an hour - the
+repairer's obstruction handling must COLLECT items/trees/rocks and destroy stray ghosts,
+never treat them as hard blockers; and the two smelt zones share ox, so per-ore lane columns
+(ox-2, ox-4, ...) are mandatory or connect_mine_to_array merges the ore lanes.
