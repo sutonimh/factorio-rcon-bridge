@@ -245,11 +245,18 @@ def catalog():
 # ---------------------------------------------------------------- stamping
 
 def _lua_stamp(bp_expr, x, y, direction=None):
+    # Verified live on 2.1.17 (2026-08-29): surface.create_entities_from_blueprint_string
+    # returned NIL for a valid string (no ghosts, no error). The proven path (GOTCHAS
+    # "Megabase ghost placement") is a temp inventory + import_stack + build_blueprint
+    # {force_build}: import returns 0 on success and the build places entity-GHOSTS
+    # (no materials consumed - legit; revive with build_ghosts or construction bots).
     d = ", direction=%d" % direction if direction is not None else ""
-    return ("/sc local s=game.surfaces[1]; "
-            "local g=s.create_entities_from_blueprint_string{string=%s, "
-            "position={x=%s, y=%s}, force='player'%s}; "
-            "storage._bp=nil; rcon.print(#g)" % (bp_expr, x, y, d))
+    return ("/sc local inv=game.create_inventory(1); local st=inv[1]; "
+            "local ok=st.import_stack(%s); local n=-1; "
+            "if ok<=0 and st.is_blueprint then "
+            "local g=st.build_blueprint{surface=game.surfaces[1], force='player', "
+            "position={x=%s, y=%s}, force_build=true%s}; n=#g end; "
+            "inv.destroy(); storage._bp=nil; rcon.print(n)" % (bp_expr, x, y, d))
 
 
 def stamp_lua(bp_string, x, y, direction=None):
