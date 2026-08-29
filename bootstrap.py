@@ -1292,6 +1292,41 @@ def setup_science_io():
     dedupe_poles()
 
 
+def ensure_science_cells():
+    """DELTA-build science io-cells: for each SCIENCE_CHAIN recipe short of live assemblers,
+    build just those cells at the next free grid slots. setup_science_io's all-or-nothing
+    idempotency left the two automation-science-pack cells UNBUILT forever (2026-08-29:
+    green flowed, red had no assembler, labs idle, research 0%)."""
+    import collections
+    want = collections.Counter(SCIENCE_CHAIN)
+    have_raw = A._print(
+        "/sc local s=game.surfaces[1]; local t={};"
+        "for _,a in pairs(s.find_entities_filtered{type='assembling-machine'}) do"
+        "  local r=a.get_recipe(); if r then t[#t+1]=r.name end end;"
+        "rcon.print(table.concat(t,','))").strip()
+    have = collections.Counter(x for x in have_raw.split(",") if x)
+    missing = []
+    for recipe, n in want.items():
+        missing += [recipe] * max(0, n - have.get(recipe, 0))
+    if not missing:
+        return 0
+    bx, by = SCIENCE_CELL
+    cols = SCIENCE_COLS
+    total = len(SCIENCE_CHAIN)
+    built = 0
+    if _count("assembling-machine-1") < len(missing):
+        make("assembling-machine-1", len(missing) - _count("assembling-machine-1"))
+    for k, recipe in enumerate(missing):
+        slot = total + k          # append past the chain grid so we never overlap live cells
+        col, row = slot % cols, slot // cols
+        if build_io_cell(recipe, bx + col * 8, by + row * 5):
+            built += 1
+    if built:
+        status.log(f"ensure_science_cells: built {built} missing cell(s): {missing}")
+        power_row(bx, bx + cols * 8, by + ((total + len(missing)) // cols) * 5 + 3)
+    return built
+
+
 def _service_assembler_chests():
     """Fill each science assembler's INPUT chest with its recipe ingredients (from inventory) and
     EMPTY its OUTPUT chest back to inventory (Seth's rule). The inserters do the assembler I/O;
@@ -1766,8 +1801,14 @@ def harvest_array_plates():
         "local function move(item, area, cap) local have=inv.get_item_count(item); if have>=cap then return end;"
         "  for _,src in pairs(s.find_entities_filtered{name='iron-chest',area=area}) do local si=src.get_inventory(defines.inventory.chest);"
         "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n}; if ins>0 then si.remove{name=item,count=ins} end; have=have+ins end end end;"
-        # iron + copper plates for science; steel plates (steel stack drain ~x26,y6) for steel-furnace builds + recipes
-        "move('iron-plate',{{10,1},{28,6}},300); move('copper-plate',{{2,10},{22,16}},300)")
+        # CONTENT-BASED: any chest holding plates near the arrays is a drain (the old
+        # hardcoded areas were the RETIRED map's - copper harvest silently collected 0)
+        "local function sweep(item, cap) local have=inv.get_item_count(item); if have>=cap then return end;"
+        "  for _,src in pairs(s.find_entities_filtered{area={{-14,-2},{34,22}},name={'iron-chest','wooden-chest'}}) do"
+        "    local si=src.get_inventory(defines.inventory.chest);"
+        "    local n=math.min(si.get_item_count(item), cap-have); if n>0 then local ins=inv.insert{name=item,count=n};"
+        "      if ins>0 then si.remove{name=item,count=ins} end; have=have+ins end end end;"
+        "sweep('iron-plate',300); sweep('copper-plate',300)")
 
 
 def _gated():
