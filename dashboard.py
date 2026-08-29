@@ -150,7 +150,14 @@ def derpface_window(half=6):
         "for _,e in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}}}) do"
         "  if e.name~='character' and #ents<160 then"
         "    local n=(e.name=='entity-ghost') and e.ghost_name or e.name;"
-        "    ents[#ents+1]={n=n,x=e.position.x,y=e.position.y,t=e.type,g=(e.name=='entity-ghost') and 1 or nil} end end;"
+        "    local r={n=n,x=e.position.x,y=e.position.y,t=e.type,g=(e.name=='entity-ghost') and 1 or nil};"
+        "    local okd,dd=pcall(function() return e.direction end); if okd and dd then r.d=dd end;"
+        "    local oks,st=pcall(function() return e.status end);"
+        "    if oks and st==defines.entity_status.working then r.w=1 end;"
+        "    if e.type=='transport-belt' then local it=0;"
+        "      for li=1,e.get_max_transport_line_index() do it=it+#e.get_transport_line(li) end;"
+        "      if it>0 then r.it=it end end;"
+        "    ents[#ents+1]=r end end;"
         "local tiles={};"
         "for _,t in pairs(s.find_tiles_filtered{area={{x1,y1},{x2,y2}},name={'water','deepwater'}}) do"
         "  tiles[#tiles+1]={x=t.position.x,y=t.position.y,w=1} end;"
@@ -333,6 +340,7 @@ class H(BaseHTTPRequestHandler):
                 "orders": _read_json("orders.json", [])[-10:] if isinstance(_read_json("orders.json", []), list) else [],
                 "metrics": live_metrics(),
                 "action": _read_json("action.json", {}),
+                "prompts": [json.loads(x) for x in _tail("operator-inbox.jsonl", 6) if x.strip()],
             })
         elif self.path == "/api/terrain":
             self._send(terrain())
@@ -372,6 +380,19 @@ class H(BaseHTTPRequestHandler):
                 self._send({"saved": "user-" + name, **a})
             except Exception as e:
                 self._send({"error": str(e)[:300]})
+        elif self.path == "/api/prompt":
+            text = (body.get("text") or "").strip()
+            if not text:
+                self._send({"error": "empty prompt"})
+                return
+            row = {"id": int(time.time() * 1000), "ts": int(time.time()),
+                   "text": text[:2000], "status": "pending", "result": ""}
+            try:
+                with open(HERE / "operator-inbox.jsonl", "a") as f:
+                    f.write(json.dumps(row) + "\n")
+                self._send({"ok": True, "id": row["id"]})
+            except OSError as e:
+                self._send({"error": str(e)[:200]})
         elif self.path == "/api/blueprints/select":
             slot, name = body.get("slot"), body.get("name")
             if slot not in SLOTS or not name:

@@ -120,6 +120,12 @@
     <div class="actionbig" id="action">—</div>
     <div id="actionmeta" style="color:var(--faint);margin-top:5px"></div></div>
   <div class="card"><h2>Task queue</h2><ol class="queue" id="queue" style="margin:0;padding-left:20px"></ol></div>
+  <div class="card"><h2>Instruct derpface</h2>
+    <div style="display:flex;gap:8px">
+      <input id="oprompt" onkeydown="if(event.key===&quot;Enter&quot;)sendPromptOp()" placeholder='e.g. "build a 10-drill stone mine" or "research logistics-2"' style="flex:1">
+      <button onclick="sendPromptOp()">send</button></div>
+    <div style="color:var(--faint);margin:6px 0 4px">Interpreted by the local 35B into safe autopilot commands, queued behind the current gates.</div>
+    <pre id="ophist"></pre></div>
   <div class="card" style="grid-row:span 2"><h2>Derpface live <span id="derpstate" style="text-transform:none;letter-spacing:0"></span></h2>
     <canvas id="derp" width="440" height="440"></canvas></div>
   <div class="card" style="grid-column:1/-1"><h2>Live map
@@ -181,6 +187,7 @@ const TCOL = {".":"#232b1c", w:"#2b5d8a", i:"#5a7d9e", c:"#a06a45", k:"#3a3a3a",
               o:"#5a3d78", t:"#2e4420"};
 const TNAME = {w:"water", i:"iron ore", c:"copper ore", k:"coal", s:"stone", o:"crude oil", t:"trees"};
 const $ = id => document.getElementById(id);
+const arr = x => Array.isArray(x) ? x : [];   // lua table_to_json turns empty lists into {}
 const fmt = v => (typeof v==="number" ? (v>=10?v.toFixed(0):v.toFixed(2)) : (v??"—"));
 function note(id, msg) { const c=$(id), g=c.getContext("2d");
   g.fillStyle="#181f13"; g.fillRect(0,0,c.width,c.height);
@@ -242,6 +249,8 @@ async function tick() {
       `derpface (${(st.derpface||{}).pos||"?"}) ${(st.derpface||{}).walking==="true"?"walking":"idle"} · coal ${(st.derpface||{}).coal??"?"}`;
     const q = (st.build_queue||[]).length ? st.build_queue : (a.plan||[]);
     $("queue").innerHTML = q.length ? q.map(x=>`<li>${x}</li>`).join("") : "<li>(queue empty)</li>";
+    $("ophist").innerHTML = arr(s.prompts).slice().reverse().map(pr =>
+      `<span class="logline ${pr.status==="failed"?"err":pr.status==="queued"?"gate":"triage"}">[${pr.status}] ${String(pr.text).replace(/</g,"&lt;").slice(0,90)}${pr.result?` → ${String(pr.result).replace(/</g,"&lt;").slice(0,160)}`:""}</span>`).join("") || "(no instructions yet)";
   } catch(e) {}
   try {
     const lg = await (await fetch("/api/log", {cache:"no-store"})).json();
@@ -333,7 +342,7 @@ async function drawMap() {
       terrainCache = await (await fetch("/api/terrain", {cache:"no-store"})).json(); terrainTs = Date.now();
     }
     const d = await (await fetch("/api/map", {cache:"no-store"})).json();
-    mapData = {ents: d.ents||[], derp: d.derp||null};
+    mapData = {ents: arr(d.ents), derp: d.derp||null};
     renderMap();
   } catch(e) { note("map", "map error: "+e.message); }
 }
@@ -387,19 +396,50 @@ async function drawDerp() {
     if (d.x === undefined) { note("derp","derpface not available (server restarting?)"); return; }
     const span = d.x2 - d.x1, sc = c.width / span;
     g.fillStyle = "#232b1c"; g.fillRect(0,0,c.width,c.height);
-    for (const t of d.tiles||[]) {
+    for (const t of arr(d.tiles)) {
       g.fillStyle = t.w ? TCOL.w : ({["iron-ore"]:TCOL.i,["copper-ore"]:TCOL.c,coal:TCOL.k,stone:TCOL.s,["crude-oil"]:TCOL.o}[t.o] || "#333");
       g.fillRect((t.x-d.x1)*sc, (t.y-d.y1)*sc, sc+0.5, sc+0.5);
     }
     g.strokeStyle = "rgba(255,255,255,0.06)"; g.lineWidth = 1;
     for (let i=0;i<=span;i++){ g.beginPath(); g.moveTo(i*sc,0); g.lineTo(i*sc,c.height); g.stroke();
                                g.beginPath(); g.moveTo(0,i*sc); g.lineTo(c.width,i*sc); g.stroke(); }
-    for (const e of d.ents||[]) {
+    const DIRV = {0:[0,-1],4:[1,0],8:[0,1],12:[-1,0]};
+    for (const e of arr(d.ents)) {
       g.globalAlpha = e.g ? 0.4 : 1;
-      g.fillStyle = COLORS[e.n] || COLORS.default;
-      const big = ["assembling-machine","furnace","boiler","lab","mining-drill","offshore-pump","refinery","chemical"].some(t=>(e.t||"").includes(t));
-      const s2 = big ? sc*1.8 : sc*0.85;
-      g.fillRect((e.x-d.x1)*sc - s2/2, (e.y-d.y1)*sc - s2/2, s2, s2);
+      const col = COLORS[e.n] || COLORS.default;
+      const ex = (e.x-d.x1)*sc, ey = (e.y-d.y1)*sc;
+      const fp = SIZES[e.n] || ((e.t||"").includes("assembling")||(e.t||"").includes("furnace")||e.t==="lab"||e.t==="boiler" ? 2 : 1);
+      const s2 = fp*sc*0.92;
+      if (e.t === "transport-belt") {
+        // belt: base + direction chevron + item dots
+        g.fillStyle = "#4d4436"; g.fillRect(ex-sc*0.46, ey-sc*0.46, sc*0.92, sc*0.92);
+        const v = DIRV[e.d||0]||[0,-1];
+        g.strokeStyle = col; g.lineWidth = Math.max(1.5, sc*0.13);
+        g.beginPath();
+        g.moveTo(ex - v[0]*sc*0.28 - v[1]*sc*0.22, ey - v[1]*sc*0.28 - v[0]*sc*0.22);
+        g.lineTo(ex + v[0]*sc*0.3, ey + v[1]*sc*0.3);
+        g.lineTo(ex - v[0]*sc*0.28 + v[1]*sc*0.22, ey - v[1]*sc*0.28 + v[0]*sc*0.22);
+        g.stroke();
+        if (e.it) { g.fillStyle = "#e8e2d4";
+          for (let k=0;k<Math.min(e.it,4);k++) g.fillRect(ex - sc*0.3 + k*sc*0.2, ey - sc*0.08, sc*0.13, sc*0.13); }
+      } else if ((e.t||"").includes("inserter")) {
+        const v = DIRV[e.d||0]||[0,-1];
+        g.strokeStyle = col; g.lineWidth = Math.max(1.5, sc*0.16);
+        g.beginPath(); g.moveTo(ex + v[0]*sc*0.4, ey + v[1]*sc*0.4);
+        g.lineTo(ex - v[0]*sc*0.4, ey - v[1]*sc*0.4); g.stroke();
+        g.fillStyle = col; g.beginPath(); g.arc(ex - v[0]*sc*0.4, ey - v[1]*sc*0.4, sc*0.16, 0, 7); g.fill();
+      } else if (e.t === "electric-pole") {
+        g.strokeStyle = col; g.lineWidth = 1.5;
+        g.beginPath(); g.moveTo(ex, ey+sc*0.3); g.lineTo(ex, ey-sc*0.35); g.stroke();
+        g.beginPath(); g.moveTo(ex-sc*0.25, ey-sc*0.2); g.lineTo(ex+sc*0.25, ey-sc*0.2); g.stroke();
+      } else {
+        g.fillStyle = col;
+        g.fillRect(ex - s2/2, ey - s2/2, s2, s2);
+        g.strokeStyle = "rgba(0,0,0,0.45)"; g.lineWidth = 1;
+        g.strokeRect(ex - s2/2, ey - s2/2, s2, s2);
+        if (e.w) { g.strokeStyle = "#9fe87b"; g.lineWidth = 1.6;   // working glow
+          g.strokeRect(ex - s2/2 - 1.5, ey - s2/2 - 1.5, s2+3, s2+3); }
+      }
     }
     g.globalAlpha = 1;
     const dx = (d.x-d.x1)*sc, dy = (d.y-d.y1)*sc;
@@ -415,7 +455,7 @@ async function loadBPs() {
   const el = $("bplist");
   try {
     const d = await (await fetch("/api/blueprints", {cache:"no-store"})).json();
-    const prints = d.prints||[], ov = d.overrides||{}, slots = d.slots||[];
+    const prints = arr(d.prints), ov = d.overrides||{}, slots = arr(d.slots);
     // best score PER ROLE, so "recommended" means "best print for this job"
     const bestByRole = {};
     for (const p of prints) if (p.role)
@@ -456,7 +496,7 @@ async function preview(name, child) {
     sel.classList.remove("hidden");
     sel.innerHTML = d.children.map((l,i)=>`<option${i===child?" selected":""}>${l}</option>`).join("");
   } else sel.classList.add("hidden");
-  const ents = d.ents||[];
+  const ents = arr(d.ents);
   if (!ents.length) { g.fillStyle="#a89f8c"; g.fillText("(empty blueprint)", 14, 24); return; }
   const xs = ents.map(e=>e.x), ys = ents.map(e=>e.y);
   const minx=Math.min(...xs)-2, maxx=Math.max(...xs)+2, miny=Math.min(...ys)-2, maxy=Math.max(...ys)+2;
@@ -494,6 +534,12 @@ async function submitBP() {
         (r.missing_techs.length ? `\nmissing research: ${r.missing_techs.join(", ")}` : "");
     loadBPs();
   } catch(e) { out.textContent = "error: "+e.message; }
+}
+async function sendPromptOp() {
+  const el = $("oprompt");
+  if (!el.value.trim()) return;
+  await fetch("/api/prompt", {method:"POST", body: JSON.stringify({text: el.value})});
+  el.value = ""; tick();
 }
 async function selectBP(name) {
   const slot = $("slot-"+name).value;

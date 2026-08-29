@@ -77,6 +77,11 @@ def lap_hook(i):
     if i % 5:
         return
     try:
+        import operator2 as _op
+        _op.process_inbox()
+    except Exception as e:
+        status.log(f"operator inbox error: {e}")
+    try:
         import triage
         d = delta()
         if not (d.get("engines") or d.get("labs") or d.get("drills")):
