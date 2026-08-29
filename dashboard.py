@@ -69,6 +69,57 @@ def live_metrics():
         return {"error": out[:200]}
 
 
+def _rcon_chunked(key, build_lua, ttl=30):
+    """Chunked storage read (architect.py pattern) with TTL cache — for payloads >4KB that a
+    single RCON response would truncate. build_lua must end with storage._dash=<json string>
+    and rcon.print(#storage._dash)."""
+    now = time.time()
+    hit = _cache.get(key)
+    if hit and now - hit[0] < ttl:
+        return hit[1]
+    try:
+        n = int(rcon.run(build_lua).strip() or "0")
+        parts, i = [], 1
+        while i <= n:
+            parts.append(rcon.run("/sc rcon.print(storage._dash:sub(%d,%d))" % (i, i + 2999)).rstrip("\r\n"))
+            i += 3000
+        rcon.run("/sc storage._dash=nil")
+        out = "".join(parts)
+    except Exception as e:
+        out = json.dumps({"error": str(e)[:100]})
+    _cache[key] = (now, out)
+    return out
+
+
+def terrain():
+    """Low-res terrain grid over the built-base bbox (step-2 tiles): water/ore/tree/land as
+    char rows. Rendered under the live map so the base sits in real geography."""
+    out = _rcon_chunked("terrain", (
+        "/sc local s=game.surfaces[1];"
+        "local x1,y1,x2,y2=1e9,1e9,-1e9,-1e9;"
+        "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
+        "  local p=e.position; if p.x<x1 then x1=p.x end; if p.x>x2 then x2=p.x end;"
+        "  if p.y<y1 then y1=p.y end; if p.y>y2 then y2=p.y end end;"
+        "if x1>x2 then storage._dash='{}' rcon.print(2) return end;"
+        "x1,y1,x2,y2=math.floor(x1)-14,math.floor(y1)-14,math.floor(x2)+14,math.floor(y2)+14;"
+        "local STEP=2; local W=math.floor((x2-x1)/STEP)+1; local H=math.floor((y2-y1)/STEP)+1;"
+        "local grid={}; for r=1,H do grid[r]={} for c=1,W do grid[r][c]='.' end end;"
+        "local function mark(px,py,ch) local c=math.floor((px-x1)/STEP)+1; local r=math.floor((py-y1)/STEP)+1;"
+        "  if r>=1 and r<=H and c>=1 and c<=W then grid[r][c]=ch end end;"
+        "for _,t in pairs(s.find_tiles_filtered{area={{x1,y1},{x2,y2}},name={'water','deepwater'}}) do mark(t.position.x,t.position.y,'w') end;"
+        "local OC={['iron-ore']='i',['copper-ore']='c',['coal']='k',['stone']='s',['crude-oil']='o'};"
+        "for _,r in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}},type='resource'}) do mark(r.position.x,r.position.y,OC[r.name] or 's') end;"
+        "for _,t in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}},type='tree'}) do mark(t.position.x,t.position.y,'t') end;"
+        "local rows={}; for r=1,H do rows[r]=table.concat(grid[r]) end;"
+        "storage._dash=helpers.table_to_json({x1=x1,y1=y1,step=STEP,rows=rows});"
+        "rcon.print(#storage._dash)"
+    ), ttl=30)
+    try:
+        return json.loads(out)
+    except ValueError:
+        return {}
+
+
 def live_map():
     """Entity scatter for the canvas map: name-class + tile pos (+ ghosts flagged g=1) and
     derpface position, capped."""
@@ -114,6 +165,93 @@ def derpface_window(half=6):
         return {}
 
 
+def _researched():
+    """Set of researched tech names (cached 30s)."""
+    out = _rcon_chunked("techs", (
+        "/sc local t={}; for n,tech in pairs(game.forces.player.technologies) do"
+        "  if tech.researched then t[#t+1]=n end end;"
+        "storage._dash=helpers.table_to_json(t); rcon.print(#storage._dash)"), ttl=30)
+    try:
+        return set(json.loads(out))
+    except (ValueError, TypeError):
+        return set()
+
+
+def _producing():
+    """Item names with nonzero cumulative production (cached 30s)."""
+    out = _rcon_chunked("prod", (
+        "/sc local s=game.surfaces[1]; local ps=game.forces.player.get_item_production_statistics(s);"
+        "local t={}; for n,c in pairs(ps.input_counts) do if c>0 then t[#t+1]=n end end;"
+        "storage._dash=helpers.table_to_json(t); rcon.print(#storage._dash)"), ttl=30)
+    try:
+        return set(json.loads(out))
+    except (ValueError, TypeError):
+        return set()
+
+
+def _bom(node, acc):
+    if "blueprint_book" in node:
+        for ch in node["blueprint_book"].get("blueprints", []):
+            _bom(ch, acc)
+    elif "blueprint" in node:
+        for e in node["blueprint"].get("entities", []):
+            acc[e["name"]] = acc.get(e["name"], 0) + 1
+
+
+def analyze_bp(bp_string, techdb, researched, producing):
+    """Readiness review of one blueprint/book against live research + production."""
+    import bplib
+    d = bplib.decode(bp_string)
+    maj, minor = bplib.game_version(d)
+    bom = {}
+    _bom(d, bom)
+    rows, ready_count, total = [], 0, 0
+    missing = {}
+    for item, cnt in sorted(bom.items(), key=lambda kv: -kv[1]):
+        tech = techdb.unlocking_tech(item)
+        ok = (tech is None) or (tech in researched)
+        total += cnt
+        if ok:
+            ready_count += cnt
+        else:
+            missing[tech] = missing.get(tech, 0) + cnt
+        rows.append({"item": item, "count": cnt, "tech": tech,
+                     "researched": ok, "producing": item in producing})
+    pct = int(100 * ready_count / total) if total else 0
+    return {"game_version": f"{maj}.{minor}", "v2": maj == 2, "entity_count": total,
+            "distinct_items": len(bom), "research_ready_pct": pct,
+            "missing_techs": sorted(missing, key=lambda t: -missing[t]),
+            "producing_pct": int(100 * sum(1 for r in rows if r["producing"]) / max(1, len(rows))),
+            "bom": rows[:40]}
+
+
+OVERRIDES = HERE / "bp-overrides.json"
+SLOTS = ("oil-block", "robot-factory", "city-block", "rail-segments", "science", "smelting", "mall")
+
+
+def blueprint_catalog():
+    import bplib
+    import techdb
+    researched, producing = _researched(), _producing()
+    key = ("bpcat", len(researched), len(producing))
+    hit = _cache.get(key)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    out = []
+    for meta in bplib.catalog():
+        name = meta["name"]
+        try:
+            s = bplib.load(name)[0]
+            a = analyze_bp(s, techdb, researched, producing)
+            a.pop("bom", None)
+        except Exception as e:
+            a = {"error": str(e)[:120]}
+        out.append({"name": name, "label": meta.get("label", ""), **a})
+    result = {"prints": out, "overrides": _read_json("bp-overrides.json", {}), "slots": SLOTS}
+    _cache[key] = (time.time(), result)
+    return result
+
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
@@ -142,13 +280,54 @@ class H(BaseHTTPRequestHandler):
                 "architect_actions": rep.get("prioritized_actions", [])[:5],
                 "orders": _read_json("orders.json", [])[-10:] if isinstance(_read_json("orders.json", []), list) else [],
                 "metrics": live_metrics(),
+                "action": _read_json("action.json", {}),
             })
+        elif self.path == "/api/terrain":
+            self._send(terrain())
+        elif self.path == "/api/blueprints":
+            self._send(blueprint_catalog())
         elif self.path == "/api/map":
             self._send(live_map())
         elif self.path == "/api/derpface":
             self._send(derpface_window())
         elif self.path.startswith("/api/log"):
             self._send({"lines": _tail("autopilot.log", 60)})
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+    def do_POST(self):
+        try:
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0)) or 0) or b"{}")
+        except ValueError:
+            self._send({"error": "bad json"})
+            return
+        if self.path == "/api/blueprints/submit":
+            import bplib
+            import techdb
+            name = "".join(ch if ch.isalnum() or ch in "-_" else "-"
+                           for ch in (body.get("name") or "user-print").lower())[:48]
+            s = (body.get("string") or "").strip()
+            try:
+                bplib.verify_2x(s)
+                a = analyze_bp(s, techdb, _researched(), _producing())
+                bplib.save("user-" + name, s, {"source_url": "dashboard-submit", "label": body.get("name", name)})
+                _cache.pop(("bpcat",), None)
+                self._send({"saved": "user-" + name, **a})
+            except Exception as e:
+                self._send({"error": str(e)[:300]})
+        elif self.path == "/api/blueprints/select":
+            slot, name = body.get("slot"), body.get("name")
+            if slot not in SLOTS or not name:
+                self._send({"error": f"slot must be one of {SLOTS}"})
+                return
+            ov = _read_json("bp-overrides.json", {})
+            ov[slot] = name
+            try:
+                OVERRIDES.write_text(json.dumps(ov, indent=1))
+                self._send({"ok": True, "overrides": ov})
+            except OSError as e:
+                self._send({"error": f"write failed ({e}) - is /app mounted read-only?"})
         else:
             self.send_response(404)
             self.end_headers()

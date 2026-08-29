@@ -49,7 +49,7 @@ def stamp_block(p, bx, by):
     if g["blocks"].get(key):
         return
     ax, ay = _block_anchor(g, bx, by)
-    bp = modules.child_string(BLOCK_LIB)
+    bp = modules.child_string(modules.lib_for("city-block", BLOCK_LIB))
     n = modules.stamp_at(bp, ax, ay, (g["pitch"], g["pitch"]))
     g["blocks"][key] = "stamped"
     status.log(f"city block ({bx},{by}) stamped: {n} ghosts @ {ax},{ay}")
