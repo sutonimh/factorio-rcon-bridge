@@ -1499,7 +1499,7 @@ def ensure_derpface():
         "rcon.print('derpface valid='..tostring(storage.derpface and storage.derpface.valid))").strip()
 
 
-def maintain(laps=0):
+def maintain(laps=0, lap_hook=None):
     """SELF-RUNNING loop with Seth's PRIORITY model: do PENDING BUILD TASKS first when able;
     only switch to refuel/refill when a GATE blocks; resolve it; resume builds. Two concurrent
     strands (RCON is thread-safe - fresh socket per call):
@@ -1571,6 +1571,11 @@ def maintain(laps=0):
                 gamedb.snapshot()      # refresh the structures + chest-inventory DB
             status.write_status(BUILD_QUEUE)   # heartbeat for a Claude session to read
             _note()
+            if lap_hook:
+                try:
+                    lap_hook(i)        # learning loop: triage / architect (planner.lap_hook)
+                except Exception as e:
+                    status.log(f"lap_hook error: {e}")
             time.sleep(2)
     finally:
         flag["run"] = False
