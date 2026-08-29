@@ -11,7 +11,7 @@ git pull --ff-only
 echo "==> scp code + static tech DB to charon:$CHARON_DIR (NOT runtime json)"
 # Only ship code (*.py) + the static tech DB. status.json / state-db.json / base-snapshot.json
 # are LIVE runtime state written on Charon: never overwrite them with stale local copies.
-scp ./*.py ./tech-tree.json charon:"$CHARON_DIR"/
+scp ./*.py ./tech-tree.json ./dashboard.html charon:"$CHARON_DIR"/
 # v2 assets: vendored Lua + the curated blueprint library (static, versioned in git)
 ssh charon "mkdir -p $CHARON_DIR/lua $CHARON_DIR/blueprints/library"
 scp ./lua/*.lua charon:"$CHARON_DIR"/lua/
