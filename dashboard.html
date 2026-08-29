@@ -33,7 +33,9 @@
   <div class="card"><h2>Architect</h2><pre id="arch"></pre></div>
   <div class="card"><h2>Lessons</h2><pre id="lessons"></pre></div>
   <div class="card log"><h2>Log</h2><pre id="log"></pre></div>
-  <div class="card" style="grid-column:1/-1"><h2>Map (registry + live entities)</h2>
+  <div class="card"><h2>Derpface live <span id="derpstate" style="text-transform:none"></span></h2>
+    <canvas id="derp" width="360" height="360"></canvas></div>
+  <div class="card" style="grid-column:1/-1"><h2>Live map <span style="text-transform:none;color:var(--dim)">(dim = ghosts · orange dot = derpface)</span></h2>
     <canvas id="map" width="1200" height="600"></canvas></div>
 </div>
 <script>
@@ -78,7 +80,8 @@ async function tick() {
 }
 async function drawMap() {
   try {
-    const ents = await (await fetch("/api/map")).json();
+    const d = await (await fetch("/api/map")).json();
+    const ents = d.ents || [];
     const c = document.getElementById("map"), g = c.getContext("2d");
     g.fillStyle = "#0d0b08"; g.fillRect(0,0,c.width,c.height);
     if (!ents.length) return;
@@ -87,11 +90,48 @@ async function drawMap() {
     const miny = Math.min(...ys)-8, maxy = Math.max(...ys)+8;
     const sc = Math.min(c.width/(maxx-minx), c.height/(maxy-miny));
     for (const e of ents) {
+      g.globalAlpha = e.g ? 0.32 : 1;
       g.fillStyle = COLORS[e.n] || COLORS.default;
       g.fillRect((e.x-minx)*sc, (e.y-miny)*sc, Math.max(2,sc), Math.max(2,sc));
     }
+    g.globalAlpha = 1;
+    if (d.derp) {                       // derpface: bright orange dot + halo
+      const dx = (d.derp.x-minx)*sc, dy = (d.derp.y-miny)*sc;
+      g.strokeStyle = "#e8871f"; g.lineWidth = 2;
+      g.beginPath(); g.arc(dx, dy, 7, 0, 7); g.stroke();
+      g.fillStyle = "#e8871f"; g.beginPath(); g.arc(dx, dy, 3.2, 0, 7); g.fill();
+    }
   } catch(e) {}
 }
-tick(); drawMap();
-setInterval(tick, 4000); setInterval(drawMap, 12000);
+const ORECOL = {"iron-ore":"#7fa8c9","copper-ore":"#d47f4a","coal":"#555","stone":"#a89b7d","crude-oil":"#3a2a4d"};
+async function drawDerp() {
+  try {
+    const d = await (await fetch("/api/derpface")).json();
+    const c = document.getElementById("derp"), g = c.getContext("2d");
+    g.fillStyle = "#0d0b08"; g.fillRect(0,0,c.width,c.height);
+    if (d.x === undefined) return;
+    const span = d.x2 - d.x1, sc = c.width / span;
+    for (const t of d.tiles||[]) {       // terrain first: water + ore
+      g.fillStyle = t.w ? "#1d3a52" : (ORECOL[t.o] || "#333");
+      g.fillRect((t.x-d.x1)*sc, (t.y-d.y1)*sc, sc, sc);
+    }
+    g.strokeStyle = "#241f17"; g.lineWidth = 1;   // tile grid
+    for (let i=0;i<=span;i++){ g.beginPath(); g.moveTo(i*sc,0); g.lineTo(i*sc,c.height); g.stroke();
+                               g.beginPath(); g.moveTo(0,i*sc); g.lineTo(c.width,i*sc); g.stroke(); }
+    for (const e of d.ents||[]) {
+      g.globalAlpha = e.g ? 0.35 : 1;
+      g.fillStyle = COLORS[e.n] || COLORS.default;
+      const s2 = (e.t==="assembling-machine"||e.t==="furnace"||e.t==="boiler"||e.t==="lab") ? 2.6 : 1.4;
+      g.fillRect((e.x-d.x1)*sc - s2*sc/3, (e.y-d.y1)*sc - s2*sc/3, s2*sc*0.66, s2*sc*0.66);
+    }
+    g.globalAlpha = 1;
+    const dx = (d.x-d.x1)*sc, dy = (d.y-d.y1)*sc;   // derpface marker
+    g.fillStyle = "#e8871f"; g.beginPath(); g.arc(dx, dy, sc*0.45, 0, 7); g.fill();
+    g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.beginPath(); g.arc(dx, dy, sc*0.45, 0, 7); g.stroke();
+    document.getElementById("derpstate").textContent =
+      ` — (${Math.floor(d.x)},${Math.floor(d.y)}) ${d.walking?"walking":"idle"}${d.craftq?` · crafting ${d.craftq}`:""}`;
+  } catch(e) {}
+}
+tick(); drawMap(); drawDerp();
+setInterval(tick, 4000); setInterval(drawMap, 4000); setInterval(drawDerp, 2000);
 </script>

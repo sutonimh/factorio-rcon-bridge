@@ -1416,8 +1416,39 @@ def keep_power():
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local b=s.find_entities_filtered{name='boiler'}[1]; if b then local need=5-b.get_fuel_inventory().get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end;"
         "local bc=s.find_entities_filtered{name='wooden-chest',position={45,-2},radius=6}[1]; if bc then local ci=bc.get_inventory(defines.inventory.chest); local need=120-ci.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then ci.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
-    # ensure_grid_connected() DISABLED: it adds bridge poles -> modifies the operator's hand-built power layout.
-    # Power is human-managed now; the autopilot must not auto-place poles.
+    # v2 fresh map: the autopilot OWNS the whole layout (the hands-off rule was for the
+    # retired human-built base), so grid self-healing is back ON.
+    ensure_grid_connected()
+    fix_unpowered()
+
+
+def fix_unpowered(limit=8):
+    """Consumer-side power self-heal: for electric consumers reading no_power, place a small
+    pole adjacent (from carried poles; script-crafts a few from plates when short) and bridge
+    it to the engine's network if it landed as an island. power_row VERIFIED coverage but
+    nothing ACTED on the gaps - the 2026-08-29 science-cell stall (5 assemblers + inserters
+    dark on a healthy grid) was exactly this. Server-side, no walk."""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
+        "local eng=s.find_entities_filtered{name='steam-engine'}[1]; if not eng or eng.energy<=0 then return end; local main=eng.electric_network_id;"
+        "if inv.get_item_count('small-electric-pole')<4 then local w=inv.get_item_count('wood'); local cc=inv.get_item_count('copper-cable');"
+        "  if cc<2 and inv.get_item_count('copper-plate')>=1 then inv.remove{name='copper-plate',count=1}; inv.insert{name='copper-cable',count=2}; cc=cc+2 end;"
+        "  if w>=1 and cc>=2 then inv.remove{name='wood',count=1}; inv.remove{name='copper-cable',count=2}; inv.insert{name='small-electric-pole',count=1} end end;"
+        "local fixed=0;"
+        "for _,e in pairs(s.find_entities_filtered{type={'assembling-machine','lab','inserter'},position=p.position,radius=120}) do"
+        f"  if fixed>={limit} then break end;"
+        "  if e.status==defines.entity_status.no_power and inv.get_item_count('small-electric-pole')>0 then"
+        "    for _,off in pairs({{2,0},{-2,0},{0,2},{0,-2},{2,2},{-2,-2}}) do"
+        "      local x,y=math.floor(e.position.x)+off[1]+0.5,math.floor(e.position.y)+off[2]+0.5;"
+        "      if s.can_place_entity{name='small-electric-pole',position={x,y},force=f} then"
+        "        local np=s.create_entity{name='small-electric-pole',position={x,y},force=f};"
+        "        if np then inv.remove{name='small-electric-pole',count=1}; fixed=fixed+1;"
+        "          if np.electric_network_id~=main then local near,bd=nil,1e9;"
+        "            for _,q in pairs(s.find_entities_filtered{type='electric-pole'}) do if q.electric_network_id==main then local d=(q.position.x-np.position.x)^2+(q.position.y-np.position.y)^2; if d<bd then bd=d; near=q end end end;"
+        "            if near then local ex,ey,tx,ty=np.position.x,np.position.y,near.position.x,near.position.y; local steps=math.ceil(math.sqrt(bd)/6);"
+        "              for k=1,steps do if inv.get_item_count('small-electric-pole')<1 then break end; local bx,by=math.floor(ex+(tx-ex)*k/steps)+0.5,math.floor(ey+(ty-ey)*k/steps)+0.5;"
+        "                if s.can_place_entity{name='small-electric-pole',position={bx,by},force=f} then s.create_entity{name='small-electric-pole',position={bx,by},force=f}; inv.remove{name='small-electric-pole',count=1} end end end end;"
+        "          break end end end end end")
 
 
 def ensure_grid_connected():
