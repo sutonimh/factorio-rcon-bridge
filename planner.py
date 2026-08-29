@@ -198,7 +198,30 @@ def gate1():
     return all(checks.values()), checks
 
 
-PHASES = {0: (phase0, gate0), 1: (phase1, gate1)}
+# ------------------------------------------------------------------ phases 2-3
+def phase2(p):
+    import phase2_mall
+    phase2_mall.advance(p)
+    save(p)
+
+
+def gate2():
+    import phase2_mall
+    return phase2_mall.gate(load())
+
+
+def phase3(p):
+    import phase3_grid
+    phase3_grid.advance(p)
+    save(p)
+
+
+def gate3():
+    import phase3_grid
+    return phase3_grid.gate(load())
+
+
+PHASES = {0: (phase0, gate0), 1: (phase1, gate1), 2: (phase2, gate2), 3: (phase3, gate3)}
 
 
 # ------------------------------------------------------------------ top level
