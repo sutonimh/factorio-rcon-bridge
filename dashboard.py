@@ -70,17 +70,48 @@ def live_metrics():
 
 
 def live_map():
-    """Entity scatter for the canvas map: name-class + tile pos, capped."""
+    """Entity scatter for the canvas map: name-class + tile pos (+ ghosts flagged g=1) and
+    derpface position, capped."""
     out = _rcon_cached("map", (
         "/sc local s=game.surfaces[1]; local o={};"
         "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
-        "  if #o<2500 and e.name~='character' then o[#o+1]={n=e.name,x=math.floor(e.position.x),y=math.floor(e.position.y)} end end;"
-        "rcon.print(helpers.table_to_json(o))"
-    ), ttl=10)
+        "  if #o<3000 and e.name~='character' then"
+        "    if e.name=='entity-ghost' then o[#o+1]={n=e.ghost_name,x=math.floor(e.position.x),y=math.floor(e.position.y),g=1}"
+        "    else o[#o+1]={n=e.name,x=math.floor(e.position.x),y=math.floor(e.position.y)} end end end;"
+        "local p=storage.derpface; local dp=p and p.valid and {x=p.position.x,y=p.position.y} or nil;"
+        "rcon.print(helpers.table_to_json({ents=o,derp=dp}))"
+    ), ttl=4)
+    try:
+        d = json.loads(out)
+        return d if isinstance(d, dict) else {"ents": d, "derp": None}
+    except ValueError:
+        return {"ents": [], "derp": None}
+
+
+def derpface_window(half=6):
+    """Live close-up around derpface: entities + water/resource tiles in a ~(2*half)^2 area,
+    plus position/walking/crafting state. Small + fast (2s TTL) so the panel feels live."""
+    out = _rcon_cached("derp", (
+        "/sc local p=storage.derpface; if not (p and p.valid) then rcon.print('{}') return end;"
+        "local s=p.surface; local px,py=p.position.x,p.position.y;"
+        f"local x1,y1,x2,y2=math.floor(px)-{half},math.floor(py)-{half},math.floor(px)+{half},math.floor(py)+{half};"
+        "local ents={};"
+        "for _,e in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}}}) do"
+        "  if e.name~='character' and #ents<160 then"
+        "    local n=(e.name=='entity-ghost') and e.ghost_name or e.name;"
+        "    ents[#ents+1]={n=n,x=e.position.x,y=e.position.y,t=e.type,g=(e.name=='entity-ghost') and 1 or nil} end end;"
+        "local tiles={};"
+        "for _,t in pairs(s.find_tiles_filtered{area={{x1,y1},{x2,y2}},name={'water','deepwater'}}) do"
+        "  tiles[#tiles+1]={x=t.position.x,y=t.position.y,w=1} end;"
+        "for _,r in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}},type='resource'}) do"
+        "  tiles[#tiles+1]={x=math.floor(r.position.x),y=math.floor(r.position.y),o=r.name} end;"
+        "rcon.print(helpers.table_to_json({x=px,y=py,walking=p.walking_state.walking,"
+        "craftq=p.crafting_queue_size,ents=ents,tiles=tiles,x1=x1,y1=y1,x2=x2,y2=y2}))"
+    ), ttl=2)
     try:
         return json.loads(out)
     except ValueError:
-        return []
+        return {}
 
 
 class H(BaseHTTPRequestHandler):
@@ -114,6 +145,8 @@ class H(BaseHTTPRequestHandler):
             })
         elif self.path == "/api/map":
             self._send(live_map())
+        elif self.path == "/api/derpface":
+            self._send(derpface_window())
         elif self.path.startswith("/api/log"):
             self._send({"lines": _tail("autopilot.log", 60)})
         else:
