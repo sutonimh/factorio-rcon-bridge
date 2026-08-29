@@ -1497,6 +1497,39 @@ def _lane_connected(ore):
         return True
 
 
+def fix_mine_row_flow(ore):
+    """FLOW-DIRECTION self-heal for a mine's drop row (GOTCHAS: belt flow must point AT the
+    consumer). The iron row was half-west half-east (drills fed both; the east half ran ore
+    to a dead end and the array starved with every belt EMPTY). Find the row's EXIT (the belt
+    whose output leaves the row - the lane toward base) and point every row belt at it."""
+    spot = STATE.get(ore) or A.richest_spot(ore, 0, 0, radius=160)
+    if not spot:
+        return
+    rx, ry = int(spot[0]), int(spot[1])
+    A._print(
+        f"/sc local s=game.surfaces[1]; local row={{}};"
+        f"for _,b in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='transport-belt'}}) do"
+        "  row[#row+1]=b end;"
+        "if #row<4 then return end;"
+        # find the dominant row Y (most belts share it) - that's the drop row
+        "local ycnt={}; for _,b in pairs(row) do local y=math.floor(b.position.y); ycnt[y]=(ycnt[y] or 0)+1 end;"
+        "local ry2,best=nil,0; for y,c in pairs(ycnt) do if c>best then best=c; ry2=y end end;"
+        # exit = a row belt whose output is OFF the row (corner into the lane) or, failing that,
+        # the end adjacent to a non-row belt; fall back: the westmost belt
+        "local exitx=nil;"
+        "for _,b in pairs(row) do local y=math.floor(b.position.y);"
+        "  if y==ry2 then for _,o in pairs(b.belt_neighbours.outputs) do"
+        "    if math.floor(o.position.y)~=ry2 then exitx=math.floor(b.position.x) end end end end;"
+        "if not exitx then local mn=1e9; for _,b in pairs(row) do local y=math.floor(b.position.y);"
+        "  if y==ry2 then local x=math.floor(b.position.x); if x<mn then mn=x end end end; exitx=mn end;"
+        "local n=0;"
+        "for _,b in pairs(row) do local y=math.floor(b.position.y);"
+        "  if y==ry2 then local x=math.floor(b.position.x);"
+        "    local want=(x>exitx) and 12 or ((x<exitx) and 4 or b.direction);"
+        "    if b.direction~=want and x~=exitx then b.direction=want; n=n+1 end end end;"
+        "if n>0 then game.print('fix_mine_row_flow: pointed '..n..' belts at the row exit') end")
+
+
 def ensure_lanes(lap=0):
     """SOURCE-TO-DESTINATION lane law (Seth, 2026-08-29): a mine belt must reach its smelter
     array by belt connectivity - no chest shuttles where a belt belongs, no trusting that a lay
@@ -1505,6 +1538,7 @@ def ensure_lanes(lap=0):
     fixed = 0
     for ore in ("iron-ore", "copper-ore"):
         try:
+            fix_mine_row_flow(ore)
             if not _lane_connected(ore):
                 status.log(f"lane {ore}: NOT connected to array - re-laying via connect_mine_to_array")
                 A.purpose(f"re-laying the {ore} belt so it reaches the smelters")
