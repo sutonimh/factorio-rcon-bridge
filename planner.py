@@ -92,6 +92,12 @@ def lap_hook(i):
         v = triage.classify(d)
         status.log(f"triage[{v.get('_source','?')[:9]}]: {v['state']}"
                    + (f"/{v['class']}" if v.get("class") else "") + f" - {v['reason']}")
+        if v.get("state") in ("stall", "anomaly"):
+            # BOTTLENECK FIRST (Seth): stop what we're doing, run the heal battery NOW,
+            # and record what each heal fixed as a lesson (learning, not just logging)
+            import autopilot as A
+            A.stop()
+            heal_battery("triage " + v["state"])
         if v.get("wake_architect") and time.time() - _last_arch["t"] > ARCH_COOLDOWN_S:
             _last_arch["t"] = time.time()
             # daemon thread: a 35B call can take minutes and must never block the
@@ -100,6 +106,24 @@ def lap_hook(i):
             threading.Thread(target=_run_architect_safe, args=(d, v), daemon=True).start()
     except Exception as e:
         status.log(f"lap_hook error: {e}")
+
+
+def heal_battery(reason):
+    """Run every self-heal immediately; heals that FIX something become lessons (the
+    automated GOTCHAS - Seth: learn from mistakes, don't just repair them)."""
+    import bootstrap as B
+    for fn, tag in (("keep_power", "power"), ("fix_unpowered", "power"),
+                    ("repair_belt_gaps", "belts"), ("ensure_lanes", "belts")):
+        try:
+            r = getattr(B, fn)()
+            if isinstance(r, int) and r > 0:
+                lessons.add(condition=f"heal {fn} fired ({reason})",
+                            mistake=f"{fn} found {r} defect(s) the build left behind",
+                            rule=f"whatever built this must verify; {fn} covers the gap meanwhile",
+                            tags=("self-heal", tag))
+                status.log(f"heal_battery: {fn} fixed {r} ({reason})")
+        except Exception as e:
+            status.log(f"heal_battery {fn}: {e}")
 
 
 def _run_architect_safe(d, v):
@@ -264,11 +288,7 @@ def play():
         # PASS-START SELF-HEALS + operator inbox: build passes can run long (walks), and these
         # are all server-side/instant - they must never wait for a maintain burst (Seth: the
         # maintenance loop must not get in the way of automation)
-        for fn in ("keep_power", "fix_unpowered", "repair_belt_gaps", "ensure_lanes"):
-            try:
-                getattr(B, fn)()
-            except Exception as e:
-                status.log(f"pass-start {fn}: {e}")
+        heal_battery("pass start")
         try:
             import operator2 as _op
             _op.process_inbox()
