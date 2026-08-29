@@ -16,6 +16,9 @@ scp ./*.py ./tech-tree.json ./dashboard.html charon:"$CHARON_DIR"/
 ssh charon "mkdir -p $CHARON_DIR/lua $CHARON_DIR/blueprints/library"
 scp ./lua/*.lua charon:"$CHARON_DIR"/lua/
 scp ./blueprints/library/* charon:"$CHARON_DIR"/blueprints/library/
+# GOTCHAS: a process kill mid-walk leaves walking_state=true (character runs forever).
+# Best-effort stop before the restart; ignore failures (server may be down).
+FACTORIO_RCON_HOST=100.100.199.83 FACTORIO_RCON_PORT=27015 python3 rcon.py "/sc if storage.derpface and storage.derpface.valid then storage.derpface.walking_state={walking=false} end" || true
 echo "==> restart the autopilot container"
 ssh charon "sudo docker restart factorio-autopilot"
 echo "==> deployed. status: ssh charon cat $CHARON_DIR/status.json"
