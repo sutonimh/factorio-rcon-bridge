@@ -214,6 +214,7 @@ def phase0(p):
     B.automate_green_science()
     A.purpose("phase 0: science I/O cells + powering them")
     B.setup_science_io()
+    B.ensure_science_cells()   # delta-build any recipe cells the all-or-nothing pass missed
     A.purpose("phase 0: locating crude oil for phase 1")
     scout_oil(p)
 
