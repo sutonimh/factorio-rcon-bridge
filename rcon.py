@@ -80,17 +80,6 @@ def _run_once(command, timeout=10.0):
         return "".join(out)
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "--ping":
-        print(run("/sc rcon.print('pong tick='..game.tick)"))
-        sys.exit(0)
-    cmd = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else sys.stdin.read()
-    cmd = cmd.strip()
-    if not cmd:
-        print("no command given", file=sys.stderr)
-        sys.exit(2)
-    print(run(cmd))
-
 
 def run(command, timeout=10.0):
     """Bounded retry on CONNECT-phase failures (refused/reset) - one RCON blip was
@@ -110,3 +99,15 @@ def run(command, timeout=10.0):
             if attempt >= 2:
                 raise
             _t.sleep(2.0)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--ping":
+        print(run("/sc rcon.print('pong tick='..game.tick)"))
+        sys.exit(0)
+    cmd = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else sys.stdin.read()
+    cmd = cmd.strip()
+    if not cmd:
+        print("no command given", file=sys.stderr)
+        sys.exit(2)
+    print(run(cmd))
