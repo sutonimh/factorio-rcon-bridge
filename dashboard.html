@@ -2,72 +2,139 @@
 <meta charset="utf-8">
 <title>Factorio Autopilot</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-  :root { --bg:#16130e; --panel:#211c15; --line:#3a3226; --ink:#e8e2d4; --dim:#a89f8c;
-          --acc:#e8871f; --ok:#7bb661; --bad:#d4614d; --blue:#6fa8dc; }
+  :root { --bg:#16130e; --panel:#211c15; --panel2:#2a241b; --line:#3a3226; --ink:#e8e2d4;
+          --dim:#a89f8c; --faint:#7d7563; --acc:#e8871f; --ok:#7bb661; --bad:#d4614d;
+          --blue:#6fa8dc; --amber:#e0c05a; }
   * { box-sizing:border-box; }
-  body { background:var(--bg); color:var(--ink); font:14px/1.5 ui-monospace,Menlo,monospace;
-         margin:0; padding:16px; }
-  h1 { font-size:18px; margin:0 0 10px; color:var(--acc); display:inline-block; margin-right:20px; }
-  .tabs { display:inline-flex; gap:6px; vertical-align:middle; }
-  .tab { padding:5px 14px; border:1px solid var(--line); background:var(--panel); color:var(--dim);
+  body { background:var(--bg); color:var(--ink); font:13.5px/1.5 "IBM Plex Mono",ui-monospace,Menlo,monospace;
+         margin:0; padding:0 18px 40px; }
+  ::-webkit-scrollbar { width:10px; height:10px; } ::-webkit-scrollbar-thumb { background:var(--line); }
+  h1 { font:700 22px Rajdhani,sans-serif; letter-spacing:.02em; color:var(--acc); margin:0; }
+  header { display:flex; align-items:center; gap:22px; flex-wrap:wrap; padding:14px 0 10px;
+           border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:10; }
+  .tabs { display:flex; gap:6px; }
+  .tab { font:600 14px Rajdhani,sans-serif; text-transform:uppercase; letter-spacing:.1em;
+         padding:6px 16px; border:1px solid var(--line); background:var(--panel); color:var(--dim);
          cursor:pointer; user-select:none; }
-  .tab.on { border-color:var(--acc); color:var(--acc); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
-  .card { background:var(--panel); border:1px solid var(--line); padding:12px; overflow:auto; }
-  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--dim); margin:0 0 8px; }
-  .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; }
-  .kv b { color:var(--dim); font-weight:normal; }
-  .ok { color:var(--ok); } .bad { color:var(--bad); } .acc { color:var(--acc); }
-  .phases { display:flex; gap:8px; margin:10px 0 12px; flex-wrap:wrap; }
-  .ph { padding:6px 12px; border:1px solid var(--line); background:var(--panel); color:var(--dim); }
-  .ph.cur { border-color:var(--acc); color:var(--acc); }
+  .tab:hover { border-color:var(--acc); }
+  .tab.on { border-color:var(--acc); color:var(--acc); background:var(--pan2, var(--panel2)); }
+  .pills { display:flex; gap:8px; margin-left:auto; flex-wrap:wrap; }
+  .pill { display:flex; align-items:center; gap:6px; padding:3px 11px; border:1px solid var(--line);
+          background:var(--panel); font-size:12px; color:var(--dim); }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--faint); }
+  .dot.ok { background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .dot.bad { background:var(--bad); box-shadow:0 0 6px var(--bad); }
+  .dot.amber { background:var(--amber); box-shadow:0 0 5px var(--amber); }
+  .rbar { width:70px; height:6px; background:var(--line); position:relative; }
+  .rbar i { position:absolute; inset:0 auto 0 0; background:var(--blue); }
+  .phases { display:flex; gap:0; margin:14px 0; flex-wrap:wrap; align-items:center; }
+  .ph { font:600 13px Rajdhani,sans-serif; text-transform:uppercase; letter-spacing:.08em;
+        padding:7px 16px; border:1px solid var(--line); background:var(--panel); color:var(--faint); }
+  .ph.cur { border-color:var(--acc); color:var(--acc); background:var(--panel2); }
   .ph.done { border-color:var(--ok); color:var(--ok); }
+  .ph.done::before { content:"✓ "; }
+  .conn { width:22px; height:1px; background:var(--line); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); padding:13px 14px; overflow:auto; min-width:0; }
+  .card h2 { font:600 13px Rajdhani,sans-serif; text-transform:uppercase; letter-spacing:.14em;
+             color:var(--dim); margin:0 0 9px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:3px 14px; font-size:13px; }
+  .kv b { color:var(--faint); font-weight:normal; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .acc { color:var(--acc); } .amber { color:var(--amber); }
   pre { margin:0; white-space:pre-wrap; font-size:12px; color:var(--dim); }
-  canvas { display:block; background:#11170f; border:1px solid var(--line); max-width:100%; }
-  .log { max-height:260px; }
-  .actionbig { font-size:16px; color:var(--acc); }
-  .bar { height:8px; background:var(--line); position:relative; margin:4px 0; }
+  canvas { display:block; background:#181f13; border:1px solid var(--line); max-width:100%; }
+  #map { width:100%; }
+  .tiles { display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  .tile { background:var(--panel2); border:1px solid var(--line); padding:8px 10px 5px; }
+  .tile .v { font:600 20px Rajdhani,sans-serif; color:var(--ink); }
+  .tile .l { font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; }
+  .tile svg { display:block; width:100%; height:22px; margin-top:2px; }
+  .chip { display:inline-block; padding:1px 9px; border:1px solid var(--line); margin:2px 4px 2px 0; font-size:12px; }
+  .chip.y { border-color:var(--ok); color:var(--ok); } .chip.n { border-color:var(--bad); color:var(--bad); }
+  .chip.role { border-color:var(--blue); color:var(--blue); }
+  .logline { display:block; } .logline.err { color:var(--bad); } .logline.gate { color:var(--ok); }
+  .logline.triage { color:var(--amber); } .logline.trig { color:var(--blue); }
+  .log { max-height:300px; }
+  .actionbig { font:600 17px Rajdhani,sans-serif; color:var(--acc); }
+  .queue li { margin-bottom:4px; color:var(--dim); } .queue li:first-child { color:var(--ink); }
+  .bar { height:8px; background:var(--line); position:relative; margin:5px 0 4px; }
   .bar i { position:absolute; inset:0 auto 0 0; background:var(--ok); }
-  .bp { border:1px solid var(--line); padding:8px 10px; margin-bottom:8px; }
-  .bp .nm { color:var(--ink); }
-  .badge { font-size:11px; padding:1px 7px; border:1px solid var(--ok); color:var(--ok); margin-left:8px; }
+  .bp { border:1px solid var(--line); background:var(--panel2); padding:10px 12px; margin-bottom:9px; }
+  .bp .nm { font:600 15px Rajdhani,sans-serif; color:var(--ink); }
+  .badge { font-size:11px; padding:1px 8px; border:1px solid var(--ok); color:var(--ok); margin-left:8px; }
+  .badge.use { border-color:var(--acc); color:var(--acc); }
   textarea { width:100%; height:90px; background:#0d0b08; color:var(--ink); border:1px solid var(--line);
-             font:12px ui-monospace,monospace; padding:6px; }
+             font:12px "IBM Plex Mono",monospace; padding:6px; }
   input, select, button { background:#0d0b08; color:var(--ink); border:1px solid var(--line);
-             font:13px ui-monospace,monospace; padding:5px 10px; }
+             font:13px "IBM Plex Mono",monospace; padding:5px 11px; }
   button { cursor:pointer; } button:hover { border-color:var(--acc); color:var(--acc); }
+  button:focus-visible, .tab:focus-visible { outline:2px solid var(--acc); outline-offset:2px; }
   .hidden { display:none !important; }
+  .mapbtns { position:absolute; right:10px; top:10px; display:flex; gap:6px; z-index:6; }
+  .mapbtns button { padding:2px 10px; font-size:15px; }
+  .legend { display:flex; gap:12px; flex-wrap:wrap; margin-top:7px; font-size:11.5px; color:var(--faint); }
+  .legend i { display:inline-block; width:10px; height:10px; margin-right:4px; vertical-align:-1px; }
+  #modal { position:fixed; inset:0; background:rgba(10,8,5,.82); z-index:50; display:flex;
+           align-items:center; justify-content:center; }
+  #modal .inner { background:var(--panel); border:1px solid var(--acc); padding:16px; max-width:92vw; max-height:92vh; overflow:auto; }
+  .tip { position:absolute; display:none; background:#0d0b08; border:1px solid var(--acc); color:var(--ink);
+         padding:3px 8px; font-size:12px; pointer-events:none; white-space:nowrap; z-index:5; }
 </style>
-<h1>⚙ Factorio Autopilot</h1>
-<div class="tabs">
-  <div class="tab on" data-tab="overview">Overview</div>
-  <div class="tab" data-tab="live">Live</div>
-  <div class="tab" data-tab="bp">Blueprints</div>
-</div>
+
+<header>
+  <h1>⚙ FACTORIO AUTOPILOT</h1>
+  <div class="tabs">
+    <div class="tab on" data-tab="overview" tabindex="0">Overview</div>
+    <div class="tab" data-tab="live" tabindex="0">Live</div>
+    <div class="tab" data-tab="bp" tabindex="0">Blueprints</div>
+  </div>
+  <div class="pills">
+    <div class="pill"><span class="dot" id="p-heart"></span><span id="p-heart-t">heartbeat</span></div>
+    <div class="pill"><span class="dot" id="p-power"></span>power</div>
+    <div class="pill"><span class="dot" id="p-triage"></span><span id="p-triage-t">triage</span></div>
+    <div class="pill"><span id="p-research">research</span><span class="rbar"><i id="p-research-b" style="width:0"></i></span></div>
+  </div>
+</header>
 <div class="phases" id="phases"></div>
 
 <div id="tab-overview" class="grid">
   <div class="card"><h2>Status</h2><div class="kv" id="status"></div></div>
-  <div class="card"><h2>Production /min</h2><div class="kv" id="prod"></div></div>
-  <div class="card"><h2>Phase gates</h2><pre id="gates"></pre></div>
+  <div class="card"><h2>Production /min</h2><div class="tiles" id="prod"></div></div>
+  <div class="card"><h2>Phase gates</h2><div id="gates"></div></div>
   <div class="card"><h2>Architect</h2><pre id="arch"></pre></div>
   <div class="card"><h2>Lessons</h2><pre id="lessons"></pre></div>
-  <div class="card log"><h2>Log</h2><pre id="log"></pre></div>
+  <div class="card log" style="grid-column:1/-1"><h2>Log
+    <span style="float:right;text-transform:none;letter-spacing:0">
+      <button style="padding:1px 8px;font-size:11px" onclick="logFilter=null;tick()">all</button>
+      <button style="padding:1px 8px;font-size:11px" onclick="logFilter='err';tick()">errors</button>
+      <button style="padding:1px 8px;font-size:11px" onclick="logFilter='triage';tick()">triage</button>
+    </span></h2><pre id="log"></pre></div>
 </div>
 
 <div id="tab-live" class="grid hidden">
   <div class="card"><h2>Current action</h2>
     <div class="actionbig" id="action">—</div>
-    <div id="actionmeta" style="color:var(--dim);margin-top:4px"></div></div>
-  <div class="card"><h2>Task queue</h2><pre id="queue">—</pre></div>
-  <div class="card" style="grid-row:span 2"><h2>Derpface live <span id="derpstate" style="text-transform:none"></span></h2>
-    <canvas id="derp" width="380" height="380"></canvas></div>
-  <div class="card" style="grid-column:1/-1"><h2>Live map <span style="text-transform:none;color:var(--dim)">(terrain + base · dim = ghosts · ⊙ = derpface · scroll = zoom · drag = pan · double-click = reset)</span></h2>
+    <div id="actionmeta" style="color:var(--faint);margin-top:5px"></div></div>
+  <div class="card"><h2>Task queue</h2><ol class="queue" id="queue" style="margin:0;padding-left:20px"></ol></div>
+  <div class="card" style="grid-row:span 2"><h2>Derpface live <span id="derpstate" style="text-transform:none;letter-spacing:0"></span></h2>
+    <canvas id="derp" width="440" height="440"></canvas></div>
+  <div class="card" style="grid-column:1/-1"><h2>Live map
+    <span style="text-transform:none;letter-spacing:0;color:var(--faint)"> scroll = zoom · drag = pan · dbl-click = fit · hover = inspect · ⊙ = follow derpface</span></h2>
     <div id="mapwrap" style="position:relative">
+      <div class="mapbtns">
+        <button onclick="mapZoom(1.25)" title="zoom in">+</button>
+        <button onclick="mapZoom(0.8)" title="zoom out">−</button>
+        <button id="followbtn" onclick="toggleFollow()" title="follow derpface">⊙</button>
+        <button onclick="view.fitted=false;renderMap()" title="fit all">⛶</button>
+      </div>
       <canvas id="map" width="1400" height="400" style="cursor:grab"></canvas>
-      <div id="maptip" style="position:absolute;display:none;background:#0d0b08;border:1px solid var(--acc);color:var(--ink);padding:3px 8px;font-size:12px;pointer-events:none;white-space:nowrap;z-index:5"></div>
-    </div></div>
+      <div id="maptip" class="tip"></div>
+    </div>
+    <div class="legend" id="maplegend"></div></div>
 </div>
 
 <div id="tab-bp" class="grid hidden">
@@ -77,79 +144,128 @@
     <div style="margin:8px 0"><textarea id="bpstring" placeholder="paste blueprint string (0eNq...)"></textarea></div>
     <pre id="bpresult"></pre></div>
   <div class="card" style="grid-column:1/-1"><h2>Library — readiness vs current research &amp; production</h2>
-    <div style="color:var(--dim);margin-bottom:8px">Recommended = highest buildable-now score. "Use for…" points the autopilot's next pass at that print.</div>
+    <div style="color:var(--faint);margin-bottom:9px">Role is auto-detected from contents · ★ = best buildable-now score for its role · assigning a slot points the autopilot's next pass at that print</div>
     <div id="bplist">loading…</div></div>
 </div>
 
+<div id="modal" class="hidden"><div class="inner">
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px">
+    <span id="pv-label" style="font:600 16px Rajdhani,sans-serif;color:var(--acc)"></span>
+    <select id="pv-child" class="hidden" onchange="preview(pvName, this.selectedIndex)"></select>
+    <button style="margin-left:auto" onclick="document.getElementById('modal').classList.add('hidden')">✕ close</button>
+  </div>
+  <div style="position:relative"><canvas id="pv" width="820" height="560"></canvas><div id="pvtip" class="tip"></div></div>
+  <div class="legend" id="pv-legend"></div>
+</div></div>
+
 <script>
 const PHASE_NAMES = ["0 Bootstrap","1 Bus + Robots","2 Mall Era","3 City Blocks"];
-const COLORS = {default:"#a89f8c","transport-belt":"#e8c15a","fast-transport-belt":"#e85d5d",
-  "stone-furnace":"#c87d45","steel-furnace":"#9a9a9a","burner-mining-drill":"#7bb661",
-  "electric-mining-drill":"#7bb661","assembling-machine-1":"#6fa8dc","assembling-machine-2":"#6fa8dc",
-  lab:"#d06fdc",boiler:"#d4614d","steam-engine":"#d4614d","offshore-pump":"#5ab4e8",
-  "small-electric-pole":"#888","medium-electric-pole":"#888",pumpjack:"#e8871f",
-  "oil-refinery":"#b58ee0","chemical-plant":"#8ee0b5",roboport:"#e0d38e",
-  "iron-chest":"#ddd","wooden-chest":"#b8905a",inserter:"#e8871f","burner-inserter":"#d4a017"};
-const TCOL = {".":"#1a2213", w:"#1d3a52", i:"#41586e", c:"#6e5541", k:"#2e2e2e", s:"#5a5346",
-              o:"#3a2a4d", t:"#233318"};
-function kv(el, obj) { el.innerHTML = Object.entries(obj).map(([k,v])=>`<b>${k}</b><span>${v}</span>`).join(""); }
-function note(id, msg) { const c=document.getElementById(id), g=c.getContext("2d");
-  g.fillStyle="#11170f"; g.fillRect(0,0,c.width,c.height);
+const COLORS = {default:"#b0a790","transport-belt":"#e8c15a","fast-transport-belt":"#e85d5d",
+  "express-transport-belt":"#6fd3e8","underground-belt":"#c9a53f","fast-underground-belt":"#d35454",
+  "stone-furnace":"#c87d45","steel-furnace":"#a8a8a8","electric-furnace":"#c0c0d8",
+  "burner-mining-drill":"#8fc973","electric-mining-drill":"#6fbf52","pumpjack":"#e8871f",
+  "assembling-machine-1":"#6fa8dc","assembling-machine-2":"#5a90d0","assembling-machine-3":"#8ab8f0",
+  lab:"#d06fdc",boiler:"#d4614d","steam-engine":"#e07a6a","offshore-pump":"#5ab4e8",
+  "small-electric-pole":"#999","medium-electric-pole":"#aaa","big-electric-pole":"#ccc",substation:"#ddd",
+  "oil-refinery":"#b58ee0","chemical-plant":"#8ee0b5","storage-tank":"#9ec3cf",roboport:"#e8d75a",
+  "iron-chest":"#e0e0e0","wooden-chest":"#c99b63","steel-chest":"#f0f0f0",
+  inserter:"#e8a01f","burner-inserter":"#d4a017","fast-inserter":"#5ad0e8","long-handed-inserter":"#d05454",
+  "small-lamp":"#fff2b0",pipe:"#7f97a8","pipe-to-ground":"#5f7788",splitter:"#e8c15a","fast-splitter":"#e85d5d",
+  rail:"#8a8a7a","straight-rail":"#8a8a7a","curved-rail-a":"#8a8a7a","curved-rail-b":"#8a8a7a",
+  "rail-signal":"#7bd070","rail-chain-signal":"#70a8d0","train-stop":"#e8871f",locomotive:"#d0d0d0","constant-combinator":"#c07070"};
+const SIZES = {"oil-refinery":5,"chemical-plant":3,"assembling-machine-1":3,"assembling-machine-2":3,
+  "assembling-machine-3":3,lab:3,boiler:2,"steam-engine":3,"storage-tank":3,roboport:4,substation:2,
+  "stone-furnace":2,"steel-furnace":2,"electric-furnace":3,"burner-mining-drill":2,"electric-mining-drill":3,
+  pumpjack:3,"big-electric-pole":2,"train-stop":2,locomotive:2,splitter:2,"fast-splitter":2};
+const TCOL = {".":"#232b1c", w:"#2b5d8a", i:"#5a7d9e", c:"#a06a45", k:"#3a3a3a", s:"#77705e",
+              o:"#5a3d78", t:"#2e4420"};
+const TNAME = {w:"water", i:"iron ore", c:"copper ore", k:"coal", s:"stone", o:"crude oil", t:"trees"};
+const $ = id => document.getElementById(id);
+const fmt = v => (typeof v==="number" ? (v>=10?v.toFixed(0):v.toFixed(2)) : (v??"—"));
+function note(id, msg) { const c=$(id), g=c.getContext("2d");
+  g.fillStyle="#181f13"; g.fillRect(0,0,c.width,c.height);
   g.fillStyle="#a89f8c"; g.font="13px monospace"; g.fillText(msg, 12, 24); }
+function spark(hist, color) {
+  if (hist.length < 2) return "";
+  const max = Math.max(...hist, 1), pts = hist.map((v,i) =>
+    `${(i/(hist.length-1))*100},${22 - (v/max)*20}`).join(" ");
+  return `<svg viewBox="0 0 100 22" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+}
 
-// ---- tabs
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("on", x===t));
-  ["overview","live","bp"].forEach(n =>
-    document.getElementById("tab-"+n).classList.toggle("hidden", t.dataset.tab!==n));
+  ["overview","live","bp"].forEach(n => $("tab-"+n).classList.toggle("hidden", t.dataset.tab!==n));
   if (t.dataset.tab==="bp") loadBPs();
+  if (t.dataset.tab==="live") { view.fitted=false; drawMap(); drawDerp(); }
 });
 
-// ---- overview + shared state
-let lastState = {};
+let logFilter = null, hist = {iron:[], copper:[], red:[], green:[]};
 async function tick() {
   try {
-    const s = await (await fetch("/api/state")).json();
-    lastState = s;
+    const s = await (await fetch("/api/state", {cache:"no-store"})).json();
     const st = s.status||{}, m = s.metrics||{}, ph = (s.phase||{}).phase ?? 0;
-    document.getElementById("phases").innerHTML = PHASE_NAMES.map((n,i)=>
-      `<div class="ph ${i<ph?"done":i===ph?"cur":""}">${n}</div>`).join("");
-    kv(document.getElementById("status"), {
-      heartbeat: st.iso||"?", "game hours": st.game_hours??"?",
+    const age = st.ts ? Math.floor(Date.now()/1000 - st.ts) : 9e9;
+    $("p-heart").className = "dot " + (age<180 ? "ok" : age<900 ? "amber" : "bad");
+    $("p-heart-t").textContent = age<9e8 ? `heartbeat ${age}s` : "heartbeat ?";
+    $("p-power").className = "dot " + (st.power_ok ? "ok" : "bad");
+    $("p-research").textContent = (m.research||st.research?.current||"—").slice(0,26);
+    $("p-research-b").style.width = (m.research_pct??0)+"%";
+    const tri = (st.recent_log||[]).slice().reverse().find(l=>l.includes("triage["));
+    const tstate = tri ? (tri.match(/triage\[[^\]]*\]: (\w+)/)||[])[1] : null;
+    $("p-triage").className = "dot " + (tstate==="healthy"||tstate==null ? "ok" : tstate==="watch" ? "amber" : "bad");
+    $("p-triage-t").textContent = "triage " + (tstate||"—");
+    $("phases").innerHTML = PHASE_NAMES.map((n,i)=>
+      `<div class="ph ${i<ph?"done":i===ph?"cur":""}">${n}</div>` +
+      (i<PHASE_NAMES.length-1?'<div class="conn"></div>':"")).join("");
+    kvSet("status", {
+      heartbeat: st.iso||"—", "game hours": st.game_hours??"—",
       power: st.power_ok?'<span class="ok">OK</span>':'<span class="bad">DOWN</span>',
-      "boiler fuel": st.boiler_fuel??"?", labs: st.labs||"?", assemblers: st.assemblers||"?",
-      drills: st.drills??"?",
-      research: `${m.research||st.research?.current||"-"} ${m.research_pct??""}%`});
-    kv(document.getElementById("prod"), {
-      "iron plate": fmt(m.iron_pm), "copper plate": fmt(m.copper_pm),
-      "red science": fmt(m.red_pm), "green science": fmt(m.green_pm)});
-    document.getElementById("gates").textContent = JSON.stringify((s.phase||{}).gates||{},null,1);
-    document.getElementById("arch").textContent = (s.architect_summary||"(no report yet)") + "\n\n" +
+      "boiler fuel": st.boiler_fuel??"—", labs: st.labs||"—", assemblers: st.assemblers||"—",
+      drills: st.drills??"—",
+      research: `${m.research||st.research?.current||"—"} <span class="acc">${m.research_pct??""}%</span>`});
+    pushH("iron", m.iron_pm); pushH("copper", m.copper_pm); pushH("red", m.red_pm); pushH("green", m.green_pm);
+    $("prod").innerHTML = [
+      tile("iron plate", m.iron_pm, hist.iron, "#7fa8c9"), tile("copper plate", m.copper_pm, hist.copper, "#d47f4a"),
+      tile("red science", m.red_pm, hist.red, "#d4614d"), tile("green science", m.green_pm, hist.green, "#7bb661")].join("");
+    const gates = ((s.phase||{}).gates||{})[String(ph)] || {};
+    $("gates").innerHTML = Object.keys(gates).length
+      ? Object.entries(gates).map(([k,v])=>`<span class="chip ${v?"y":"n"}">${v?"✓":"✗"} ${k}</span>`).join("")
+      : '<span style="color:var(--faint)">(no gate evaluated yet)</span>';
+    $("arch").textContent = (s.architect_summary||"(no report yet)") + "\n\n" +
       (s.architect_actions||[]).map(a=>`${a.rank}. [${a.type}] ${a.action}`).join("\n");
-    document.getElementById("lessons").textContent = (s.lessons||[]).slice(-12).map(
+    $("lessons").textContent = (s.lessons||[]).slice(-12).map(
       l=>`[${l.count}x] ${l.condition} -> ${l.rule}`).join("\n") || "(none yet)";
-    // live tab: action + queue
     const a = s.action||{};
-    document.getElementById("action").textContent = a.action || "(no action reported yet)";
-    const age = a.ts ? Math.max(0, Math.floor(Date.now()/1000 - a.ts)) : null;
-    document.getElementById("actionmeta").textContent =
-      (age!==null ? `${age}s ago · ` : "") +
-      `derpface (${(st.derpface||{}).pos||"?"}) ${(st.derpface||{}).walking==="true"?"walking":"idle"}`;
+    $("action").textContent = a.action || "(no action reported yet)";
+    const aage = a.ts ? Math.max(0, Math.floor(Date.now()/1000 - a.ts)) : null;
+    $("actionmeta").textContent = (aage!==null ? `${aage}s ago · ` : "") +
+      `derpface (${(st.derpface||{}).pos||"?"}) ${(st.derpface||{}).walking==="true"?"walking":"idle"} · coal ${(st.derpface||{}).coal??"?"}`;
     const q = (st.build_queue||[]).length ? st.build_queue : (a.plan||[]);
-    document.getElementById("queue").textContent = q.length ? q.map((x,i)=>`${i+1}. ${x}`).join("\n") : "(queue empty)";
+    $("queue").innerHTML = q.length ? q.map(x=>`<li>${x}</li>`).join("") : "<li>(queue empty)</li>";
   } catch(e) {}
   try {
-    const lg = await (await fetch("/api/log")).json();
-    const el = document.getElementById("log");
-    el.textContent = (lg.lines||[]).join("\n"); el.scrollTop = el.scrollHeight;
+    const lg = await (await fetch("/api/log", {cache:"no-store"})).json();
+    const cls = l => l.includes("error")||l.includes("ERROR") ? "err" : l.includes("GATE PASSED") ? "gate"
+              : l.includes("triage[") ? "triage" : l.includes("trigger tech") ? "trig" : "";
+    let lines = lg.lines||[];
+    if (logFilter) lines = lines.filter(l => cls(l)===logFilter);
+    $("log").innerHTML = lines.map(l=>`<span class="logline ${cls(l)}">${l.replace(/</g,"&lt;")}</span>`).join("");
+    $("log").scrollTop = $("log").scrollHeight;
   } catch(e) {}
 }
-const fmt = v => (typeof v==="number" ? (v>=10?v.toFixed(0):v.toFixed(2)) : (v??"?"));
+function kvSet(id, obj) { $(id).innerHTML = Object.entries(obj).map(([k,v])=>`<b>${k}</b><span>${v}</span>`).join(""); }
+function pushH(k, v) { if (typeof v==="number") { hist[k].push(v); hist[k].splice(0, hist[k].length-40); } }
+function tile(label, v, h, color) {
+  return `<div class="tile"><div class="v">${fmt(v)}</div><div class="l">${label}</div>${spark(h,color)}</div>`;
+}
 
-// ---- live map with terrain: zoom / pan / hover annotations
-let terrainCache = null, terrainTs = 0, mapData = {ents:[], derp:null};
-const view = {cx:0, cy:0, ppt:0, fitted:false};   // ppt = pixels per tile
-const TNAME = {w:"water", i:"iron ore", c:"copper ore", k:"coal", s:"stone", o:"crude oil", t:"trees"};
+let terrainCache = null, terrainTs = 0, mapData = {ents:[], derp:null}, followDerp = false;
+const view = {cx:0, cy:0, ppt:0, fitted:false};
+function toggleFollow() {
+  followDerp = !followDerp;
+  $("followbtn").style.color = followDerp ? "var(--acc)" : "";
+  if (followDerp && mapData.derp) { view.ppt = Math.max(view.ppt, 4); renderMap(); }
+}
 function mapBounds() {
   const T = terrainCache;
   if (T && T.rows && T.rows.length)
@@ -161,81 +277,85 @@ function mapBounds() {
 }
 function fitView() {
   const b = mapBounds(); if (!b) return;
-  const c = document.getElementById("map");
-  const wpx = c.parentElement.parentElement.clientWidth - 26 || 1400;
+  const c = $("map");
+  const pw = c.parentElement.clientWidth;
+  const wpx = pw > 100 ? pw - 4 : 1360;      // hidden tab reports 0 width: fall back, refit on show
   c.width = wpx;
   const ppt = wpx / (b.maxx - b.minx);
-  c.height = Math.max(220, Math.min(760, (b.maxy - b.miny) * ppt));
+  c.height = Math.max(240, Math.min(780, Math.round((b.maxy - b.miny) * ppt)));
   view.ppt = Math.min(ppt, c.height / (b.maxy - b.miny));
   view.cx = (b.minx + b.maxx) / 2; view.cy = (b.miny + b.maxy) / 2;
   view.fitted = true;
 }
-const w2sx = wx => (wx - view.cx) * view.ppt + document.getElementById("map").width / 2;
-const w2sy = wy => (wy - view.cy) * view.ppt + document.getElementById("map").height / 2;
-const s2wx = sx => (sx - document.getElementById("map").width / 2) / view.ppt + view.cx;
-const s2wy = sy => (sy - document.getElementById("map").height / 2) / view.ppt + view.cy;
+const w2sx = wx => (wx - view.cx) * view.ppt + $("map").width / 2;
+const w2sy = wy => (wy - view.cy) * view.ppt + $("map").height / 2;
+const s2wx = sx => (sx - $("map").width / 2) / view.ppt + view.cx;
+const s2wy = sy => (sy - $("map").height / 2) / view.ppt + view.cy;
 function renderMap() {
-  const c = document.getElementById("map"), g = c.getContext("2d");
+  const c = $("map"), g = c.getContext("2d");
   const T = terrainCache, ents = mapData.ents;
   if (!view.fitted) fitView();
-  if (!view.fitted) { note("map","no data yet"); return; }
-  g.fillStyle = "#11170f"; g.fillRect(0,0,c.width,c.height);
+  if (!view.fitted) { note("map","waiting for data…"); return; }
+  if (followDerp && mapData.derp) { view.cx = mapData.derp.x; view.cy = mapData.derp.y; }
+  g.fillStyle = "#181f13"; g.fillRect(0,0,c.width,c.height);
   const px = view.ppt;
   if (T && T.rows) for (let r=0;r<T.rows.length;r++) for (let cc=0;cc<T.rows[r].length;cc++) {
     const ch = T.rows[r][cc];
-    if (ch===".") continue;
     const x = w2sx(T.x1 + cc*T.step), y = w2sy(T.y1 + r*T.step);
     if (x < -8 || y < -8 || x > c.width || y > c.height) continue;
     g.fillStyle = TCOL[ch] || "#333";
-    g.fillRect(x, y, T.step*px+0.5, T.step*px+0.5);
+    g.fillRect(x, y, T.step*px+0.6, T.step*px+0.6);
   }
   for (const e of ents) {
     const x = w2sx(e.x), y = w2sy(e.y);
     if (x < -6 || y < -6 || x > c.width || y > c.height) continue;
-    g.globalAlpha = e.g ? 0.32 : 1;
+    g.globalAlpha = e.g ? 0.35 : 1;
     g.fillStyle = COLORS[e.n] || COLORS.default;
-    g.fillRect(x, y, Math.max(2,px), Math.max(2,px));
+    const s = Math.max(1.8, (SIZES[e.n]||1) * px);
+    g.fillRect(x, y, s, s);
   }
   g.globalAlpha = 1;
   if (mapData.derp) {
     const dx = w2sx(mapData.derp.x), dy = w2sy(mapData.derp.y);
     g.strokeStyle = "#e8871f"; g.lineWidth = 2;
-    g.beginPath(); g.arc(dx, dy, Math.max(8, px), 0, 7); g.stroke();
-    g.fillStyle = "#ffb35c"; g.beginPath(); g.arc(dx, dy, Math.max(3.5, px*0.4), 0, 7); g.fill();
+    g.beginPath(); g.arc(dx, dy, Math.max(9, px), 0, 7); g.stroke();
+    g.fillStyle = "#ffb35c"; g.beginPath(); g.arc(dx, dy, Math.max(4, px*0.4), 0, 7); g.fill();
   }
+  $("maplegend").innerHTML = [["water",TCOL.w],["iron",TCOL.i],["copper",TCOL.c],["coal",TCOL.k],
+    ["stone",TCOL.s],["oil",TCOL.o],["trees",TCOL.t],["belts",COLORS["transport-belt"]],
+    ["machines",COLORS["assembling-machine-1"]],["power",COLORS.boiler],["ghosts (dim)","#5a5346"]]
+    .map(([n,c2])=>`<span><i style="background:${c2}"></i>${n}</span>`).join("");
 }
+function mapZoom(f) { view.ppt = Math.max(0.4, Math.min(30, view.ppt*f)); renderMap(); }
 async function drawMap() {
   try {
     if (!terrainCache || Date.now()-terrainTs > 30000) {
-      terrainCache = await (await fetch("/api/terrain")).json(); terrainTs = Date.now();
+      terrainCache = await (await fetch("/api/terrain", {cache:"no-store"})).json(); terrainTs = Date.now();
     }
-    const d = await (await fetch("/api/map")).json();
+    const d = await (await fetch("/api/map", {cache:"no-store"})).json();
     mapData = {ents: d.ents||[], derp: d.derp||null};
     renderMap();
   } catch(e) { note("map", "map error: "+e.message); }
 }
-// interactions
 (() => {
-  const c = document.getElementById("map"), tip = document.getElementById("maptip");
+  const c = $("map"), tip = $("maptip");
   let drag = null;
   c.addEventListener("wheel", ev => {
     ev.preventDefault();
     const wx = s2wx(ev.offsetX), wy = s2wy(ev.offsetY);
-    view.ppt *= ev.deltaY < 0 ? 1.18 : 1/1.18;
-    view.ppt = Math.max(0.4, Math.min(30, view.ppt));
+    view.ppt = Math.max(0.4, Math.min(30, view.ppt * (ev.deltaY < 0 ? 1.18 : 1/1.18)));
     view.cx = wx - (ev.offsetX - c.width/2)/view.ppt;
     view.cy = wy - (ev.offsetY - c.height/2)/view.ppt;
-    renderMap();
+    followDerp = false; renderMap();
   }, {passive:false});
   c.addEventListener("mousedown", ev => { drag = {x:ev.offsetX, y:ev.offsetY}; c.style.cursor="grabbing"; });
   window.addEventListener("mouseup", () => { drag = null; c.style.cursor="grab"; });
-  c.addEventListener("dblclick", () => { view.fitted = false; renderMap(); });
+  c.addEventListener("dblclick", () => { followDerp=false; view.fitted = false; renderMap(); });
   c.addEventListener("mouseleave", () => tip.style.display = "none");
   c.addEventListener("mousemove", ev => {
     if (drag) {
-      view.cx -= (ev.offsetX - drag.x)/view.ppt;
-      view.cy -= (ev.offsetY - drag.y)/view.ppt;
-      drag = {x:ev.offsetX, y:ev.offsetY};
+      view.cx -= (ev.offsetX - drag.x)/view.ppt; view.cy -= (ev.offsetY - drag.y)/view.ppt;
+      drag = {x:ev.offsetX, y:ev.offsetY}; followDerp = false;
       renderMap(); tip.style.display = "none"; return;
     }
     const wx = s2wx(ev.offsetX), wy = s2wy(ev.offsetY);
@@ -252,84 +372,132 @@ async function drawMap() {
       const ch = (T.rows[r]||"")[cc];
       if (ch && ch !== ".") best = `${TNAME[ch]||ch} @ ${Math.floor(wx)},${Math.floor(wy)}`;
     }
-    if (best) {
-      tip.textContent = best;
+    if (best) { tip.textContent = best;
       tip.style.left = (ev.offsetX + 14) + "px"; tip.style.top = (ev.offsetY + 10) + "px";
       tip.style.display = "block";
     } else tip.style.display = "none";
   });
+  window.addEventListener("resize", () => { view.fitted=false; renderMap(); });
 })();
 
-// ---- derpface window
 async function drawDerp() {
-  const c = document.getElementById("derp"), g = c.getContext("2d");
+  const c = $("derp"), g = c.getContext("2d");
   try {
-    const d = await (await fetch("/api/derpface")).json();
+    const d = await (await fetch("/api/derpface", {cache:"no-store"})).json();
     if (d.x === undefined) { note("derp","derpface not available (server restarting?)"); return; }
     const span = d.x2 - d.x1, sc = c.width / span;
-    g.fillStyle = "#1a2213"; g.fillRect(0,0,c.width,c.height);   // land ground, not black
+    g.fillStyle = "#232b1c"; g.fillRect(0,0,c.width,c.height);
     for (const t of d.tiles||[]) {
       g.fillStyle = t.w ? TCOL.w : ({["iron-ore"]:TCOL.i,["copper-ore"]:TCOL.c,coal:TCOL.k,stone:TCOL.s,["crude-oil"]:TCOL.o}[t.o] || "#333");
       g.fillRect((t.x-d.x1)*sc, (t.y-d.y1)*sc, sc+0.5, sc+0.5);
     }
-    g.strokeStyle = "rgba(255,255,255,0.05)"; g.lineWidth = 1;
+    g.strokeStyle = "rgba(255,255,255,0.06)"; g.lineWidth = 1;
     for (let i=0;i<=span;i++){ g.beginPath(); g.moveTo(i*sc,0); g.lineTo(i*sc,c.height); g.stroke();
                                g.beginPath(); g.moveTo(0,i*sc); g.lineTo(c.width,i*sc); g.stroke(); }
     for (const e of d.ents||[]) {
-      g.globalAlpha = e.g ? 0.35 : 1;
+      g.globalAlpha = e.g ? 0.4 : 1;
       g.fillStyle = COLORS[e.n] || COLORS.default;
-      const big = ["assembling-machine","furnace","boiler","lab","mining-drill","offshore-pump"].some(t=>(e.t||"").includes(t));
-      const s2 = big ? sc*1.7 : sc*0.8;
+      const big = ["assembling-machine","furnace","boiler","lab","mining-drill","offshore-pump","refinery","chemical"].some(t=>(e.t||"").includes(t));
+      const s2 = big ? sc*1.8 : sc*0.85;
       g.fillRect((e.x-d.x1)*sc - s2/2, (e.y-d.y1)*sc - s2/2, s2, s2);
     }
     g.globalAlpha = 1;
     const dx = (d.x-d.x1)*sc, dy = (d.y-d.y1)*sc;
     g.fillStyle = "#e8871f"; g.beginPath(); g.arc(dx, dy, sc*0.45, 0, 7); g.fill();
     g.strokeStyle = "#fff"; g.lineWidth = 1.5; g.beginPath(); g.arc(dx, dy, sc*0.45, 0, 7); g.stroke();
-    document.getElementById("derpstate").textContent =
+    $("derpstate").textContent =
       ` — (${Math.floor(d.x)},${Math.floor(d.y)}) ${d.walking?"walking":"idle"}${d.craftq?` · crafting ${d.craftq}`:""}`;
   } catch(e) { note("derp", "error: "+e.message); }
 }
 
-// ---- blueprints tab
+let pvName = null;
 async function loadBPs() {
-  const el = document.getElementById("bplist");
+  const el = $("bplist");
   try {
-    const d = await (await fetch("/api/blueprints")).json();
+    const d = await (await fetch("/api/blueprints", {cache:"no-store"})).json();
     const prints = d.prints||[], ov = d.overrides||{}, slots = d.slots||[];
-    const best = Math.max(...prints.map(p=>p.research_ready_pct||0));
+    // best score PER ROLE, so "recommended" means "best print for this job"
+    const bestByRole = {};
+    for (const p of prints) if (p.role)
+      bestByRole[p.role] = Math.max(bestByRole[p.role]||0, p.research_ready_pct||0);
     el.innerHTML = prints.sort((a,b)=>(b.research_ready_pct||0)-(a.research_ready_pct||0)).map(p => {
       if (p.error) return `<div class="bp"><span class="nm">${p.name}</span> <span class="bad">${p.error}</span></div>`;
-      const rec = p.research_ready_pct===best && best>0 ? '<span class="badge">recommended</span>' : "";
+      const rec = p.role && p.research_ready_pct===bestByRole[p.role]
+        ? `<span class="badge">★ best for ${p.role}</span>` : "";
       const used = Object.entries(ov).filter(([s,n])=>n===p.name).map(([s])=>s);
+      const opts = ['<option value="">— choose slot —</option>']
+        .concat(slots.map(s=>`<option value="${s}"${ov[s]===p.name ? " selected" : (!used.length && s===p.role ? " selected" : "")}>${s}</option>`));
       return `<div class="bp">
-        <span class="nm">${p.name}</span> <span style="color:var(--dim)">v${p.game_version} · ${p.entity_count} ents</span>${rec}
-        ${used.length?`<span class="badge" style="border-color:var(--acc);color:var(--acc)">in use: ${used.join(", ")}</span>`:""}
+        <span class="nm">${p.name}</span> <span style="color:var(--faint)">v${p.game_version} · ${p.entity_count} ents · ${p.distinct_items} item types</span>
+        ${p.role?`<span class="chip role">${p.role} — ${p.role_why}</span>`:'<span class="chip">no clear role</span>'}${rec}
+        ${used.length?`<span class="badge use">in use: ${used.join(", ")}</span>`:""}
         <div class="bar"><i style="width:${p.research_ready_pct||0}%"></i></div>
-        <div style="color:var(--dim)">buildable now: ${p.research_ready_pct||0}% · items we already produce: ${p.producing_pct||0}%
-          ${p.missing_techs&&p.missing_techs.length?` · missing: ${p.missing_techs.slice(0,4).join(", ")}${p.missing_techs.length>4?"…":""}`:""}</div>
-        <div style="margin-top:5px">Use for
-          <select id="slot-${p.name}">${slots.map(s=>`<option${ov[s]===p.name?" selected":""}>${s}</option>`).join("")}</select>
+        <div style="color:var(--faint)">buildable now: <span class="${p.research_ready_pct>79?"ok":p.research_ready_pct>39?"amber":"bad"}">${p.research_ready_pct||0}%</span>
+          · items we already produce: ${p.producing_pct||0}%
+          ${p.missing_techs&&p.missing_techs.length?`<div>missing: ${p.missing_techs.slice(0,5).map(t=>`<span class="chip n">${t}</span>`).join("")}${p.missing_techs.length>5?"…":""}</div>`:""}</div>
+        <div style="margin-top:6px">
+          <button onclick="preview('${p.name}',0)">👁 preview</button>
+          &nbsp;use for <select id="slot-${p.name}">${opts.join("")}</select>
           <button onclick="selectBP('${p.name}')">apply</button></div>
       </div>`;
     }).join("") || "(library empty)";
   } catch(e) { el.textContent = "error: "+e.message; }
 }
+async function preview(name, child) {
+  pvName = name;
+  $("modal").classList.remove("hidden");
+  const d = await (await fetch(`/api/blueprints/preview?name=${encodeURIComponent(name)}&child=${child}`)).json();
+  const c = $("pv"), g = c.getContext("2d");
+  g.fillStyle = "#181f13"; g.fillRect(0,0,c.width,c.height);
+  if (d.error) { g.fillStyle="#d4614d"; g.fillText(d.error, 14, 24); return; }
+  $("pv-label").textContent = d.label || name;
+  const sel = $("pv-child");
+  if (d.children && d.children.length) {
+    sel.classList.remove("hidden");
+    sel.innerHTML = d.children.map((l,i)=>`<option${i===child?" selected":""}>${l}</option>`).join("");
+  } else sel.classList.add("hidden");
+  const ents = d.ents||[];
+  if (!ents.length) { g.fillStyle="#a89f8c"; g.fillText("(empty blueprint)", 14, 24); return; }
+  const xs = ents.map(e=>e.x), ys = ents.map(e=>e.y);
+  const minx=Math.min(...xs)-2, maxx=Math.max(...xs)+2, miny=Math.min(...ys)-2, maxy=Math.max(...ys)+2;
+  const sc = Math.min(c.width/(maxx-minx), c.height/(maxy-miny));
+  window._pvState = {ents, minx, miny, sc};
+  const counts = {};
+  for (const e of ents) {
+    counts[e.n] = (counts[e.n]||0)+1;
+    g.fillStyle = COLORS[e.n] || COLORS.default;
+    const s = (SIZES[e.n]||1)*sc;
+    g.fillRect((e.x-minx)*sc - s/2, (e.y-miny)*sc - s/2, Math.max(2,s), Math.max(2,s));
+  }
+  $("pv-legend").innerHTML = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,14)
+    .map(([n,ct])=>`<span><i style="background:${COLORS[n]||COLORS.default}"></i>${n} ×${ct}</span>`).join("");
+}
+$("pv").addEventListener("mousemove", ev => {
+  const st = window._pvState, tip = $("pvtip");
+  if (!st) return;
+  const wx = ev.offsetX/st.sc + st.minx, wy = ev.offsetY/st.sc + st.miny;
+  let best=null, bd=2;
+  for (const e of st.ents) { const d2=Math.abs(e.x-wx)+Math.abs(e.y-wy); if (d2<bd){bd=d2;best=e.n;} }
+  if (best) { tip.textContent=best; tip.style.left=(ev.offsetX+14)+"px"; tip.style.top=(ev.offsetY+10)+"px"; tip.style.display="block"; }
+  else tip.style.display="none";
+});
+$("modal").addEventListener("click", ev => { if (ev.target.id==="modal") $("modal").classList.add("hidden"); });
 async function submitBP() {
-  const out = document.getElementById("bpresult");
+  const out = $("bpresult");
   out.textContent = "analyzing…";
   try {
     const r = await (await fetch("/api/blueprints/submit", {method:"POST",
-      body: JSON.stringify({name: document.getElementById("bpname").value,
-                            string: document.getElementById("bpstring").value})})).json();
+      body: JSON.stringify({name: $("bpname").value, string: $("bpstring").value})})).json();
     out.textContent = r.error ? ("REJECTED: " + r.error)
       : `saved as ${r.saved} — v${r.game_version}, ${r.entity_count} entities, buildable now ${r.research_ready_pct}%` +
+        (r.role ? `\ndetected role: ${r.role} (${r.role_why})` : "") +
         (r.missing_techs.length ? `\nmissing research: ${r.missing_techs.join(", ")}` : "");
     loadBPs();
   } catch(e) { out.textContent = "error: "+e.message; }
 }
 async function selectBP(name) {
-  const slot = document.getElementById("slot-"+name).value;
+  const slot = $("slot-"+name).value;
+  if (!slot) return;
   await fetch("/api/blueprints/select", {method:"POST", body: JSON.stringify({slot, name})});
   loadBPs();
 }

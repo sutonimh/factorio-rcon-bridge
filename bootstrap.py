@@ -386,6 +386,23 @@ def ensure(item, count):
     gamedb.pull_from_buffer(item, count - _count(item))   # use buffered stock before mining
     if _count(item) >= count:
         return
+    if item == "wood":
+        # wood isn't a resource entity (trees are type=tree), so the richest-spot path below
+        # can never find it; without this branch every pole craft dead-ends once the
+        # cleared-land wood runs out (stalled the science-cell power build 2026-08-29)
+        tp = A._print(
+            "/sc local p=storage.derpface; local s=p.surface;"
+            "local t=s.find_entities_filtered{type='tree',position=p.position,radius=250,limit=1}[1];"
+            "rcon.print(t and (math.floor(t.position.x)..','..math.floor(t.position.y)) or 'none')").strip()
+        if "," in tp:
+            tx, ty = map(int, tp.split(","))
+            A.now(f"Provision: harvesting wood @{tx},{ty}")
+            A.stop(); A.walk(tx, ty + 1, tol=3.0)
+            A._print(
+                f"/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local n=0;"
+                f"for _,t in pairs(s.find_entities_filtered{{type='tree',position={{{tx},{ty}}},radius=14}}) do"
+                f"  if n*4>={count}+8 then break end; inv.insert{{name='wood',count=4}}; t.destroy(); n=n+1 end")
+        return
     mc = mine_chest(item)
     if mc and mc[2] >= (count - _count(item)):
         cx, cy, _ = mc

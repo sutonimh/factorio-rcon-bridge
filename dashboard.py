@@ -218,15 +218,67 @@ def analyze_bp(bp_string, techdb, researched, producing):
         rows.append({"item": item, "count": cnt, "tech": tech,
                      "researched": ok, "producing": item in producing})
     pct = int(100 * ready_count / total) if total else 0
+    role, role_why = classify_bp(bom)
     return {"game_version": f"{maj}.{minor}", "v2": maj == 2, "entity_count": total,
             "distinct_items": len(bom), "research_ready_pct": pct,
             "missing_techs": sorted(missing, key=lambda t: -missing[t]),
             "producing_pct": int(100 * sum(1 for r in rows if r["producing"]) / max(1, len(rows))),
+            "role": role, "role_why": role_why,
             "bom": rows[:40]}
+
+
+def bp_preview(name, child=0):
+    """Entity layout of one blueprint (or one child of a book) for the client-side preview
+    renderer. Books list their children so the modal can page through them."""
+    import bplib
+    try:
+        s = bplib.load(name)[0]
+        d = bplib.decode(s)
+    except Exception as e:
+        return {"error": str(e)[:200]}
+    labels = []
+    node = d
+    if "blueprint_book" in d:
+        kids = d["blueprint_book"].get("blueprints", [])
+        if not kids:
+            return {"error": "empty book"}
+        labels = [(k.get("blueprint") or k.get("blueprint_book") or {}).get("label", f"#{i}")
+                  for i, k in enumerate(kids)]
+        node = kids[max(0, min(child, len(kids) - 1))]
+        while "blueprint_book" in node:      # nested book: dive to its first blueprint
+            node = node["blueprint_book"]["blueprints"][0]
+    bp = node.get("blueprint", {})
+    ents = [{"n": e["name"], "x": e["position"]["x"], "y": e["position"]["y"],
+             "d": e.get("direction", 0)} for e in bp.get("entities", [])][:5000]
+    return {"label": bp.get("label", name), "children": labels, "child": child, "ents": ents}
 
 
 OVERRIDES = HERE / "bp-overrides.json"
 SLOTS = ("oil-block", "robot-factory", "city-block", "rail-segments", "science", "smelting", "mall")
+
+
+def classify_bp(bom):
+    """Guess which build slot a print serves from its contents. Returns (slot, reason)."""
+    n = lambda *names: sum(bom.get(x, 0) for x in names)
+    rails = n("rail", "straight-rail", "curved-rail-a", "curved-rail-b", "rail-signal",
+              "rail-chain-signal", "train-stop", "rail-ramp", "rail-support")
+    total = max(1, sum(bom.values()))
+    if rails / total > 0.3:
+        return "rail-segments", f"{rails} rail pieces"
+    if n("oil-refinery") >= 2 or (n("chemical-plant") >= 2 and n("pumpjack", "storage-tank")):
+        return "oil-block", f"{n('oil-refinery')} refineries, {n('chemical-plant')} chem plants"
+    if n("roboport") >= 2 and n("big-electric-pole", "substation") >= 4 and total < 200:
+        return "city-block", "roboport/pole grid skeleton"
+    if n("lab") >= 4:
+        return "science", f"{n('lab')} labs"
+    if n("stone-furnace", "steel-furnace", "electric-furnace") >= 8:
+        return "smelting", f"{n('stone-furnace','steel-furnace','electric-furnace')} furnaces"
+    if n("roboport") >= 1 and n("logistic-chest-passive-provider", "passive-provider-chest",
+                                "logistic-chest-storage", "storage-chest") >= 2:
+        return "robot-factory", "roboport + logistic chests"
+    if n("assembling-machine-1", "assembling-machine-2", "assembling-machine-3") >= 10:
+        return "mall", "many assemblers"
+    return None, "no clear role"
 
 
 def blueprint_catalog():
@@ -286,6 +338,10 @@ class H(BaseHTTPRequestHandler):
             self._send(terrain())
         elif self.path == "/api/blueprints":
             self._send(blueprint_catalog())
+        elif self.path.startswith("/api/blueprints/preview"):
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            self._send(bp_preview(q.get("name", [""])[0], int(q.get("child", ["0"])[0])))
         elif self.path == "/api/map":
             self._send(live_map())
         elif self.path == "/api/derpface":
