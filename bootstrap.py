@@ -1431,6 +1431,10 @@ def fix_unpowered(limit=8):
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
         "local eng=s.find_entities_filtered{name='steam-engine'}[1]; if not eng or eng.energy<=0 then return end; local main=eng.electric_network_id;"
+        # wood fallback: cleared base land has no trees in pocket - harvest a few server-side
+        "if inv.get_item_count('wood')<2 and inv.get_item_count('small-electric-pole')<1 then"
+        "  local n=0; for _,tr in pairs(s.find_entities_filtered{type='tree',position=p.position,radius=90}) do"
+        "    if n>=4 then break end; inv.insert{name='wood',count=4}; tr.destroy(); n=n+1 end end;"
         "if inv.get_item_count('small-electric-pole')<4 then local w=inv.get_item_count('wood'); local cc=inv.get_item_count('copper-cable');"
         "  if cc<2 and inv.get_item_count('copper-plate')>=1 then inv.remove{name='copper-plate',count=1}; inv.insert{name='copper-cable',count=2}; cc=cc+2 end;"
         "  if w>=1 and cc>=2 then inv.remove{name='wood',count=1}; inv.remove{name='copper-cable',count=2}; inv.insert{name='small-electric-pole',count=1} end end;"

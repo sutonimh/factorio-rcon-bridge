@@ -39,7 +39,8 @@ def _ob(p):
 
 
 def _block_string():
-    s = bplib.load(BLOCK_LIB)[0]
+    import modules
+    s = bplib.load(modules.lib_for("oil-block", BLOCK_LIB))[0]
     d = bplib.decode(s)
     child = d["blueprint_book"]["blueprints"][0]      # "Basic Oil Processing Block"
     bplib.strip_snap(child)

@@ -770,6 +770,13 @@ def now(action, plan=None):
         "(biters OFF, crash debris cleared)",
     ]
     lines = [("> " + str(action), True), ("-- queue --", False)] + [(t, False) for t in plan]
+    # live current-action feed for the dashboard (world render is invisible off-game)
+    try:
+        import json as _json, pathlib as _pl
+        (_pl.Path(__file__).resolve().parent / "action.json").write_text(
+            _json.dumps({"ts": int(time.time()), "action": str(action), "plan": list(plan)}))
+    except Exception:
+        pass
     return _render_notes(lines)
 
 

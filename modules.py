@@ -16,6 +16,22 @@ import status
 import techdb
 
 
+def lib_for(slot, default):
+    """Library name for a build slot, honoring dashboard selections (bp-overrides.json).
+    Seth can pick a different print on the Blueprints tab; the planner uses it next pass."""
+    import pathlib
+    f = pathlib.Path(__file__).resolve().parent / "bp-overrides.json"
+    try:
+        ov = json.loads(f.read_text())
+        pick = ov.get(slot)
+        if pick:
+            bplib.load(pick)      # validate it exists before honoring it
+            return pick
+    except (OSError, ValueError, FileNotFoundError):
+        pass
+    return default
+
+
 def child_string(lib_name, child_label=None, index=0):
     """Extract one blueprint from a library book (by label substring, else index),
     snap-stripped and re-encoded. A bare (non-book) entry returns itself."""
