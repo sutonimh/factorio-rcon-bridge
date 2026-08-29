@@ -1,0 +1,97 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Factorio Autopilot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#16130e; --panel:#211c15; --line:#3a3226; --ink:#e8e2d4; --dim:#a89f8c;
+          --acc:#e8871f; --ok:#7bb661; --bad:#d4614d; }
+  * { box-sizing:border-box; }
+  body { background:var(--bg); color:var(--ink); font:14px/1.5 ui-monospace,Menlo,monospace;
+         margin:0; padding:16px; }
+  h1 { font-size:18px; margin:0 0 12px; color:var(--acc); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:12px; }
+  .card { background:var(--panel); border:1px solid var(--line); padding:12px; overflow:auto; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:var(--dim);
+             margin:0 0 8px; }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:2px 14px; }
+  .kv b { color:var(--dim); font-weight:normal; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .acc { color:var(--acc); }
+  .phases { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .ph { padding:6px 12px; border:1px solid var(--line); background:var(--panel); color:var(--dim); }
+  .ph.cur { border-color:var(--acc); color:var(--acc); }
+  .ph.done { border-color:var(--ok); color:var(--ok); }
+  pre { margin:0; white-space:pre-wrap; font-size:12px; color:var(--dim); }
+  canvas { width:100%; background:#0d0b08; border:1px solid var(--line); }
+  .log { max-height:260px; }
+</style>
+<h1>⚙ Factorio Autopilot — Nauvis Megabase</h1>
+<div class="phases" id="phases"></div>
+<div class="grid">
+  <div class="card"><h2>Status</h2><div class="kv" id="status"></div></div>
+  <div class="card"><h2>Production /min</h2><div class="kv" id="prod"></div></div>
+  <div class="card"><h2>Phase gates</h2><pre id="gates"></pre></div>
+  <div class="card"><h2>Architect</h2><pre id="arch"></pre></div>
+  <div class="card"><h2>Lessons</h2><pre id="lessons"></pre></div>
+  <div class="card log"><h2>Log</h2><pre id="log"></pre></div>
+  <div class="card" style="grid-column:1/-1"><h2>Map (registry + live entities)</h2>
+    <canvas id="map" width="1200" height="600"></canvas></div>
+</div>
+<script>
+const PHASE_NAMES = ["0 Bootstrap","1 Bus + Robots","2 Mall Era","3 City Blocks"];
+const COLORS = {default:"#a89f8c","transport-belt":"#e8c15a","stone-furnace":"#c87d45",
+  "steel-furnace":"#c87d45","burner-mining-drill":"#7bb661","electric-mining-drill":"#7bb661",
+  "assembling-machine-1":"#6fa8dc","assembling-machine-2":"#6fa8dc",lab:"#d06fdc",
+  boiler:"#d4614d","steam-engine":"#d4614d","offshore-pump":"#5ab4e8",
+  "small-electric-pole":"#888","medium-electric-pole":"#888",pumpjack:"#333",
+  "iron-chest":"#ddd","wooden-chest":"#b8905a",inserter:"#e8871f","burner-inserter":"#e8871f"};
+function kv(el, obj) {
+  el.innerHTML = Object.entries(obj).map(([k,v])=>`<b>${k}</b><span>${v}</span>`).join("");
+}
+async function tick() {
+  try {
+    const s = await (await fetch("/api/state")).json();
+    const st = s.status||{}, m = s.metrics||{}, ph = (s.phase||{}).phase ?? 0;
+    document.getElementById("phases").innerHTML = PHASE_NAMES.map((n,i)=>
+      `<div class="ph ${i<ph?"done":i===ph?"cur":""}">${n}</div>`).join("");
+    kv(document.getElementById("status"), {
+      heartbeat: st.iso||"?", "game hours": st.game_hours??"?",
+      power: st.power_ok?'<span class="ok">OK</span>':'<span class="bad">DOWN</span>',
+      "boiler fuel": st.boiler_fuel??"?", labs: st.labs||"?", assemblers: st.assemblers||"?",
+      drills: st.drills??"?",
+      research: `${m.research||st.research?.current||"-"} ${m.research_pct??""}%`});
+    kv(document.getElementById("prod"), {
+      "iron plate": (m.iron_pm??0).toFixed?.(1)??m.iron_pm,
+      "copper plate": (m.copper_pm??0).toFixed?.(1)??m.copper_pm,
+      "red science": (m.red_pm??0).toFixed?.(2)??m.red_pm,
+      "green science": (m.green_pm??0).toFixed?.(2)??m.green_pm});
+    document.getElementById("gates").textContent = JSON.stringify((s.phase||{}).gates||{},null,1);
+    document.getElementById("arch").textContent = (s.architect_summary||"(no report yet)") + "\n\n" +
+      (s.architect_actions||[]).map(a=>`${a.rank}. [${a.type}] ${a.action}`).join("\n");
+    document.getElementById("lessons").textContent = (s.lessons||[]).slice(-12).map(
+      l=>`[${l.count}x] ${l.condition} -> ${l.rule}`).join("\n") || "(none yet)";
+  } catch(e) {}
+  try {
+    const lg = await (await fetch("/api/log")).json();
+    const el = document.getElementById("log");
+    el.textContent = (lg.lines||[]).join("\n"); el.scrollTop = el.scrollHeight;
+  } catch(e) {}
+}
+async function drawMap() {
+  try {
+    const ents = await (await fetch("/api/map")).json();
+    const c = document.getElementById("map"), g = c.getContext("2d");
+    g.fillStyle = "#0d0b08"; g.fillRect(0,0,c.width,c.height);
+    if (!ents.length) return;
+    const xs = ents.map(e=>e.x), ys = ents.map(e=>e.y);
+    const minx = Math.min(...xs)-8, maxx = Math.max(...xs)+8;
+    const miny = Math.min(...ys)-8, maxy = Math.max(...ys)+8;
+    const sc = Math.min(c.width/(maxx-minx), c.height/(maxy-miny));
+    for (const e of ents) {
+      g.fillStyle = COLORS[e.n] || COLORS.default;
+      g.fillRect((e.x-minx)*sc, (e.y-miny)*sc, Math.max(2,sc), Math.max(2,sc));
+    }
+  } catch(e) {}
+}
+tick(); drawMap();
+setInterval(tick, 4000); setInterval(drawMap, 12000);
+</script>
