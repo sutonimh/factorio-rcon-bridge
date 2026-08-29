@@ -300,11 +300,17 @@ def analyze_local(snap, focus=None):
         ask += "Focus especially on: %s\n" % focus
     ask += (
         "Reply with ONLY a JSON object with keys: summary (string), bottlenecks "
-        "(array of {area, severity: low|medium|high, evidence, root_cause}), messes "
-        "(array of {kind, location, recommended_cleanup}), layout_recommendations "
-        "(array of {title, rationale, steps: [string], rules_respected: [string]}), "
-        "prioritized_actions (array of {rank: int, type: cleanup|supply|power|layout|verify, "
-        "action, risk: low|medium|high}). Cite entities/positions/statuses in every evidence.\n\n"
+        "(array of {area, severity: low|medium|high, evidence, root_cause, fix}), "
+        "prioritized_actions (array of {rank: int, action, risk: low|medium|high}), and "
+        "commands: an array of MACHINE-EXECUTABLE commands from this exact catalog - the "
+        "loop executes rank order, so put the root-cause fix first:\n"
+        '{"cmd":"repair","target":"belts|power|all"} | '
+        '{"cmd":"connect_mine","ore":"iron-ore|copper-ore"} | '
+        '{"cmd":"research","tech":"<name>"} | {"cmd":"craft","item":"<name>","count":N} | '
+        '{"cmd":"mine_outpost","ore":"...","drills":N} | {"cmd":"walk","x":X,"y":Y} | '
+        '{"cmd":"stamp","lib":"<library>","x":X,"y":Y} | {"cmd":"plan_note","text":"..."}\n'
+        "Only emit commands the evidence justifies; an empty commands array is valid. "
+        "Cite entities/positions/statuses in every evidence.\n\n"
         "```json\n" + json.dumps(compact(snap), separators=(",", ":")) + "\n```"
     )
     report = llm.chat_json(
@@ -313,9 +319,10 @@ def analyze_local(snap, focus=None):
     )
     if report is None:
         raise RuntimeError("local architect returned unparseable output twice")
-    missing = [k for k in REPORT_SCHEMA["required"] if k not in report]
+    missing = [k for k in ("summary", "bottlenecks", "prioritized_actions") if k not in report]
     if missing:
         raise RuntimeError("local architect report missing keys: %s" % missing)
+    report.setdefault("commands", [])
     report["_model"] = llm.ARCHITECT
     return report
 

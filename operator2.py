@@ -28,6 +28,8 @@ CATALOG = """Available commands (JSON array, each one object):
 - {"cmd":"walk","x":X,"y":Y}                         send derpface somewhere
 - {"cmd":"stamp","lib":"<library-name>","x":X,"y":Y} ghost-stamp a blueprint library entry
 - {"cmd":"plan_note","text":"..."}                   add a line to the on-screen plan/queue
+- {"cmd":"repair","target":"belts|power|all"}        run the self-heal battery (belt gaps, lanes, flow, poles, grid)
+- {"cmd":"connect_mine","ore":"iron-ore|copper-ore"} re-lay the ore lane from that mine to its smelter array
 - {"cmd":"reject","reason":"..."}                    the instruction cannot be mapped safely"""
 
 
@@ -96,9 +98,39 @@ def _validate(c):
         import autopilot as A2
         txt = str(c.get("text", ""))[:80]
         return f"note: {txt}", lambda: A2.now(txt)
+    if cmd == "repair":
+        target = c.get("target", "all")
+        def _repair():
+            if target in ("belts", "all"):
+                B.scrub_mixed_ore(); B.repair_belt_gaps(); B.ensure_lanes()
+            if target in ("power", "all"):
+                B.keep_power(); B.fix_unpowered(); B.ensure_grid_connected()
+        return f"repair {target}", _repair
+    if cmd == "connect_mine":
+        ore = c.get("ore")
+        if ore not in ("iron-ore", "copper-ore"):
+            raise ValueError(f"bad ore {ore!r}")
+        return f"connect_mine {ore}", lambda: B.connect_mine_to_array(ore)
     if cmd == "reject":
         raise ValueError(c.get("reason", "rejected"))
     raise ValueError(f"unknown command {cmd!r}")
+
+
+def validate_commands(cmds):
+    """Shared actuator pipeline (audit item 2): validate a command list, queue the valid ones
+    on bootstrap.BUILD_QUEUE. Returns (accepted_descs, rejected_strs). Used by operator
+    prompts AND architect prioritized_actions - one catalog, one gate."""
+    import bootstrap as B
+    accepted, rejected = [], []
+    for c in cmds or []:
+        try:
+            desc, thunk = _validate(c)
+            thunk.__name__ = f"cmd:{desc}"
+            B.BUILD_QUEUE.append(thunk)
+            accepted.append(desc)
+        except Exception as e:
+            rejected.append(f"{(c or {}).get('cmd', '?')}: {str(e)[:100]}")
+    return accepted, rejected
 
 
 def process_inbox():
@@ -117,16 +149,7 @@ def process_inbox():
             pend["result"] = "could not interpret (LLM returned no commands)"
             _write(rows)
             return
-        import bootstrap as B
-        accepted, rejected = [], []
-        for c in cmds:
-            try:
-                desc, thunk = _validate(c)
-                thunk.__name__ = f"operator:{desc}"
-                B.BUILD_QUEUE.append(thunk)
-                accepted.append(desc)
-            except (ValueError, KeyError, TypeError, Exception) as e:
-                rejected.append(f"{c.get('cmd', '?')}: {str(e)[:100]}")
+        accepted, rejected = validate_commands(cmds)
         pend["status"] = "queued" if accepted else "failed"
         pend["result"] = "; ".join(accepted + (["REJECTED: " + "; ".join(rejected)] if rejected else []))[:400]
         _write(rows)

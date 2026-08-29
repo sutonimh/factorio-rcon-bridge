@@ -77,6 +77,14 @@ L1  WORLD      authoritative state DB: entities/registry/patches/power/ratios ·
 L0  GAME I/O   rcon.py (persistent socket) · FLE-derived Lua tool layer · chunked reads
 ```
 
+> **2026-08-29 revision (the sweep):** runtime control is INVERTED into `controller.py` —
+> a realtime issue loop (sense → detect → prioritize → fix → verify → escalate → learn,
+> ~3s cadence) that owns L4's triage/architect/lessons plus all self-heals; the builder
+> thread only advances phase programs and is preempted by severity-0/1 issues. The v1
+> maintain loop is retired. Architect output is an executable command queue (shared
+> validated actuator catalog with operator prompts), never advisory prose alone.
+
+
 - **L0**: keep rcon.py + the chunked-read pattern; add the persistent authenticated socket
   (ROADMAP HIGH). Vendor the FLE Lua chunks we adopt into `lua/` with attribution (MIT).
 - **L1 World model** (`world.py`, merges gamedb.py + state-db.json): every entity WE build is

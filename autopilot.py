@@ -217,6 +217,15 @@ def walk(tx, ty, tol=2.0, timeout=150):
                     if time.time() - t0 > timeout:
                         _route_cache.pop(ck, None)   # plan was bad -> drop it
                         return px, py, False
+                    # PREEMPT (controller): a severity-0/1 issue outranks any walk. Stop
+                    # cleanly (walking_state=false) and hand control back to the builder.
+                    try:
+                        import controller as _ctl
+                        if _ctl.PREEMPT.get("want"):
+                            stop()
+                            return px, py, False
+                    except ImportError:
+                        pass
                     px, py = pos()
                     # remaining distance ALONG the leg direction (projection):
                     # overshoot/lateral drift can't fool it, and direction never

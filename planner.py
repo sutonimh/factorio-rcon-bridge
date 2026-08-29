@@ -277,37 +277,44 @@ PHASES = {0: (phase0, gate0), 1: (phase1, gate1), 2: (phase2, gate2), 3: (phase3
 
 # ------------------------------------------------------------------ top level
 def play():
-    """The autonomous top loop: build pass -> gate check -> maintain burst (with lap hook) ->
-    repeat. Survives restarts via phase.json. Phase programs are idempotent so a crashed pass
-    just reruns."""
+    """v2 control structure (Seth's sweep, 2026-08-29): controller.py owns realtime -
+    sensing, issue detection, prioritized fixing, learning, operator prompts - on its own
+    thread. THIS loop is only the BUILDER: advance the current phase's program in idempotent
+    passes, evaluate gates, move on. No maintain bursts, no lap hooks: fixing problems is no
+    longer a phase of the loop, it IS the other loop."""
+    import controller
     p = load()
     _restore_state(p)
-    status.log(f"play(): resuming at phase {p['phase']}")
+    A.stop()                    # clear any stuck walking_state from a mid-walk restart
+    controller.start()
+    status.log(f"play(): builder resuming at phase {p['phase']} (controller running)")
     while True:
-        B.ensure_derpface()    # every pass: the character can vanish on an un-autosaved restart
-        # PASS-START SELF-HEALS + operator inbox: build passes can run long (walks), and these
-        # are all server-side/instant - they must never wait for a maintain burst (Seth: the
-        # maintenance loop must not get in the way of automation)
-        heal_battery("pass start")
-        try:
-            import operator2 as _op
-            _op.process_inbox()
-        except Exception as e:
-            status.log(f"operator inbox error: {e}")
+      try:                       # EVERYTHING in the try: builder crashes outside a try were
+        B.ensure_derpface()      # the 18-restarts-in-108-min churn (audit item 1/8)
         phase = p["phase"]
         if phase not in PHASES:
-            status.log(f"play(): phase {phase} has no program yet - holding in maintain")
-            B.maintain(laps=500, lap_hook=lap_hook)
+            status.log(f"play(): phase {phase} has no program yet - holding (controller keeps the base alive)")
+            time.sleep(60)
             continue
         program, gate = PHASES[phase]
         try:
-            status.write_status([])    # heartbeat: long build passes write no laps
+            status.write_status(B.BUILD_QUEUE)
             program(p)
         except Exception as e:
             status.log(f"phase {phase} program error: {e}")
             lessons.add(condition=f"phase {phase} build pass", mistake=str(e)[:200],
                         rule="see traceback in autopilot.log", evidence=traceback.format_exc()[-1500:],
                         phase=phase, tags=("phase-program",))
+        # operator-queued build tasks run between passes (controller only queues them)
+        while B.BUILD_QUEUE:
+            task = B.BUILD_QUEUE.pop(0)
+            name = getattr(task, "__name__", "task")
+            status.log(f"builder: operator task {name}")
+            A.purpose(f"operator request: {name}")
+            try:
+                task()
+            except Exception as e:
+                status.log(f"operator task {name} error: {e}")
         ok, checks = gate()
         p["gates"][str(phase)] = checks
         _persist_state(p)
@@ -317,8 +324,12 @@ def play():
             save(p)
             continue
         status.log(f"phase {phase} gate not met: " +
-                   ", ".join(k for k, v in checks.items() if not v) + " - maintain burst")
-        B.maintain(laps=150, lap_hook=lap_hook)
+                   ", ".join(k for k, v in checks.items() if not v) +
+                   " - builder idles 90s (controller keeps working)")
+        time.sleep(90)
+      except Exception as e:
+        status.log(f"builder loop error (recovering in 30s): {e}\n{traceback.format_exc()[-500:]}")
+        time.sleep(30)
 
 
 if __name__ == "__main__":

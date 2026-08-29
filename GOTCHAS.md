@@ -847,3 +847,24 @@ Also learned today: a single item-on-ground blocked a belt-gap bridge for an hou
 repairer's obstruction handling must COLLECT items/trees/rocks and destroy stray ghosts,
 never treat them as hard blockers; and the two smelt zones share ox, so per-ore lane columns
 (ox-2, ox-4, ...) are mandatory or connect_mine_to_array merges the ore lanes.
+
+## THE SWEEP (2026-08-29): control inversion — the maintain loop is retired
+
+Seth's audit call ("problems prioritized, self-learning working, no legacy loop") + a
+two-agent code/AI audit found the loop was detect -> log -> blind heal -> log: 42 LLM
+verdicts + 4 correct architect diagnoses in 75 min produced ZERO fixes; architect
+prioritized_actions were parsed by nothing; lesson dedup never accumulated (LLM prose never
+repeats -> every lesson count=1 -> promotion unreachable); builder crashes outside try
+caused 18 restarts/108 min, resetting every cooldown; and triage's schema couldn't express
+the failures it watched (class=null 6/6 in replay, a fatal coal-death classed 'watch').
+
+The fix is structural (controller.py): SENSE -> DETECT (rule battery owns known
+signatures) -> PRIORITIZE (sev 0-2) -> FIX (one actuator) -> VERIFY (re-sense; repeat
+failures escalate) -> LEARN (structured-key lessons that actually count up). The builder
+thread only builds; sev<=1 issues preempt walks mid-leg. Architect reports now END in a
+validated command queue (same catalog as operator prompts) - findings EXECUTE. Triage 4B is
+demoted to residual anomalies with trend + actuator routing + verdict dedup. A 15-min
+zero-flow progress watchdog is severity 0 - the detector the silent July-August dead month
+needed. Controller state (fail counters, architect cooldown) persists across restarts.
+RULES: no timer-driven blind healing; every finding must terminate in an actuator or a
+rejection lesson; every fixer is verified by re-sensing, never by its own claim.
