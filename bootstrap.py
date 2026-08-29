@@ -1455,7 +1455,7 @@ def keep_power():
     Run every fast cycle."""
     A._print(
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
-        "local b=s.find_entities_filtered{name='boiler'}[1]; if b then local need=5-b.get_fuel_inventory().get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end;"
+        "local b=s.find_entities_filtered{name='boiler'}[1]; if b then local need=25-b.get_fuel_inventory().get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end;"
         "local bc=nil; if b then bc=s.find_entities_filtered{name='wooden-chest',position=b.position,radius=6}[1] end; if bc then local ci=bc.get_inventory(defines.inventory.chest); local need=120-ci.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then ci.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
     # v2 fresh map: the autopilot OWNS the whole layout (the hands-off rule was for the
     # retired human-built base), so grid self-healing is back ON.
