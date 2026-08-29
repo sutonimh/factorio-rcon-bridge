@@ -756,6 +756,15 @@ def _render_notes(lines):
     return _print(lua)
 
 
+PURPOSE = {"text": ""}
+
+
+def purpose(text):
+    """Set WHY the next actions happen (shown under the dashboard's current action).
+    Top-level steps set it; low-level helpers (make/ensure/walk) inherit it."""
+    PURPOSE["text"] = str(text)[:120]
+
+
 def now(action, plan=None):
     """Update the on-screen note (world-space rendering near the base; see `_render_notes`).
     Structure (Seth's rule): the FIRST line is always the live pending task / thing being waited on
@@ -774,7 +783,8 @@ def now(action, plan=None):
     try:
         import json as _json, pathlib as _pl
         (_pl.Path(__file__).resolve().parent / "action.json").write_text(
-            _json.dumps({"ts": int(time.time()), "action": str(action), "plan": list(plan)}))
+            _json.dumps({"ts": int(time.time()), "action": str(action),
+                         "why": PURPOSE["text"], "plan": list(plan)}))
     except Exception:
         pass
     return _render_notes(lines)

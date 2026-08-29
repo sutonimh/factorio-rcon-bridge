@@ -806,3 +806,14 @@ where the same lane resumes within 30 tiles in the belt's direction, bridges the
 inventory (script-crafting belts from plates when short). No continuation = left alone (legit
 terminus) for the architect to judge. RULE: any belt-laying routine must either verify its
 lane end-to-end or rely on this repairer running.
+
+## Lane law: verify SOURCE->DESTINATION by belt BFS; chests only where buffering is needed (Seth, 2026-08-29)
+
+The copper lane looked laid but its two segments sat on ADJACENT ROWS - a misaligned junction
+no same-row gap-bridging can fix; ore piled up and the arrays starved. Tile-local checks are
+not enough: `_lane_connected(ore)` BFS-walks the mine's lane via belt_neighbours.outputs and
+requires it to REACH the array intake; a broken lane is fully re-laid by
+connect_mine_to_array (lay_belt_path corners join row offsets). Runs every 10th maintain lap
++ after phase-0 belt builds. RULE (Seth): raw ore belts DIRECTLY to smelters; plates belt
+DIRECTLY onto the bus once it exists; a chest is only legitimate where something must buffer
+(mine terminal for character-haul era, boiler coal buffer, array plate drain until the bus).

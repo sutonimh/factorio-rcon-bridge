@@ -21,3 +21,5 @@ orders.json
 phase.json
 evals-baseline.json
 proposals/
+llm-activity.jsonl
+operator-inbox.jsonl

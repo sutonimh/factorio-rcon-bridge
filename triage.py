@@ -50,7 +50,7 @@ def classify(delta):
         out = llm.chat_json(
             [{"role": "system", "content": system},
              {"role": "user", "content": json.dumps(delta, separators=(",", ":"))}],
-            model=llm.TRIAGE, max_tokens=200, timeout=60,
+            model=llm.TRIAGE, max_tokens=200, timeout=60, tag="triage",
         )
         if out and out.get("state") in STATES:
             out.setdefault("class", None)

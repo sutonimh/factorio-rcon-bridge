@@ -341,6 +341,7 @@ class H(BaseHTTPRequestHandler):
                 "metrics": live_metrics(),
                 "action": _read_json("action.json", {}),
                 "prompts": [json.loads(x) for x in _tail("operator-inbox.jsonl", 6) if x.strip()],
+                "ai": [json.loads(x) for x in _tail("llm-activity.jsonl", 12) if x.strip()],
             })
         elif self.path == "/api/terrain":
             self._send(terrain())

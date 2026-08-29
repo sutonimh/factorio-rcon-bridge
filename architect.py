@@ -309,7 +309,7 @@ def analyze_local(snap, focus=None):
     )
     report = llm.chat_json(
         [{"role": "system", "content": system}, {"role": "user", "content": ask}],
-        model=llm.ARCHITECT, max_tokens=6000,
+        model=llm.ARCHITECT, max_tokens=6000, tag="architect",
     )
     if report is None:
         raise RuntimeError("local architect returned unparseable output twice")
