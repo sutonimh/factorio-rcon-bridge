@@ -1,25 +1,29 @@
 #!/usr/bin/env python3
-"""Architect: use the Claude API to diagnose the base's supply chain + layout and propose
-concrete, rules-legal cleanups and redesigns.
+"""Architect: LLM diagnosis of the base's supply chain + layout -> rules-legal action plan.
 
 The autopilot drives the base tactically (fuel/feed/maintain); the architect is the strategic
 layer. It takes a rich live snapshot of every player entity (positions, directions, status,
-recipes, fuel, power network, chest contents) and asks Claude (Opus 4.8, adaptive thinking) to:
+recipes, fuel, power network, chest contents) and asks an LLM to:
   - find supply-chain bottlenecks (what's starved, why, where it backs up),
   - find MESSES (orphaned belts/poles, scattered builds, mixed ore lanes, misaligned inserters),
   - propose better layouts + a prioritized action list, every recommendation constrained by the
     hard-won rules in GOTCHAS.md / "BUILD CONVENTIONS" (encoded in RULES below).
 
+v2 (MEGABASE-V2-DESIGN §6): the DEFAULT model is LOCAL — halo's Qwen 35B via llm.py — so the
+architect can run continuously in the loop, with lessons.py rules injected into every prompt.
+The Claude path remains behind --claude as the occasional offline blind-spot auditor.
+
 The output is structured JSON (a report) so a follow-up pass can act on it; it is also printed
 as a human-readable summary and written to architect-report.json.
 
 Usage:
-    python3 architect.py                 snapshot -> Claude -> report (needs ANTHROPIC_API_KEY)
-    python3 architect.py --snapshot-only dump the live snapshot JSON, no API call (no key needed)
+    python3 architect.py                 snapshot -> halo 35B -> report
+    python3 architect.py --claude        snapshot -> Claude API (auditor; needs ANTHROPIC_API_KEY)
+    python3 architect.py --snapshot-only dump the live snapshot JSON, no LLM call
     python3 architect.py --focus "labs"  steer the analysis at one area
 
 Run server-side in the autopilot container (RCON is container-local), or from the Mac with
-FACTORIO_RCON_HOST=charon. Needs the `anthropic` package and ANTHROPIC_API_KEY in the env.
+FACTORIO_RCON_HOST=charon (and LEMONADE_URL=http://halo.bombay-humboldt.ts.net:13305/v1).
 """
 import argparse
 import json
@@ -256,6 +260,66 @@ REPORT_SCHEMA = {
 }
 
 
+def compact(snap, max_detail=150):
+    """Shrink a full snapshot for the local model's context budget (design: prompts <=8k tokens).
+    Healthy entities collapse into per-name status histograms; only NOT-working entities keep
+    per-entity detail (position/status/recipe/fuel), capped at max_detail. Chests keep contents."""
+    hist, detail, chests = {}, [], []
+    ok_status = {"working", "normal", "waiting_for_space_in_destination", "low_input_fluid"}
+    for e in snap.get("ents", []):
+        key = e["n"]
+        st = str(e.get("s", "?"))
+        hist.setdefault(key, {})
+        hist[key][st] = hist[key].get(st, 0) + 1
+        if e.get("c") is not None:
+            chests.append({"n": key, "x": e["x"], "y": e["y"], "c": e["c"]})
+        elif st not in ok_status and st != "?" and len(detail) < max_detail:
+            d = {k: e[k] for k in ("n", "x", "y", "s") if k in e}
+            for k in ("r", "coal", "d", "eid"):
+                if k in e:
+                    d[k] = e[k]
+            detail.append(d)
+    return {"globals": snap.get("globals", {}),
+            "entity_status_histogram": hist,
+            "problem_entities": detail,
+            "chests": chests[:80]}
+
+
+def analyze_local(snap, focus=None):
+    """Send the snapshot to halo's 35B (llm.py) and return the structured report dict.
+    Lessons from lessons.py are injected so past mistakes constrain new recommendations."""
+    import lessons
+    import llm
+
+    system = SYSTEM_PROMPT
+    lb = lessons.prompt_block(tags=("architect",), k=8)
+    if lb:
+        system += "\n\n" + lb
+    ask = "Here is the live base snapshot (JSON). Analyze it per your instructions.\n"
+    if focus:
+        ask += "Focus especially on: %s\n" % focus
+    ask += (
+        "Reply with ONLY a JSON object with keys: summary (string), bottlenecks "
+        "(array of {area, severity: low|medium|high, evidence, root_cause}), messes "
+        "(array of {kind, location, recommended_cleanup}), layout_recommendations "
+        "(array of {title, rationale, steps: [string], rules_respected: [string]}), "
+        "prioritized_actions (array of {rank: int, type: cleanup|supply|power|layout|verify, "
+        "action, risk: low|medium|high}). Cite entities/positions/statuses in every evidence.\n\n"
+        "```json\n" + json.dumps(compact(snap), separators=(",", ":")) + "\n```"
+    )
+    report = llm.chat_json(
+        [{"role": "system", "content": system}, {"role": "user", "content": ask}],
+        model=llm.ARCHITECT, max_tokens=6000,
+    )
+    if report is None:
+        raise RuntimeError("local architect returned unparseable output twice")
+    missing = [k for k in REPORT_SCHEMA["required"] if k not in report]
+    if missing:
+        raise RuntimeError("local architect report missing keys: %s" % missing)
+    report["_model"] = llm.ARCHITECT
+    return report
+
+
 def analyze(snap, focus=None):
     """Send the snapshot to Claude and return the structured report dict."""
     try:
@@ -339,10 +403,11 @@ def render(report):
 
 # --------------------------------------------------------------------------- cli
 def main():
-    ap = argparse.ArgumentParser(description="Claude-powered Factorio base architect.")
-    ap.add_argument("--snapshot-only", action="store_true", help="dump the live snapshot JSON, no API call")
-    ap.add_argument("--from-snapshot", metavar="FILE", help="analyze a pre-gathered snapshot JSON (skip RCON; lets the API call run somewhere the game/key aren't co-located)")
+    ap = argparse.ArgumentParser(description="LLM Factorio base architect (local halo 35B by default).")
+    ap.add_argument("--snapshot-only", action="store_true", help="dump the live snapshot JSON, no LLM call")
+    ap.add_argument("--from-snapshot", metavar="FILE", help="analyze a pre-gathered snapshot JSON (skip RCON; lets the LLM call run somewhere the game/key aren't co-located)")
     ap.add_argument("--focus", help="steer the analysis at one area (e.g. 'green science chain')")
+    ap.add_argument("--claude", action="store_true", help="use the Claude API auditor instead of the local model")
     args = ap.parse_args()
 
     if args.from_snapshot:
@@ -354,7 +419,7 @@ def main():
         print("\n# %d entities, globals=%s" % (len(snap.get("ents", [])), snap.get("globals")), file=sys.stderr)
         return
 
-    report = analyze(snap, focus=args.focus)
+    report = analyze(snap, focus=args.focus) if args.claude else analyze_local(snap, focus=args.focus)
     REPORT_PATH.write_text(json.dumps(report, indent=2))
     print(render(report))
     print("\n(full report written to %s)" % REPORT_PATH)

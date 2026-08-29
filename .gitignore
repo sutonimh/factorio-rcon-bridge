@@ -14,3 +14,7 @@ patrol.out
 
 # secret: RCON password (lives in charon /config, never the repo)
 rcon.pass
+lemonade.key
+lessons.jsonl
+world-db.json
+orders.json
