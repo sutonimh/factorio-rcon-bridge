@@ -129,10 +129,12 @@ def fuel(amount=300):
     """Hand-mine the first coal (nothing runs without fuel)."""
     if _count("coal") >= amount:
         return
+    ensure("coal", amount)   # AUTOMATION FIRST: chests/belts before ever hand-mining
+    if _count("coal") >= amount:
+        return
     cx, cy, _ = STATE["coal"]
-    A.now(f"Bootstrap: mining first coal @{cx},{cy}")
+    A.now(f"Bootstrap: mining first coal @{cx},{cy} (no automated source yet)")
     A.stop(); A.walk(cx + 1, cy, tol=2.5)
-    A.mine("coal", amount)
     A.mine("coal", amount)
 
 
@@ -415,7 +417,19 @@ def ensure(item, count):
     if not spot:
         return
     sx, sy, _ = spot
-    A.now(f"Provision: mining {count} {item} @{sx},{sy}")
+    # belt-fed mine (no terminal chest): LIFT off the lane belts before ever hand-mining
+    lifted = A._print(
+        f"/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local got=0;"
+        f"for _,b in pairs(s.find_entities_filtered{{position={{{sx},{sy}}},radius=30,type='transport-belt'}}) do"
+        f"  if got>={count} then break end;"
+        "  for li=1,b.get_max_transport_line_index() do local L=b.get_transport_line(li);"
+        f"    local n=L.get_item_count('{item}'); if n>0 then local take=math.min(n,{count}-got);"
+        f"      local r=L.remove_item{{name='{item}',count=take}}; if r>0 then inv.insert{{name='{item}',count=r}}; got=got+r end end end end;"
+        "rcon.print(got)").strip()
+    if _count(item) >= count:
+        A.now(f"Provision: lifted {item} off the mine belts (no hand-mining)")
+        return
+    A.now(f"Provision: mining {count} {item} @{sx},{sy} (belts short)")
     A.stop(); A.walk(sx + 1, sy, tol=2.5)
     A.mine(item, count - _count(item) + 20)
 
@@ -525,10 +539,13 @@ def red_science():
     Robust: loops crafting+feeding until automation actually completes."""
     A.now("Bootstrap: lab + red science -> research automation")
     wx, wy = STATE["water"]
-    if not _find("lab", wx, wy, 30):
-        if _count("lab") < 1:
-            _craft_wait("lab", 1)
+    have_labs = int(A._print(f"/sc rcon.print(#game.surfaces[1].find_entities_filtered{{name='lab',position={{{wx},{wy}}},radius=30}})").strip() or "0")
+    if have_labs < 2:            # gate0 needs labs_working>=2; one lab made phase 0 UNSATISFIABLE
+        need = 2 - have_labs
+        if _count("lab") < need:
+            _craft_wait("lab", need)
         A.place("lab", wx + 4, wy - 9, clear=4)
+        A.place("lab", wx + 8, wy - 9, clear=2)
     fire_craft_trigger("automation-science-pack")   # headless craft-item triggers never
     # self-complete (see fire_craft_trigger docstring); without this ALL research deadlocks
     _feed_lab_until("automation", ("automation-science-pack",))
@@ -694,8 +711,9 @@ def build_belt_supply():
     Charon so derpface builds it. Iron array may already exist (built + validated by hand)."""
     build_smelter_array("iron-ore", 16)
     build_smelter_array("copper-ore", 12)
-    connect_mine_to_array("iron-ore")
-    connect_mine_to_array("copper-ore")
+    for _ore in ("iron-ore", "copper-ore"):
+        if not _lane_connected(_ore):     # destructive re-lay ONLY when broken (audit #5)
+            connect_mine_to_array(_ore)
     # coal belt from the coal mine down to the arrays (codified layer, not build_belt)
     cs = STATE.get("coal")
     if cs:
@@ -1438,7 +1456,7 @@ def keep_power():
     A._print(
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local b=s.find_entities_filtered{name='boiler'}[1]; if b then local need=5-b.get_fuel_inventory().get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end;"
-        "local bc=s.find_entities_filtered{name='wooden-chest',position={45,-2},radius=6}[1]; if bc then local ci=bc.get_inventory(defines.inventory.chest); local need=120-ci.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then ci.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
+        "local bc=nil; if b then bc=s.find_entities_filtered{name='wooden-chest',position=b.position,radius=6}[1] end; if bc then local ci=bc.get_inventory(defines.inventory.chest); local need=120-ci.get_item_count('coal'); local c=math.min(need,inv.get_item_count('coal')); if c>0 then ci.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end")
     # v2 fresh map: the autopilot OWNS the whole layout (the hands-off rule was for the
     # retired human-built base), so grid self-healing is back ON.
     ensure_grid_connected()
@@ -1462,7 +1480,7 @@ def fix_unpowered(limit=8):
         "  if cc<2 and inv.get_item_count('copper-plate')>=1 then inv.remove{name='copper-plate',count=1}; inv.insert{name='copper-cable',count=2}; cc=cc+2 end;"
         "  if w>=1 and cc>=2 then inv.remove{name='wood',count=1}; inv.remove{name='copper-cable',count=2}; inv.insert{name='small-electric-pole',count=1} end end;"
         "local fixed=0;"
-        "for _,e in pairs(s.find_entities_filtered{type={'assembling-machine','lab','inserter'},position=p.position,radius=120}) do"
+        "for _,e in pairs(s.find_entities_filtered{type={'assembling-machine','lab','inserter'},position={0,0},radius=250}) do"
         f"  if fixed>={limit} then break end;"
         "  if e.status==defines.entity_status.no_power and inv.get_item_count('small-electric-pole')>0 then"
         "    for _,off in pairs({{2,0},{-2,0},{0,2},{0,-2},{2,2},{-2,-2}}) do"
@@ -1556,6 +1574,9 @@ def fix_mine_row_flow(ore):
         "if n>0 then game.print('fix_mine_row_flow: pointed '..n..' belts at the row exit') end")
 
 
+_LANE_RELAYS = {}
+
+
 def ensure_lanes(lap=0):
     """SOURCE-TO-DESTINATION lane law (Seth, 2026-08-29): a mine belt must reach its smelter
     array by belt connectivity - no chest shuttles where a belt belongs, no trusting that a lay
@@ -1568,10 +1589,24 @@ def ensure_lanes(lap=0):
         try:
             fix_mine_row_flow(ore)
             if not _lane_connected(ore):
-                status.log(f"lane {ore}: NOT connected to array - re-laying via connect_mine_to_array")
+                n = _LANE_RELAYS.get(ore, 0)
+                if n >= 3:
+                    if n == 3:              # converged on failure: stop churning, flag it once
+                        status.log(f"lane {ore}: re-lay NOT converging after 3 attempts - escalation needed")
+                        import lessons as _l
+                        _l.add(condition=f"lane {ore} re-lay does not converge",
+                               mistake="connect_mine_to_array laid 3x, BFS still disconnected",
+                               rule="architect must diagnose the routing (obstacle/geometry)",
+                               tags=("controller", "belts"), key=f"lane-stuck:{ore}")
+                        _LANE_RELAYS[ore] = 4
+                    continue
+                status.log(f"lane {ore}: NOT connected - re-laying (attempt {n + 1}/3)")
                 A.purpose(f"re-laying the {ore} belt so it reaches the smelters")
                 connect_mine_to_array(ore)
+                _LANE_RELAYS[ore] = n + 1
                 fixed += 1
+            else:
+                _LANE_RELAYS.pop(ore, None)
         except Exception as e:
             status.log(f"ensure_lanes({ore}): {e}")
     return fixed

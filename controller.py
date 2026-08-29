@@ -39,6 +39,7 @@ _STATE_PATH = pathlib.Path(__file__).resolve().parent / "controller-state.json"
 _HIST = []                          # (wallclock, sense dict) ring for the progress watchdog
 _PREV = {"d": None}
 _LAST_VERDICT = {"s": "", "n": 0}
+_TRIAGE_BUSY = {"b": False}
 
 
 def _load_state():
@@ -224,13 +225,14 @@ def controller_loop(stop_flag):
                 if lap % 10 == 0:
                     B.reap_dead_drills()
                     B.keep_power()
-                if lap % 7 == 0 and d.get("engines"):
+                if lap % 7 == 0 and d.get("engines") and not _TRIAGE_BUSY["b"]:
                     # residual-anomaly triage (4B, v2): rules own known signatures; the model
                     # judges the residue WITH trend, routes to a real actuator, and identical
                     # verdicts dedupe into a count instead of a 29-line scream (audit item 5)
-                    try:
+                    def _triage_worker(dd, prev):
+                      try:
                         import triage
-                        v = triage.classify(d, _PREV["d"])
+                        v = triage.classify(dd, prev)
                         sig = f"{v.get('state')}|{v.get('class')}|{v.get('reason','')[:60]}"
                         if sig == _LAST_VERDICT["s"]:
                             _LAST_VERDICT["n"] += 1
@@ -255,8 +257,12 @@ def controller_loop(stop_flag):
                         elif v.get("wake_architect"):
                             _escalate(Issue("triage_" + str(v.get("class") or v["state"]), 2,
                                             v.get("reason", ""), lambda: None), d)
-                    except Exception as e:
+                      except Exception as e:
                         status.log(f"triage: {e}")
+                      finally:
+                        _TRIAGE_BUSY["b"] = False
+                    _TRIAGE_BUSY["b"] = True
+                    threading.Thread(target=_triage_worker, args=(d, _PREV["d"]), daemon=True).start()
                 _PREV["d"] = d
             # operator prompts are realtime, always
             try:
