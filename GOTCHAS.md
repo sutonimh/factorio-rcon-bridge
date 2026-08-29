@@ -765,3 +765,32 @@ shared compose network and talk to `factorio:27015` by name instead of sharing n
 - Tech tree re-dumped via the new `dump_techtree.py` (repeatable; chunked storage read).
   2.1.8 -> 2.1.17 diff: transport-belt-capacity-2 gained prerequisite
   inserter-capacity-bonus-7; everything else identical (277 techs, 631 recipe mappings).
+
+## Headless research TRIGGERS don't self-credit (2.1.17, cost the fresh-map run its research — 2026-08-29)
+
+The engine only credits craft-item research triggers from PLAYER craft events. derpface
+(player-less character) REALLY crafted a lab via `begin_crafting` (works fine on a character
+entity: real ingredients, real crafting time, queue drains) — yet `automation-science-pack`
+stayed locked, which deadlocked ALL research on the fresh map (nothing can queue while the
+trigger tech is pending; the old map never hit this because Seth's hand-play had fired the
+triggers long ago). Smelting-product triggers (steam-power=iron-plate, electronics=
+copper-plate) DO fire headless; crafted-item ones do not.
+RULE: `bootstrap.fire_craft_trigger(tech)` = verify the character genuinely performed the
+trigger craft (begin_crafting + inventory delta), then set `technologies[t].researched=true`.
+Trigger techs cost no science, materials + craft time were real -> faithful emulation, not a
+cheat. `research_chain` calls it for every craft-item trigger in a chain; phase1_oil does the
+same for `oil-processing` (mine-entity) once the pumpjack has DEMONSTRABLY produced crude.
+
+## Blueprint stamping on 2.1.17: use import_stack + build_blueprint, not the new API (2026-08-29)
+
+`surface.create_entities_from_blueprint_string` (2.1 API docs) returned NIL for a
+known-valid string live (no ghosts, no error). The proven path works: temp inventory ->
+`import_stack` (returns 0 on success) -> `st.build_blueprint{surface, force, position,
+force_build=true}` -> entity-GHOSTS (no materials consumed; revive with build_ghosts*/bots).
+`bplib._lua_stamp` implements it, with the storage._bp chunk pattern for >4KB strings.
+
+## Vendored FLE placements must consume inventory (keep-it-legit)
+
+Upstream FLE's connect_entities places from NOTHING. Our vendored lua/fle_lib.lua routes all
+placements through `F.take(name)` (derpface inventory decrement, refund on failed create).
+Any future vendored builder gets the same treatment before first use.
