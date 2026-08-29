@@ -206,10 +206,33 @@ def connect_crude(p, pump_pos):
     return False
 
 
+def _fire_oil_trigger(pump_pos):
+    """oil-processing = mine-entity crude-oil trigger. If the pumpjack has DEMONSTRABLY
+    produced crude (real machine mining) and the tech is still locked, complete it — the same
+    headless trigger-crediting gap as craft-item (see bootstrap.fire_craft_trigger)."""
+    if B._tech_done("oil-processing"):
+        return True
+    ox, oy = pump_pos
+    crude = A._print(
+        f"/sc local s=game.surfaces[1]; local pj=s.find_entities_filtered{{name='pumpjack',position={{{ox},{oy}}},radius=24}}[1];"
+        "local ps=game.forces.player.get_fluid_production_statistics(s);"
+        "rcon.print((pj and math.floor(pj.get_fluid_count('crude-oil')) or -1)..','..math.floor(ps.get_input_count('crude-oil')))").strip()
+    try:
+        buffered, produced = (int(x) for x in crude.split(","))
+    except ValueError:
+        return False
+    if max(buffered, produced) <= 0:
+        return False
+    A._print("/sc game.forces.player.technologies['oil-processing'].researched=true")
+    status.log(f"trigger tech oil-processing completed: pumpjack really mined crude "
+               f"(buffered={buffered}, produced={produced}); headless mine-entity triggers don't self-credit")
+    return True
+
+
 def advance(p):
     """One idempotent phase-1 pass; called by planner each loop."""
     pump = ensure_pumpjack(p)
-    if pump is None or not B._tech_done("oil-processing"):
+    if pump is None or not _fire_oil_trigger(pump):
         return                  # trigger hasn't fired yet (needs a POWERED pumpjack mining)
     stamp(p)
     craft_for_block(p)

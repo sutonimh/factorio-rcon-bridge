@@ -442,6 +442,65 @@ def make(recipe, count):
     return _craft_wait(recipe, count)
 
 
+def craft_real(recipe, count=1, timeout=90):
+    """REAL character crafting via begin_crafting (takes in-game seconds, consumes real
+    ingredients) - unlike _craft_wait's instant script-craft. Gathers missing ingredients
+    with make() first. Returns how many crafts were started."""
+    started = 0
+    for _ in range(3):
+        r = A._print(f"/sc local p=storage.derpface; rcon.print(p.begin_crafting{{recipe='{recipe}', count={count - started}}})").strip()
+        try:
+            started += int(r)
+        except ValueError:
+            return started
+        if started >= count:
+            break
+        miss = missing_for(recipe)
+        if not miss:
+            break
+        for item, need in miss.items():
+            try:
+                make(item, need)
+            except Exception:
+                pass
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if A._print("/sc rcon.print(storage.derpface.crafting_queue_size)").strip() == "0":
+            break
+        time.sleep(2)
+    return started
+
+
+def fire_craft_trigger(tech_name):
+    """Complete a craft-item TRIGGER tech by REALLY crafting its trigger item.
+
+    WHY the scripted completion at the end: verified live on 2.1.17 (2026-08-29) - a
+    player-LESS character's begin_crafting genuinely crafts the item (real ingredients, real
+    time) but the engine only credits craft-item triggers from PLAYER craft events, so the
+    tech never completes headless (a lab was really crafted; automation-science-pack stayed
+    locked and ALL research deadlocked). Trigger techs cost no science; after verifying the
+    real craft happened we mark the tech researched - a faithful emulation of the intended
+    mechanic, not a shortcut. Keep-it-legit: materials + craft time were real."""
+    if _tech_done(tech_name):
+        return True
+    t = techdb.tech(tech_name) or {}
+    trig = t.get("trigger") or {}
+    if trig.get("type") != "craft-item":
+        return False
+    item, n = trig.get("item"), int(trig.get("count", 1))
+    if not item:
+        return False
+    before = _count(item)
+    craft_real(item, n)
+    if _count(item) < max(before + n, n):
+        A.now(f"trigger craft {item} x{n} failed (have {_count(item)})")
+        return False
+    A._print(f"/sc game.forces.player.technologies['{tech_name}'].researched=true")
+    status.log(f"trigger tech {tech_name} completed via real character craft of {item} x{n} "
+               "(headless characterless crafts don't credit craft-item triggers)")
+    return _tech_done(tech_name)
+
+
 def red_science():
     """Lab + hand-crafted red science -> research 'automation' (unlocks assemblers).
     Robust: loops crafting+feeding until automation actually completes."""
@@ -451,6 +510,8 @@ def red_science():
         if _count("lab") < 1:
             _craft_wait("lab", 1)
         A.place("lab", wx + 4, wy - 9, clear=4)
+    fire_craft_trigger("automation-science-pack")   # headless craft-item triggers never
+    # self-complete (see fire_craft_trigger docstring); without this ALL research deadlocks
     _feed_lab_until("automation", ("automation-science-pack",))
 
 
@@ -468,9 +529,13 @@ def research_chain(target_tech, packs_available=("automation-science-pack",)):
         info = techdb.tech(t) or {}
         trig = info.get("trigger")
         if trig:
-            # craft-item triggers usually auto-complete from normal play; mine/build need action
             if trig.get("type") == "mine-entity":
                 return False, f"{t} (mine {trig.get('entity','?')})"
+            if trig.get("type") == "craft-item":
+                # headless craft-item triggers never self-complete (see fire_craft_trigger)
+                if not fire_craft_trigger(t):
+                    return False, f"{t} (trigger craft {trig.get('item','?')} failed)"
+                continue
             time.sleep(2)
             if not _tech_done(t):
                 return False, f"{t} (trigger {trig.get('type')})"
