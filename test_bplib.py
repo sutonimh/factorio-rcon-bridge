@@ -88,7 +88,8 @@ def test_stamp_lua_single():
     assert len(cmds) == 1
     c = cmds[0]
     assert c.startswith("/sc ") and len(c) <= bplib.MAX_CMD
-    assert "build_blueprint" in c and "import_stack" in c
+    assert "import_stack('%s')" % bplib.encode(_bp()) in c
+    assert "build_blueprint{" in c and "force_build=true" in c
     assert "force='player'" in c
     assert "position={x=12, y=-34}" in c
     assert "direction" not in c
@@ -112,8 +113,9 @@ def test_stamp_lua_chunked():
     assert "".join(  # reassembled payload is byte-identical to the original string
         c[len("/sc storage._bp=storage._bp..'"):-1] for c in cmds[1:-1]) == s
     last = cmds[-1]
-    assert "build_blueprint" in last and "import_stack" in last
-    assert "string=storage._bp" in last and "storage._bp=nil" in last
+    assert "import_stack(storage._bp)" in last
+    assert "build_blueprint{" in last and "force_build=true" in last
+    assert "storage._bp=nil" in last
     assert "position={x=5, y=6}" in last and "force='player'" in last
 
 
