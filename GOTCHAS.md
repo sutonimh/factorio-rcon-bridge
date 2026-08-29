@@ -827,3 +827,12 @@ direct A.mine top-ups are gone (ensure() everywhere). And the SELF-HEALS (keep_p
 fix_unpowered, repair_belt_gaps, ensure_lanes) + the operator inbox run at every planner
 pass START, not just inside maintain bursts - a long build pass must never delay the
 automatic systems that keep the base alive.
+
+## Split-direction mine rows starve everything silently (2026-08-29)
+
+The iron drop row was HALF west HALF east (x<=13 flowed to the lane; x>=14 carried ore east
+to a dead end): drills fed both halves, the array got a trickle then nothing, and all lane
+belts read EMPTY while drills sat waiting_for_space. A lane-connectivity BFS passes (the west
+half IS connected) - flow DIRECTION was the break. `fix_mine_row_flow(ore)` (in ensure_lanes,
+every pass start + 10th lap): find the drop row's EXIT belt (output leaves the row) and point
+every row belt at it. Manual fix that session: reversed 16 belts by hand first.
