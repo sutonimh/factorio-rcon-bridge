@@ -63,8 +63,11 @@
   <div class="card"><h2>Task queue</h2><pre id="queue">—</pre></div>
   <div class="card" style="grid-row:span 2"><h2>Derpface live <span id="derpstate" style="text-transform:none"></span></h2>
     <canvas id="derp" width="380" height="380"></canvas></div>
-  <div class="card" style="grid-column:1/-1"><h2>Live map <span style="text-transform:none;color:var(--dim)">(terrain + base · dim = ghosts · ⊙ = derpface)</span></h2>
-    <canvas id="map" width="1400" height="400"></canvas></div>
+  <div class="card" style="grid-column:1/-1"><h2>Live map <span style="text-transform:none;color:var(--dim)">(terrain + base · dim = ghosts · ⊙ = derpface · scroll = zoom · drag = pan · double-click = reset)</span></h2>
+    <div id="mapwrap" style="position:relative">
+      <canvas id="map" width="1400" height="400" style="cursor:grab"></canvas>
+      <div id="maptip" style="position:absolute;display:none;background:#0d0b08;border:1px solid var(--acc);color:var(--ink);padding:3px 8px;font-size:12px;pointer-events:none;white-space:nowrap;z-index:5"></div>
+    </div></div>
 </div>
 
 <div id="tab-bp" class="grid hidden">
@@ -143,54 +146,119 @@ async function tick() {
 }
 const fmt = v => (typeof v==="number" ? (v>=10?v.toFixed(0):v.toFixed(2)) : (v??"?"));
 
-// ---- live map with terrain
-let terrainCache = null, terrainTs = 0;
-async function drawMap() {
+// ---- live map with terrain: zoom / pan / hover annotations
+let terrainCache = null, terrainTs = 0, mapData = {ents:[], derp:null};
+const view = {cx:0, cy:0, ppt:0, fitted:false};   // ppt = pixels per tile
+const TNAME = {w:"water", i:"iron ore", c:"copper ore", k:"coal", s:"stone", o:"crude oil", t:"trees"};
+function mapBounds() {
+  const T = terrainCache;
+  if (T && T.rows && T.rows.length)
+    return {minx:T.x1, miny:T.y1, maxx:T.x1+T.rows[0].length*T.step, maxy:T.y1+T.rows.length*T.step};
+  const e = mapData.ents;
+  if (!e.length) return null;
+  const xs = e.map(a=>a.x), ys = e.map(a=>a.y);
+  return {minx:Math.min(...xs)-8, miny:Math.min(...ys)-8, maxx:Math.max(...xs)+8, maxy:Math.max(...ys)+8};
+}
+function fitView() {
+  const b = mapBounds(); if (!b) return;
+  const c = document.getElementById("map");
+  const wpx = c.parentElement.parentElement.clientWidth - 26 || 1400;
+  c.width = wpx;
+  const ppt = wpx / (b.maxx - b.minx);
+  c.height = Math.max(220, Math.min(760, (b.maxy - b.miny) * ppt));
+  view.ppt = Math.min(ppt, c.height / (b.maxy - b.miny));
+  view.cx = (b.minx + b.maxx) / 2; view.cy = (b.miny + b.maxy) / 2;
+  view.fitted = true;
+}
+const w2sx = wx => (wx - view.cx) * view.ppt + document.getElementById("map").width / 2;
+const w2sy = wy => (wy - view.cy) * view.ppt + document.getElementById("map").height / 2;
+const s2wx = sx => (sx - document.getElementById("map").width / 2) / view.ppt + view.cx;
+const s2wy = sy => (sy - document.getElementById("map").height / 2) / view.ppt + view.cy;
+function renderMap() {
   const c = document.getElementById("map"), g = c.getContext("2d");
+  const T = terrainCache, ents = mapData.ents;
+  if (!view.fitted) fitView();
+  if (!view.fitted) { note("map","no data yet"); return; }
+  g.fillStyle = "#11170f"; g.fillRect(0,0,c.width,c.height);
+  const px = view.ppt;
+  if (T && T.rows) for (let r=0;r<T.rows.length;r++) for (let cc=0;cc<T.rows[r].length;cc++) {
+    const ch = T.rows[r][cc];
+    if (ch===".") continue;
+    const x = w2sx(T.x1 + cc*T.step), y = w2sy(T.y1 + r*T.step);
+    if (x < -8 || y < -8 || x > c.width || y > c.height) continue;
+    g.fillStyle = TCOL[ch] || "#333";
+    g.fillRect(x, y, T.step*px+0.5, T.step*px+0.5);
+  }
+  for (const e of ents) {
+    const x = w2sx(e.x), y = w2sy(e.y);
+    if (x < -6 || y < -6 || x > c.width || y > c.height) continue;
+    g.globalAlpha = e.g ? 0.32 : 1;
+    g.fillStyle = COLORS[e.n] || COLORS.default;
+    g.fillRect(x, y, Math.max(2,px), Math.max(2,px));
+  }
+  g.globalAlpha = 1;
+  if (mapData.derp) {
+    const dx = w2sx(mapData.derp.x), dy = w2sy(mapData.derp.y);
+    g.strokeStyle = "#e8871f"; g.lineWidth = 2;
+    g.beginPath(); g.arc(dx, dy, Math.max(8, px), 0, 7); g.stroke();
+    g.fillStyle = "#ffb35c"; g.beginPath(); g.arc(dx, dy, Math.max(3.5, px*0.4), 0, 7); g.fill();
+  }
+}
+async function drawMap() {
   try {
     if (!terrainCache || Date.now()-terrainTs > 30000) {
       terrainCache = await (await fetch("/api/terrain")).json(); terrainTs = Date.now();
     }
     const d = await (await fetch("/api/map")).json();
-    const ents = d.ents || [], T = terrainCache;
-    if (!ents.length && !(T&&T.rows)) { note("map","no data yet"); return; }
-    // bounds: terrain bbox if present, else entity bbox
-    let minx, miny, maxx, maxy;
-    if (T && T.rows && T.rows.length) {
-      minx = T.x1; miny = T.y1;
-      maxx = T.x1 + T.rows[0].length*T.step; maxy = T.y1 + T.rows.length*T.step;
-    } else {
-      const xs = ents.map(e=>e.x), ys = ents.map(e=>e.y);
-      minx = Math.min(...xs)-8; maxx = Math.max(...xs)+8;
-      miny = Math.min(...ys)-8; maxy = Math.max(...ys)+8;
-    }
-    // autosize: fit width, set height to match aspect (no wasted space)
-    const wpx = c.parentElement.clientWidth - 26 || 1400;
-    const sc = wpx / (maxx-minx);
-    c.width = wpx; c.height = Math.max(220, Math.min(760, (maxy-miny)*sc));
-    const scy = c.height/(maxy-miny), scx = sc;
-    g.fillStyle = "#11170f"; g.fillRect(0,0,c.width,c.height);
-    if (T && T.rows) for (let r=0;r<T.rows.length;r++) for (let cc=0;cc<T.rows[r].length;cc++) {
-      const ch = T.rows[r][cc];
-      if (ch===".") continue;
-      g.fillStyle = TCOL[ch] || "#333";
-      g.fillRect((T.x1 + cc*T.step - minx)*scx, (T.y1 + r*T.step - miny)*scy,
-                 T.step*scx+0.5, T.step*scy+0.5);
-    }
-    for (const e of ents) {
-      g.globalAlpha = e.g ? 0.32 : 1;
-      g.fillStyle = COLORS[e.n] || COLORS.default;
-      g.fillRect((e.x-minx)*scx, (e.y-miny)*scy, Math.max(2,scx), Math.max(2,scy));
-    }
-    g.globalAlpha = 1;
-    if (d.derp) {
-      const dx = (d.derp.x-minx)*scx, dy = (d.derp.y-miny)*scy;
-      g.strokeStyle = "#e8871f"; g.lineWidth = 2;
-      g.beginPath(); g.arc(dx, dy, 8, 0, 7); g.stroke();
-      g.fillStyle = "#ffb35c"; g.beginPath(); g.arc(dx, dy, 3.5, 0, 7); g.fill();
-    }
+    mapData = {ents: d.ents||[], derp: d.derp||null};
+    renderMap();
   } catch(e) { note("map", "map error: "+e.message); }
 }
+// interactions
+(() => {
+  const c = document.getElementById("map"), tip = document.getElementById("maptip");
+  let drag = null;
+  c.addEventListener("wheel", ev => {
+    ev.preventDefault();
+    const wx = s2wx(ev.offsetX), wy = s2wy(ev.offsetY);
+    view.ppt *= ev.deltaY < 0 ? 1.18 : 1/1.18;
+    view.ppt = Math.max(0.4, Math.min(30, view.ppt));
+    view.cx = wx - (ev.offsetX - c.width/2)/view.ppt;
+    view.cy = wy - (ev.offsetY - c.height/2)/view.ppt;
+    renderMap();
+  }, {passive:false});
+  c.addEventListener("mousedown", ev => { drag = {x:ev.offsetX, y:ev.offsetY}; c.style.cursor="grabbing"; });
+  window.addEventListener("mouseup", () => { drag = null; c.style.cursor="grab"; });
+  c.addEventListener("dblclick", () => { view.fitted = false; renderMap(); });
+  c.addEventListener("mouseleave", () => tip.style.display = "none");
+  c.addEventListener("mousemove", ev => {
+    if (drag) {
+      view.cx -= (ev.offsetX - drag.x)/view.ppt;
+      view.cy -= (ev.offsetY - drag.y)/view.ppt;
+      drag = {x:ev.offsetX, y:ev.offsetY};
+      renderMap(); tip.style.display = "none"; return;
+    }
+    const wx = s2wx(ev.offsetX), wy = s2wy(ev.offsetY);
+    let best = null, bd = 2.5;
+    for (const e of mapData.ents) {
+      const d2 = Math.abs(e.x - wx) + Math.abs(e.y - wy);
+      if (d2 < bd) { bd = d2; best = `${e.n}${e.g?" (ghost)":""} @ ${e.x},${e.y}`; }
+    }
+    if (!best && mapData.derp && Math.abs(mapData.derp.x-wx)+Math.abs(mapData.derp.y-wy) < 3)
+      best = `derpface @ ${Math.floor(mapData.derp.x)},${Math.floor(mapData.derp.y)}`;
+    if (!best && terrainCache && terrainCache.rows) {
+      const T = terrainCache;
+      const cc = Math.floor((wx-T.x1)/T.step), r = Math.floor((wy-T.y1)/T.step);
+      const ch = (T.rows[r]||"")[cc];
+      if (ch && ch !== ".") best = `${TNAME[ch]||ch} @ ${Math.floor(wx)},${Math.floor(wy)}`;
+    }
+    if (best) {
+      tip.textContent = best;
+      tip.style.left = (ev.offsetX + 14) + "px"; tip.style.top = (ev.offsetY + 10) + "px";
+      tip.style.display = "block";
+    } else tip.style.display = "none";
+  });
+})();
 
 // ---- derpface window
 async function drawDerp() {
