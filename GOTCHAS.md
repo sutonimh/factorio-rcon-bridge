@@ -817,3 +817,13 @@ connect_mine_to_array (lay_belt_path corners join row offsets). Runs every 10th 
 + after phase-0 belt builds. RULE (Seth): raw ore belts DIRECTLY to smelters; plates belt
 DIRECTLY onto the bus once it exists; a chest is only legitimate where something must buffer
 (mine terminal for character-haul era, boiler coal buffer, array plate drain until the bus).
+
+## AUTOMATION FIRST (Seth's standing directive, 2026-08-29)
+
+The character must never do by hand what automation already provides: with drill outposts
+live, ore comes from their chests/belts (ensure() pulls before it ever hand-mines) - derpface
+hand-mining iron next to 20 working drills is a bug, not a bootstrap step. smelting_base's
+direct A.mine top-ups are gone (ensure() everywhere). And the SELF-HEALS (keep_power,
+fix_unpowered, repair_belt_gaps, ensure_lanes) + the operator inbox run at every planner
+pass START, not just inside maintain bursts - a long build pass must never delay the
+automatic systems that keep the base alive.

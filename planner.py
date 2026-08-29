@@ -261,6 +261,19 @@ def play():
     status.log(f"play(): resuming at phase {p['phase']}")
     while True:
         B.ensure_derpface()    # every pass: the character can vanish on an un-autosaved restart
+        # PASS-START SELF-HEALS + operator inbox: build passes can run long (walks), and these
+        # are all server-side/instant - they must never wait for a maintain burst (Seth: the
+        # maintenance loop must not get in the way of automation)
+        for fn in ("keep_power", "fix_unpowered", "repair_belt_gaps", "ensure_lanes"):
+            try:
+                getattr(B, fn)()
+            except Exception as e:
+                status.log(f"pass-start {fn}: {e}")
+        try:
+            import operator2 as _op
+            _op.process_inbox()
+        except Exception as e:
+            status.log(f"operator inbox error: {e}")
         phase = p["phase"]
         if phase not in PHASES:
             status.log(f"play(): phase {phase} has no program yet - holding in maintain")

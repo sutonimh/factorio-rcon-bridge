@@ -141,19 +141,14 @@ def smelting_base():
     iron/copper/stone and smelt a starting plate stock. Idempotent on the furnace rows."""
     bx, by = SPAWN
     # stone first (furnaces need it); mine generously
+    # AUTOMATION FIRST (Seth): pull ore via ensure() - mine-outpost chests/buffers first,
+    # hand-mining only as the true last resort (fresh world, no drills yet)
     if _count("stone") < 120:
-        sx, sy, _ = STATE["stone"]
-        A.now(f"Bootstrap: mining stone @{sx},{sy}")
-        A.stop(); A.walk(sx + 1, sy, tol=2.5); A.mine("stone", 250)
-    # iron + copper ore stock
+        ensure("stone", 250)
     if _count("iron-ore") < 200:
-        ix, iy, _ = STATE["iron-ore"]
-        A.now(f"Bootstrap: mining iron ore @{ix},{iy}")
-        A.stop(); A.walk(ix + 1, iy, tol=2.5); A.mine("iron-ore", 250)
+        ensure("iron-ore", 250)
     if _count("copper-ore") < 150:
-        cx, cy, _ = STATE["copper-ore"]
-        A.now(f"Bootstrap: mining copper ore @{cx},{cy}")
-        A.stop(); A.walk(cx + 1, cy, tol=2.5); A.mine("copper-ore", 200)
+        ensure("copper-ore", 200)
     # furnaces
     if _count("stone-furnace") < 12 and not _find("stone-furnace", bx, by - 1, 12):
         A.now("Bootstrap: crafting 12 stone furnaces")
