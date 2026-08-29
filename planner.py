@@ -182,27 +182,15 @@ def gate0():
 
 # ------------------------------------------------------------------ phase 1 (v1 scope)
 def phase1(p):
-    """Oil trigger + research drive to construction-robotics. v1 scope: fire the oil-processing
-    TRIGGER (pumpjack on the scouted patch) and keep research advancing; the oil-economy build
-    (blueprint-stamped refinery/chem modules) lands after the phase-0 proving run validates."""
-    oil = p.get("oil")
-    if not oil:
-        oil = scout_oil(p, max_radius=640)
-        if not oil:
-            raise RuntimeError("phase1: no crude oil located")
-    if not techdb.is_trigger("oil-processing") or B._tech_done("oil-processing"):
-        pass
-    else:
-        ox, oy = int(oil[0]), int(oil[1])
-        have = B._count("pumpjack")
-        if not have and not B._find("pumpjack", ox, oy, 20):
-            B.make("pumpjack", 1)
-        if not B._find("pumpjack", ox, oy, 20):
-            A.stop(); A.walk(ox + 2, oy, tol=3.0)
-            A.clear_area(ox, oy, 6)
-            A.place("pumpjack", ox - 1, oy - 1)   # 3x3: center lands on the patch tile
-            status.log(f"pumpjack placed at oil patch {ox},{oy} (fires oil-processing trigger on first crude)")
-    # research keeps advancing via the science strand (_advance_research targets robotics chain)
+    """Oil economy, blueprint-first: powered pumpjack fires the oil-processing trigger, then
+    the Nilaus Basic Oil Processing Block is ghost-stamped and revived incrementally with real
+    materials (phase1_oil.advance, idempotent per pass). Research keeps advancing toward
+    construction-robotics via the science strand."""
+    if not p.get("oil") and not scout_oil(p, max_radius=640):
+        raise RuntimeError("phase1: no crude oil located")
+    import phase1_oil
+    phase1_oil.advance(p)
+    save(p)
 
 
 def gate1():

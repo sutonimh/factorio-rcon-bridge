@@ -693,6 +693,37 @@ def build_ghosts(cadence=0.35, batch=2):
     return f"built {n} entities in cadence"
 
 
+def build_ghosts_priority(names, area=None, batch=6, rounds=40, cadence=0.25):
+    """Like build_ghosts, but revives ghosts in NAME-PRIORITY order (fluid infrastructure
+    before cosmetics) and optionally scoped to an area (x1,y1,x2,y2). Consumes real inventory
+    items; fuels burners on revive. Stops a name tier when materials run out and falls through
+    to the next tier so cheap items never wait behind expensive ones."""
+    ar = ""
+    if area:
+        ar = ", area={{%s,%s},{%s,%s}}" % (area[0], area[1], area[2], area[3])
+    total = 0
+    for name in names:
+        for _ in range(rounds):
+            r = _print(
+                "/sc local p=storage.derpface; local s=game.surfaces[1]; local inv=p.get_main_inventory(); local built=0;"
+                "for _,g in pairs(s.find_entities_filtered{name='entity-ghost', force='player'" + ar + "}) do"
+                "  if built>=" + str(batch) + " then break end;"
+                "  if g.ghost_name=='" + name + "' then"
+                "    local gp=g.ghost_prototype; local item=(gp.items_to_place_this and gp.items_to_place_this[1] and gp.items_to_place_this[1].name) or g.ghost_name;"
+                "    if inv.get_item_count(item)>0 then local col,e=g.revive{}; if e then inv.remove{name=item,count=1}; built=built+1;"
+                "      if e.type=='furnace' or e.name=='burner-mining-drill' or e.name=='burner-inserter' then local c=math.min(5,inv.get_item_count('coal')); if c>0 then e.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end end end;"
+                "rcon.print(built)").strip()
+            try:
+                built = int(r)
+            except ValueError:
+                return f"revived {total}; error: {r[:120]}"
+            total += built
+            if built < batch:
+                break              # tier exhausted (no more ghosts of this name, or no materials)
+            time.sleep(cadence)
+    return f"revived {total} ghosts (priority order)"
+
+
 NOTE_ANCHOR = (-10, -30)   # world tile NW of + above the base furnaces (clear space); panel grows down
 
 

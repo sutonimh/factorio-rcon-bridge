@@ -43,6 +43,12 @@ F.out = function(t)
   rcon.print(#storage.fle_out)
 end
 
+function F.take(ename)
+  local inv = storage.derpface and storage.derpface.valid and storage.derpface.get_main_inventory()
+  if inv and inv.get_item_count(ename) > 0 then inv.remove{name = ename, count = 1}; return true end
+  return false
+end
+
 -- @chunk placeable
 local F = fle
 -- Tile classification, adapted from FLE is_placeable() (connect_entities/server.lua).
@@ -122,12 +128,9 @@ end
 
 -- @chunk lay
 local F = fle
--- Belt/pipe line layer, adapted from FLE connect_entities/server.lua
--- (place_at_position + the underground-segment splitting logic). Differences: the
--- tile model comes from bootstrap.lay_belt_path — each tile's direction points at
--- the NEXT tile so corners turn; undergrounds bridge blocked spans on straight
--- runs; create_entity WITHOUT player= (GOTCHAS: player=<character> errors); no
--- inventory deduction; no character teleports.
+-- Belt/pipe layer adapted from FLE connect_entities (see LUA-VENDORING.md).
+-- Tile dirs point at the NEXT tile (corners turn); undergrounds bridge blocked
+-- straight spans; no player=; items consumed via F.take (legit builds).
 F.lay_line = function(ax, ay, bx, by, name, dry)
   local s = game.surfaces[1]
   local f = game.forces.player
@@ -166,8 +169,12 @@ F.lay_line = function(ax, ay, bx, by, name, dry)
     F.clear_tile(x, y)
     local old = s.find_entity(name, {x + 0.5, y + 0.5})
     if old then old.destroy() end
-    local e = s.create_entity{name = ename, position = {x + 0.5, y + 0.5},
-                              direction = d, force = f, type = utype}
+    local e = nil
+    if F.take(ename) then
+      e = s.create_entity{name = ename, position = {x + 0.5, y + 0.5},
+                          direction = d, force = f, type = utype}
+      if not e then storage.derpface.get_main_inventory().insert{name = ename, count = 1} end
+    end
     if e then
       placed = placed + 1
       ents[#ents + 1] = {name = ename, x = x, y = y, d = d}
@@ -315,7 +322,11 @@ F.connect_poles = function(ax, ay, bx, by, name, dry)
         if dry then
           placed = placed + 1
         else
-          local e = s.create_entity{name = name, position = pp, force = f}
+          local e = nil
+          if F.take(name) then
+            e = s.create_entity{name = name, position = pp, force = f}
+            if not e then storage.derpface.get_main_inventory().insert{name = name, count = 1} end
+          end
           if e then
             placed = placed + 1
             ents[#ents + 1] = {name = name, x = pp.x, y = pp.y}
