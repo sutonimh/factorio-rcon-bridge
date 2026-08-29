@@ -740,3 +740,28 @@ the scalable backbone; columns and the two backbones just extend east.
 `build_power_plant(n_engines)` replicates this: pump+route once, columns = ceil(n_engines/2)
 stamped at bx0+4k, extend the manifold + coal belt, +1 pump per 20 columns. Verify with
 get_fluid_count (pump 100, boiler 200/200) + engine energy > 0.
+
+## Server container RECREATE breaks the autopilot's network namespace (2026-08-29)
+
+The autopilot container runs with `--network container:factorio`, which docker resolves to a
+CONTAINER ID at create time. A plain `docker restart factorio` keeps the ID (autopilot
+survives), but a `docker compose up -d` that RECREATES the factorio container (image bump,
+compose edit) gives it a new ID -> the autopilot's netns points at a dead container -> every
+RCON connect = ConnectionRefused and the autopilot exits/flaps. FIX after any server
+recreate: `docker rm -f factorio-autopilot` and re-run it with `--network container:factorio`
+(re-resolves to the new ID). Hit during the 2.1.8 -> 2.1.17 bump (saves backed up first in
+/mnt/user/appdata/factorio/saves-backup-pre2117). Eventual fix: put both containers on a
+shared compose network and talk to `factorio:27015` by name instead of sharing netns.
+
+## Factorio 2.1.17 bump notes (2026-08-29)
+
+- Image pin: /mnt/user/appdata/factorio/docker-compose.yml -> factoriotools/factorio:2.1.17.
+  DLC mods (space-age/elevated-rails/quality/recycler) ship inside the headless build; the
+  mods dir only needs mod-list.json. Map 2.1.8-1 migrated cleanly (one-way: no going back).
+- `game.active_mods` is GONE in 2.1 (LuaGameScript doesn't contain key active_mods) - use
+  `script.active_mods` or prototypes if needed.
+- Fluid-API audit: our code never touched `fluidbox` (blocked long ago); `get_fluid_count`
+  verified working on 2.1.17. The removed `LuaFluidBox` class costs us nothing.
+- Tech tree re-dumped via the new `dump_techtree.py` (repeatable; chunked storage read).
+  2.1.8 -> 2.1.17 diff: transport-belt-capacity-2 gained prerequisite
+  inserter-capacity-bonus-7; everything else identical (277 techs, 631 recipe mappings).
