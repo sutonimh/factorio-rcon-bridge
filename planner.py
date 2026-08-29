@@ -89,9 +89,19 @@ def lap_hook(i):
                    + (f"/{v['class']}" if v.get("class") else "") + f" - {v['reason']}")
         if v.get("wake_architect") and time.time() - _last_arch["t"] > ARCH_COOLDOWN_S:
             _last_arch["t"] = time.time()
-            _run_architect(d, v)
+            # daemon thread: a 35B call can take minutes and must never block the
+            # maintain strand (it froze hauling for the duration when synchronous)
+            import threading
+            threading.Thread(target=_run_architect_safe, args=(d, v), daemon=True).start()
     except Exception as e:
         status.log(f"lap_hook error: {e}")
+
+
+def _run_architect_safe(d, v):
+    try:
+        _run_architect(d, v)
+    except Exception as e:
+        status.log(f"architect error: {e}")
 
 
 def _run_architect(d, verdict):
@@ -241,6 +251,7 @@ def play():
             continue
         program, gate = PHASES[phase]
         try:
+            status.write_status([])    # heartbeat: long build passes write no laps
             program(p)
         except Exception as e:
             status.log(f"phase {phase} program error: {e}")
