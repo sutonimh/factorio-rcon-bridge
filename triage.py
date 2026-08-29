@@ -1,73 +1,91 @@
 #!/usr/bin/env python3
-"""Lap triage: the fast lane of the learning loop (MEGABASE-V2-DESIGN §6).
+"""Residual-anomaly triage (v2, rebuilt per the 2026-08-29 AI-loop audit).
 
-Every maintain lap hands a compact state delta to halo's 4B, which classifies it as
-healthy / watch / stall(<class>) / anomaly with a one-line reason. Cheap enough to run every
-cycle; an escalation wakes the architect early. If halo is unreachable the HEURISTIC fallback
-classifies instead — the maintain loop must never block on an LLM.
-"""
+The controller's deterministic rule battery owns every KNOWN failure signature; the 4B only
+judges what the rules did not already claim, on the controller's rich sense() dict WITH the
+previous sample for trend. The audit's replay showed the old prompt failing on all six real
+cases (class never emitted, wake always true, a fatal coal-death classed 'watch'): this one
+documents sentinels, forces class/actuator from enums, and carries two few-shots from the
+real failures. wake_architect is honored only for stall/anomaly."""
 import json
 
 import lessons
 import llm
 
 STATES = ("healthy", "watch", "stall", "anomaly")
+CLASSES = ("power", "coal", "lane", "supply", "inventory", "research", "science", "build", "none")
+ACTUATORS = ("keep_power", "fix_unpowered", "ensure_grid_connected", "fix_lanes",
+             "fix_science", "fix_research", "trim_inventory", "none")
 
 SYSTEM = (
-    "You triage one Factorio base-state delta per message. States: healthy (all producing), "
-    "watch (degrading trend but producing), stall (production stopped; name the class: power / "
-    "coal / supply / inventory / research / build), anomaly (numbers that contradict each other "
-    "or a state no rule explains). Known cascade signatures: boiler_fuel=0 or engine_energy=0 "
-    "= power death; drills=0 or all chests coal=0 = coal death spiral; free_slots=0 = inventory "
-    "clog freezing material flow; full_output+ingredient_shortage+missing_science_packs with "
-    "power OK = a material-flow break, check character free slots first. Reply with ONLY JSON: "
-    '{"state": "...", "class": "..."|null, "reason": "one line", "wake_architect": true|false}'
+    "You triage ONE Factorio base state sample (cur) with the previous sample (prev) for "
+    "trend. The deterministic rule engine already handles known signatures - you judge "
+    "RESIDUAL weirdness only.\n"
+    "Field notes: -1 means 'no such entity yet' (NOT an error); engines/labs/asm/drills/"
+    "furnaces are counts; *_working are how many run now; research_pct -1 = nothing queued; "
+    "science_pm / iron_pm are per-minute production flows.\n"
+    "Known signatures (rules handle these - if one plainly applies say so in reason but "
+    "still classify): boiler_fuel=0+engine_energy=0 = power death (class power, "
+    "keep_power); power_networks>1 = grid split (power, ensure_grid_connected); "
+    "drills_blocked high + furnaces_starved high = broken ore lane (lane, fix_lanes); "
+    "free_slots<5 = inventory clog (inventory, trim_inventory); iron_pm falling toward 0 "
+    "with furnaces_starved rising = lane/supply break (lane).\n"
+    'Reply ONLY JSON: {"state":"healthy|watch|stall|anomaly","class":"power|coal|lane|'
+    'supply|inventory|research|science|build|none","actuator":"keep_power|fix_unpowered|'
+    'ensure_grid_connected|fix_lanes|fix_science|fix_research|trim_inventory|none",'
+    '"reason":"one line","wake_architect":true|false}\n'
+    "wake_architect=true ONLY for stall/anomaly you cannot map to an actuator.\n"
+    "Example 1 - cur {engines:2,engine_energy:0,boiler_fuel:0,drills:20,furnaces:39} -> "
+    '{"state":"stall","class":"power","actuator":"keep_power","reason":"engines dead and '
+    'boiler dry - power death","wake_architect":false}\n'
+    "Example 2 - cur {drills_blocked:8,furnaces_starved:36,iron_pm:0} prev {iron_pm:90} -> "
+    '{"state":"stall","class":"lane","actuator":"fix_lanes","reason":"iron flow collapsed '
+    '90->0 with drills blocked: ore lane broken","wake_architect":false}'
 )
 
 
-def heuristic(delta):
-    """LLM-free fallback: catch the known-fatal signatures."""
-    if delta.get("engine_energy", 1) == 0 or delta.get("boiler_fuel", 1) == 0:
-        return {"state": "stall", "class": "power", "reason": "engines/boiler dead (heuristic)",
-                "wake_architect": True}
-    if delta.get("free_slots", 1) == 0:
-        return {"state": "stall", "class": "inventory", "reason": "character inventory full (heuristic)",
-                "wake_architect": True}
-    if delta.get("labs_working", 1) == 0 and delta.get("assemblers_working", 1) == 0:
-        return {"state": "stall", "class": "supply", "reason": "nothing producing (heuristic)",
-                "wake_architect": True}
-    return {"state": "healthy", "class": None, "reason": "no fatal signature (heuristic)",
-            "wake_architect": False}
+def heuristic(d):
+    if d.get("engines", 0) and d.get("engine_energy", 1) <= 0:
+        return {"state": "stall", "class": "power", "actuator": "keep_power",
+                "reason": "engines dead (heuristic)", "wake_architect": False}
+    if 0 <= d.get("free_slots", -1) < 3:
+        return {"state": "stall", "class": "inventory", "actuator": "trim_inventory",
+                "reason": "inventory full (heuristic)", "wake_architect": False}
+    return {"state": "healthy", "class": "none", "actuator": "none",
+            "reason": "no fatal signature (heuristic)", "wake_architect": False}
 
 
-def classify(delta):
-    """delta: small dict of lap metrics. Returns the triage verdict dict (never raises)."""
+def classify(cur, prev=None):
+    """cur/prev: controller.sense() dicts. Never raises; falls back to the heuristic."""
     try:
         system = SYSTEM
-        lb = lessons.prompt_block(tags=("triage",), k=5)
+        lb = lessons.prompt_block(tags=("triage", "controller"), k=5)
         if lb:
             system += "\n" + lb
         out = llm.chat_json(
             [{"role": "system", "content": system},
-             {"role": "user", "content": json.dumps(delta, separators=(",", ":"))}],
-            model=llm.TRIAGE, max_tokens=200, timeout=60, tag="triage",
-        )
+             {"role": "user", "content": json.dumps({"cur": cur, "prev": prev or {}},
+                                                    separators=(",", ":"))}],
+            model=llm.TRIAGE, max_tokens=220, timeout=60, tag="triage")
         if out and out.get("state") in STATES:
-            out.setdefault("class", None)
-            out.setdefault("wake_architect", out["state"] in ("stall", "anomaly"))
+            if out.get("class") not in CLASSES:
+                out["class"] = "none"
+            if out.get("actuator") not in ACTUATORS:
+                out["actuator"] = "none"
+            out["wake_architect"] = bool(out.get("wake_architect")) and out["state"] in ("stall", "anomaly")
             out["_source"] = "llm"
             return out
-    except Exception as e:  # halo down / timeout: fall through, never block the lap
-        err = str(e)[:120]
-        v = heuristic(delta)
-        v["_source"] = "heuristic:" + err
+    except Exception as e:
+        v = heuristic(cur)
+        v["_source"] = "heuristic:" + str(e)[:100]
         return v
-    v = heuristic(delta)
+    v = heuristic(cur)
     v["_source"] = "heuristic:unparseable"
     return v
 
 
 if __name__ == "__main__":
-    sample = {"engine_energy": 0, "boiler_fuel": 0, "labs_working": 0, "labs": 3,
-              "assemblers_working": 0, "drills": 0, "free_slots": 63, "research_pct": 0}
-    print(json.dumps(classify(sample), indent=2))
+    cur = {"engines": 2, "engine_energy": 0, "boiler_fuel": 0, "labs": 1, "labs_working": 0,
+           "drills": 20, "drills_blocked": 8, "furnaces": 39, "furnaces_starved": 36,
+           "free_slots": 40, "iron_pm": 0}
+    print(json.dumps(classify(cur, {"iron_pm": 90}), indent=2))

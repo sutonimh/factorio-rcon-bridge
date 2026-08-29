@@ -137,8 +137,13 @@ def fuel(amount=300):
 
 
 def smelting_base():
-    """Build the smelting hub at spawn: 8 iron + 4 copper stone furnaces, then hand-mine
-    iron/copper/stone and smelt a starting plate stock. Idempotent on the furnace rows."""
+    """Build the smelting hub at spawn: 8 iron + 4 copper stone furnaces, then stock ore and
+    smelt starting plates. OBSOLETE once the belt-fed arrays run (automation-first): skips
+    itself when >=8 array furnaces exist - plates come from the arrays, not hand-stocking."""
+    arrays = int(A._print(
+        f"/sc local s=game.surfaces[1]; rcon.print(#s.find_entities_filtered{{area={{{{{SMELT_ZONE['iron-ore'][0] - 4},{SMELT_ZONE['iron-ore'][1] - 2}}},{{{SMELT_ZONE['iron-ore'][0] + 36},{SMELT_ZONE['copper-ore'][1] + 8}}}}},name={{'stone-furnace','steel-furnace'}}}})").strip() or "0")
+    if arrays >= 8:
+        return
     bx, by = SPAWN
     # stone first (furnaces need it); mine generously
     # AUTOMATION FIRST (Seth): pull ore via ensure() - mine-outpost chests/buffers first,
@@ -695,7 +700,9 @@ def build_belt_supply():
     cs = STATE.get("coal")
     if cs:
         ox, oy = SMELT_ZONE["iron-ore"]
-        lay_belt_path([(int(cs[0]) + 10, int(cs[1])), (ox - 2, int(cs[1])), (ox - 2, oy + 6)])
+        # coal gets its OWN column (ox-6): ox-2/ox-4 are the per-ore ORE lanes now - a shared
+        # column merges lanes (the mixed-ore bug all over again, fuel edition)
+        lay_belt_path([(int(cs[0]) + 10, int(cs[1])), (ox - 6, int(cs[1])), (ox - 6, oy + 6), (ox - 2, oy + 6)])
 
 
 STEEL_STACK = (14, 6)   # (ox,oy) of the steel-processing stack: output belt oy, input belt oy+5

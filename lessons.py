@@ -18,18 +18,23 @@ HERE = pathlib.Path(__file__).resolve().parent
 PATH = pathlib.Path(os.environ.get("LESSONS_PATH", HERE / "lessons.jsonl"))
 
 
-def add(condition, mistake, rule, evidence="", phase=None, tags=()):
-    """Record (or count-bump) a lesson. Dedup key = (condition, mistake)."""
+def add(condition, mistake, rule, evidence="", phase=None, tags=(), key=None, world=None):
+    """Record (or count-bump) a lesson.
+
+    Dedup: `key` (a STABLE structured id like "issue:grid_split" or "triage:coal") when
+    given, else exact (condition, mistake) - LLM prose never repeats exactly, which kept
+    every lesson at count=1 and made promotion unreachable (audit 2026-08-29). `world`
+    scopes coordinate-bearing lessons to one map so stale coords don't outlive it."""
     rows = _all()
     for r in rows:
-        if r["condition"] == condition and r["mistake"] == mistake:
+        if (key and r.get("key") == key) or (not key and r["condition"] == condition and r["mistake"] == mistake):
             r["count"] += 1
             r["last_ts"] = int(time.time())
             if evidence:
                 r["evidence"] = evidence[-2000:]
             _write(rows)
             return r
-    row = {"id": max((r["id"] for r in rows), default=0) + 1,
+    row = {"id": max((r["id"] for r in rows), default=0) + 1, "key": key, "world": world,
            "condition": condition, "mistake": mistake, "rule": rule,
            "evidence": evidence[-2000:], "phase": phase, "tags": sorted(tags),
            "count": 1, "ts": int(time.time()), "last_ts": int(time.time()),
