@@ -1472,6 +1472,46 @@ def fix_unpowered(limit=8):
         "          break end end end end end")
 
 
+def repair_belt_gaps(max_span=30):
+    """BELT CONTINUITY self-heal: a lane with a mid-route break starves everything downstream
+    (GOTCHAS: a belt lane must be CONTINUOUS). Interrupted lay_belt_path runs (restart mid-lay,
+    out of belts) left dead-end lanes that idled all 39 furnaces on 2026-08-29. Each pass:
+    find dead-end belts, and where the SAME lane resumes within max_span tiles in the belt's
+    direction, bridge the span with belts from inventory (script-crafting from plates/gears if
+    short). No continuation found = leave it (could be a legit terminus) - log only."""
+    A._print(
+        "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
+        "local D={[0]={0,-1},[4]={1,0},[8]={0,1},[12]={-1,0}};"
+        # keep a small belt stock: craft from plates+gears server-side (2 belts per gear+plate)
+        "if inv.get_item_count('transport-belt')<10 then"
+        "  local g=inv.get_item_count('iron-gear-wheel'); local pl=inv.get_item_count('iron-plate');"
+        "  while g<5 and pl>=2 do inv.remove{name='iron-plate',count=2}; inv.insert{name='iron-gear-wheel',count=1}; g=g+1; pl=pl-2 end;"
+        "  local n=math.min(g, math.floor(pl/1), 8); if n>0 then inv.remove{name='iron-gear-wheel',count=n}; inv.remove{name='iron-plate',count=n}; inv.insert{name='transport-belt',count=n*2} end end;"
+        "local fixed=0;"
+        "for _,b in pairs(s.find_entities_filtered{type='transport-belt'}) do"
+        "  if fixed>=12 then break end;"
+        "  if #b.belt_neighbours.outputs==0 then"
+        "    local d=D[b.direction];"
+        "    if d then"
+        "      local bx,by=b.position.x,b.position.y;"
+        "      local resume=nil;"
+        f"      for k=1,{max_span} do"
+        "        local tx,ty=bx+d[1]*k, by+d[2]*k;"
+        "        local nb=s.find_entities_filtered{position={tx,ty},radius=0.4,type='transport-belt'}[1];"
+        "        if nb and nb.direction==b.direction then resume=k break end;"
+        "        local hard=s.find_entities_filtered{position={tx,ty},radius=0.4}; local blocked=false;"
+        "        for _,e in pairs(hard) do if e.type~='resource' and e.name~='character' and e.type~='transport-belt' then blocked=true end end;"
+        "        if blocked then break end;"
+        "        if string.find(s.get_tile(math.floor(tx),math.floor(ty)).name,'water') then break end end;"
+        "      if resume then"
+        "        for k=1,resume-1 do"
+        "          if inv.get_item_count('transport-belt')<1 then break end;"
+        "          local tx,ty=bx+d[1]*k, by+d[2]*k;"
+        "          local e=s.create_entity{name='transport-belt',position={tx,ty},direction=b.direction,force=f};"
+        "          if e then inv.remove{name='transport-belt',count=1}; fixed=fixed+1 end end end end end end;"
+        "if fixed>0 then game.print('repair_belt_gaps: bridged '..fixed..' tiles') end")
+
+
 def ensure_grid_connected():
     """SELF-HEAL the electric grid: if a steam engine ends up on a DIFFERENT network than the main
     grid (the pole network with the most poles), bridge it back with a pole line. The recurring
@@ -1647,6 +1687,7 @@ def maintain(laps=0, lap_hook=None):
                 #                               rebuild base layout the operator manages - it kept rebuilding Seth's coal
                 #                               buffer/inserter. Autopilot = fuel/harvest/research ONLY, never auto-build layout.
                 fuel_drills()                 # keep all burner mining drills fueled (server-side) so mines never stall
+                repair_belt_gaps()            # bridge dead-end lanes (belt continuity law)
                 reap_dead_drills()            # remove EXHAUSTED drills (no_minable_resources) - they produce nothing + litter
                 harvest_array_plates()        # array drain chests -> science buffer chests
                 _collect_plates_all()         # furnace plates -> inventory (pre-belt-feed path)
