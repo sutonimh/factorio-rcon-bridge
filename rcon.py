@@ -53,7 +53,7 @@ def _read(sock):
     return pid, ptype, body
 
 
-def run(command, timeout=10.0):
+def _run_once(command, timeout=10.0):
     with socket.create_connection((HOST, PORT), timeout=timeout) as s:
         s.settimeout(timeout)
         # auth
@@ -90,3 +90,23 @@ if __name__ == "__main__":
         print("no command given", file=sys.stderr)
         sys.exit(2)
     print(run(cmd))
+
+
+def run(command, timeout=10.0):
+    """Bounded retry on CONNECT-phase failures (refused/reset) - one RCON blip was
+    process-fatal and drove 18 crash-restarts in 108 min (audit 2026-08-29). Refused/reset
+    mean nothing executed, so retrying is safe; timeouts retry once only (a post-send
+    timeout re-sent could double-execute a mutating /sc)."""
+    import socket as _s
+    import time as _t
+    for attempt in (1, 2, 3):
+        try:
+            return _run_once(command, timeout)
+        except (ConnectionRefusedError, ConnectionResetError) as e:
+            if attempt == 3:
+                raise
+            _t.sleep(1.5 * attempt)
+        except (_s.timeout, TimeoutError):
+            if attempt >= 2:
+                raise
+            _t.sleep(2.0)

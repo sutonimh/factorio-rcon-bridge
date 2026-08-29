@@ -868,3 +868,26 @@ zero-flow progress watchdog is severity 0 - the detector the silent July-August 
 needed. Controller state (fail counters, architect cooldown) persists across restarts.
 RULES: no timer-driven blind healing; every finding must terminate in an actuator or a
 rejection lesson; every fixer is verified by re-sensing, never by its own claim.
+
+## Legacy-audit fixes round 2 (2026-08-29)
+
+- gate0 was STRUCTURALLY UNSATISFIABLE: labs_working>=2 required, red_science built exactly
+  one lab -> phase 0 looped forever, re-running every step (the root multiplier on all the
+  obsolete work). red_science now builds two labs.
+- fuel() was the literal "hand-mining beside working drills": unconditional walk+mine at the
+  coal patch. Now ensure() first (chests -> belt-lift -> mine only as true last resort);
+  ensure() itself gained a lane-belt LIFT fallback for belt-fed mines (no terminal chest).
+- keep_power probed the RETIRED map's boiler buffer chest at (45,-2) -> silent no-op on v2
+  (contributed to today's boiler=0). Now boiler-adjacent lookup.
+- fix_unpowered searched radius 120 around DERPFACE - a runaway character made it no-op for
+  an hour while triage screamed. Now scoped to the base (spawn radius 250).
+- build_belt_supply re-ran connect_mine_to_array (destroys mine-head inserters/chests +
+  re-lays the whole route) EVERY pass; now only when the lane BFS says broken. ensure_lanes
+  got convergence accounting: 3 failed re-lays -> stop churning, write a lesson, escalate.
+- rcon.run: bounded retry on refused/reset (safe: nothing executed) - one socket blip was
+  process-fatal (18 crash-restarts today, each spawning a runaway walk).
+- Controller triage moved to a worker thread (a 60s LLM call was blocking the actuator strand).
+STILL OPEN (next batch): registry-first servicing for arrays/power/science, executor-orders
+as the one queue, v1 dead-weight quarantine (autopilot.maintain servicers, patrol.py,
+build_belt family, snapshot/rebuild), lay_belt_path inventory consumption, walk() callers
+checking the success flag, orders stuck 'running' startup sweep.
