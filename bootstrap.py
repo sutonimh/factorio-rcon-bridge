@@ -456,6 +456,8 @@ def make(recipe, count):
     for raw in MINEABLE:
         if cost.get(raw, 0) > _count(raw):
             ensure(raw, cost[raw])
+    if cost.get("wood", 0) > _count("wood"):
+        ensure("wood", cost["wood"])   # wood is raw but not MINEABLE; poles dead-ended on this
     return _craft_wait(recipe, count)
 
 
