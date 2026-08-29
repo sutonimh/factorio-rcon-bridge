@@ -1491,12 +1491,18 @@ def ensure_derpface():
     """Make sure the autonomous character `derpface` exists (recreate if missing/invalid, e.g.
     after a server restart before it was autosaved). Player-LESS character the autopilot drives;
     independent of any connected player, so it runs 24/7. Labelled "derpface" in-world."""
-    return A._print(
+    out = A._print(
         "/sc if not (storage.derpface and storage.derpface.valid) then local s=game.surfaces[1];"
-        "  local c=s.create_entity{name='character', position={6,-10}, force='player'};"
+        # fixed {6,-10} failed on the fresh v2 map (tile blocked -> nil character -> every
+        # inventory read crashed the phase pass); find a non-colliding tile near spawn instead
+        "  local pos=s.find_non_colliding_position('character', {6,-10}, 40, 1) or {x=0.5,y=0.5};"
+        "  local c=s.create_entity{name='character', position=pos, force='player'};"
         "  if c then storage.derpface=c; c.character_running_speed_modifier=0;"
         "    rendering.draw_text{text='derpface', surface=s, target=c, target_offset={0,-2.2}, color={1,0.82,0.25}, scale=1.6, alignment='center'} end end;"
         "rcon.print('derpface valid='..tostring(storage.derpface and storage.derpface.valid))").strip()
+    if "valid=true" not in out:
+        raise RuntimeError(f"ensure_derpface failed: {out[:200]}")
+    return out
 
 
 def maintain(laps=0, lap_hook=None):

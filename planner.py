@@ -79,6 +79,11 @@ def lap_hook(i):
     try:
         import triage
         d = delta()
+        if not (d.get("engines") or d.get("labs") or d.get("drills")):
+            # nothing built yet (fresh-world bootstrap in progress) - triage/architect on an
+            # empty world is pure noise (learned live 2026-08-29: 'anomaly' every lap + an
+            # architect run that diagnosed 'total loss of game state')
+            return
         v = triage.classify(d)
         status.log(f"triage[{v.get('_source','?')[:9]}]: {v['state']}"
                    + (f"/{v['class']}" if v.get("class") else "") + f" - {v['reason']}")
@@ -93,6 +98,9 @@ def _run_architect(d, verdict):
     import architect
     status.log("architect: escalated by triage, running local 35B analysis...")
     snap = architect.snapshot()
+    if not snap.get("ents"):
+        status.log("architect: empty world snapshot - skipping (nothing to analyze)")
+        return
     rep = architect.analyze_local(snap, focus=f"triage says {verdict['state']}: {verdict['reason']}")
     architect.REPORT_PATH.write_text(json.dumps(rep, indent=2))
     for b in rep.get("bottlenecks", []):
@@ -210,11 +218,11 @@ def play():
     """The autonomous top loop: build pass -> gate check -> maintain burst (with lap hook) ->
     repeat. Survives restarts via phase.json. Phase programs are idempotent so a crashed pass
     just reruns."""
-    B.ensure_derpface()
     p = load()
     _restore_state(p)
     status.log(f"play(): resuming at phase {p['phase']}")
     while True:
+        B.ensure_derpface()    # every pass: the character can vanish on an un-autosaved restart
         phase = p["phase"]
         if phase not in PHASES:
             status.log(f"play(): phase {phase} has no program yet - holding in maintain")
