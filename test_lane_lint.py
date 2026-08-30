@@ -188,6 +188,15 @@ def test_trace_loop_terminates(fake):
     assert len(tr["tiles"]) == 3                       # walked the ring once, did not spin
 
 
+@_with_rcon(comp(run_east(4)), env())
+def test_contentless_trace_makes_no_content_claims(fake):
+    # trace(contents=False) never reads the lanes, so "every lane empty" is unknown, not true
+    tr = lane_lint.trace(0, 0, contents=False)
+    assert tr["contents"] is False and len(tr["tiles"]) == 4
+    assert "get_detailed_contents" not in fake.calls[0]
+    assert [f["code"] for f in lane_lint.lint_lane(tr)] == ["DEAD_END"]
+
+
 @_with_rcon(comp(run_east(12)), env())
 def test_trace_truncation(fake):
     tr = lane_lint.trace(0, 0, limit=4)
@@ -428,14 +437,75 @@ def test_a_corner_inside_the_run_is_not_a_sideload(fake):
     assert tr["sideloads"] == []
 
 
+@_with_rcon(comp([belt(1, -2, 1, 4, o=[2]), belt(2, -1, 1, 4, i=[1], o=[3]),
+                  belt(3, 0, 1, 8, i=[2], o=[4]), belt(4, 0, 2, 8, i=[3])], start=1),
+            env(belts=[{"n": "transport-belt", "t": "transport-belt", "d": 0,
+                        "u": 900, "x": 0.5, "y": 0.5}]))
+def test_a_turned_leg_is_not_a_direction_split(fake):
+    # LIVE false positive, column x=-8: (-8,10) runs north and (-8,11) runs south one tile
+    # apart, each fed by its OWN underground output from the west - two deliberate opposing
+    # lines. It was the ONLY finding on a healthy 70-tile run. Here the run turns south at
+    # (0,1) and the orphan at (0,0) runs north: the closest diverging pair is a turn head,
+    # so the column is two legs, not a tear.
+    tr = lane_lint.trace(-2, 1)
+    assert [(t["x"], t["y"]) for t in tr["tiles"]] == [(-2, 1), (-1, 1), (0, 1), (0, 2)]
+    assert tr["orphans"] == [{"x": 0, "y": 0, "d": 0, "name": "transport-belt"}]
+    assert [f for f in lane_lint.lint_lane(tr) if f["code"] == "DIRECTION_SPLIT"] == []
+
+
+@_with_rcon(comp(run_east(4, lanes_of=lambda k: [(1, "iron-ore", 2)])),
+            env(belts=[{"n": "transport-belt", "t": "transport-belt", "d": 12,
+                        "u": 900, "x": 5.5, "y": 1.5},
+                       {"n": "transport-belt", "t": "transport-belt", "d": 4,
+                        "u": 901, "x": 6.5, "y": 1.5},
+                       {"n": "transport-belt", "t": "transport-belt", "d": 4,
+                        "u": 902, "x": 9.5, "y": 1.5, "p": 1}]))
+def test_a_leg_head_elsewhere_on_the_axis_does_not_mask_a_real_tear(fake):
+    # the exemption is scoped to the PAIR the rule names, never to the whole row: a side-fed
+    # leg head at (9,1) must not buy silence for the genuine tear at (5,1)/(6,1), which is
+    # GOTCHAS:831's shape (both halves fed along the row, neither of them a leg head).
+    tr = lane_lint.trace(0, 0)
+    assert tr["turns"] == [[9, 1]]
+    found = [f for f in lane_lint.lint_lane(tr) if f["code"] == "DIRECTION_SPLIT"]
+    assert len(found) == 1 and found[0]["evidence"]["belts"] == [[6, 1, 4], [5, 1, 12]]
+
+
+@_with_rcon(comp(run_east(4, lanes_of=lambda k: [(1, "iron-ore", 2)])),
+            env(belts=[{"n": "transport-belt", "t": "transport-belt", "d": 12,
+                        "u": 900, "x": 5.5, "y": 1.5, "p": 1},
+                       {"n": "transport-belt", "t": "transport-belt", "d": 4,
+                        "u": 901, "x": 6.5, "y": 1.5, "p": 1}]))
+def test_two_orphan_leg_heads_are_not_a_split(fake):
+    # the LIVE case, with both belts as ORPHANS: column x=-8 traced from (-8,19) puts (-8,10)
+    # and (-8,11) off the run, so the engine's perpendicular-input flag is the only source of
+    # the turn - a tile-order fallback alone reported the tear again from a different start.
+    tr = lane_lint.trace(0, 0)
+    assert sorted(tr["turns"]) == [[5, 1], [6, 1]]
+    assert [f for f in lane_lint.lint_lane(tr) if f["code"] == "DIRECTION_SPLIT"] == []
+
+
+def test_what_resolves_targets_by_bounding_box():
+    """radius is measured to the entity CENTRE, so the ported radius=0.4 resolved 1x1 targets
+    only: live, every inserter facing a 2x2 stone-furnace resolved to nil and all 12 real
+    consumers on the (-8,17) run reported `to: null`. The lua must test bbox CONTAINMENT
+    (control.lua:1379-1382 inside()) and must exclude the querying entity (:1386), which a
+    wider sweep now reaches."""
+    lua = lane_lint._lua_bbox(-5, -5, 5, 5)
+    assert "left_top" in lua and "right_bottom" in lua, "no bbox-containment test"
+    assert "e.unit_number~=me" in lua, "what() must not resolve to the querying entity"
+    assert "radius=0.4" not in lua, "centre-distance 0.4 cannot see a 2x2 target"
+    assert "what(p,r.u)" in lua, "the owning uid must be passed through"
+
+
 # --------------------------------------------------------------------------- verify_supply
 def _moving_payloads(second_items):
+    """trace (component + bbox), then ONE small tail sample — not a second full trace."""
     run = run_east(4, lanes_of=lambda k: [(1, "iron-ore", 2)])
     run[-1]["D"] = [{"l": 1, "n": "iron-ore", "p": 0.03125, "u": 500},
                     {"l": 1, "n": "iron-ore", "p": 0.28125, "u": 501}]
-    run2 = json.loads(json.dumps(run))
-    run2[-1]["D"] = second_items
-    return [comp(run), env(), comp(run2), env()]
+    tail = {"T": [{"x": k, "y": 0, "L": [{"l": 1, "n": "iron-ore", "c": 2}],
+                   "D": second_items if k == 3 else []} for k in range(4)]}
+    return [comp(run), env(), tail]
 
 
 def test_verify_supply_connected_not_moving():
@@ -489,6 +559,9 @@ def test_reads_are_read_only():
     lua = [lane_lint._lua_component(0, 0, 400, True),
            lane_lint._lua_component(0, 0, 400, False),
            lane_lint._lua_bbox(-10, -10, 10, 10),
+           # _lua_tail is emitted by every verify_supply and was the one gatherer this guard
+           # never covered - an unguarded lua emitter is exactly how a mutating verb gets in
+           lane_lint._lua_tail([{"x": -3, "y": 4}, {"x": 5, "y": -6}]),
            "rcon.print(%s:sub(1,3000))" % lane_lint.STORE]
     bad = r"create_entity|destroy|remove_item|\.direction\s*=[^=]|\brotate\b|walking_state" \
           r"|on_nth_tick|script\.on_event|\.insert\s*\{|clear_items|order_deconstruction" \
@@ -498,7 +571,7 @@ def test_reads_are_read_only():
         assert not m, "MUTATING lua emitted: %r in %s" % (m.group(0), s[:120])
         assert "rcon.print" in s
     # the ONLY world state written is the private read buffer, and it only ever gets a string
-    for s in lua[:3]:
+    for s in lua[:4]:
         writes = set(re.findall(r"(storage\.[\w.]+)\s*=[^=]", s))
         assert writes <= {lane_lint.STORE}, "wrote outside the private buffer: %s" % writes
     assert lane_lint.STORE != "storage._world", "must not share world.py's clobbered key"

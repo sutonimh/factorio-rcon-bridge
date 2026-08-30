@@ -55,9 +55,11 @@ PORTED FROM
   3. get_contents() returns a LIST of {name,count,quality}, transport lines included
      (live: name=coal count=4). Never iterate it as a name->count map.
   4. belt_to_ground_type errors on non-undergrounds — gate on type or pcall.
-  5. get_max_transport_line_index(): transport-belt 2, underground-belt 4 (both verified).
-     splitter 8 is UNVERIFIED — this map has 0 splitters/loaders/linked-belts (live census:
-     transport-belt=417, underground-belt=4, everything else 0).
+  5. get_max_transport_line_index(): transport-belt 2, underground-belt 4, splitter 8 — all
+     three verified live. Loaders and linked-belts still have none on this map, so their
+     counts are assumed. NOTE the odd->left / even->right mapping below is verified only for
+     transport-belt (i==1/2, upstream's own rule) and is an APPROXIMATION for the 4- and
+     8-line entities; a splitter's 8 lines span two tiles and two sides.
   6. Directions are the 16-way enum; live belts read 0/4/8/12 only.
   7. max_underground_distance comes from the prototype (underground-belt=5 verified;
      fast=7). fle_lib.F.underground_range's hardcoded 4 is wrong for fast/express — it only
@@ -78,7 +80,10 @@ PORTED FROM
      must be READ and never inferred from which side the entity sits on.
  10. RCON commands stay small (two compact /sc gathers), and the payload comes back through
      the chunked storage read — a full trace far exceeds one response.
- 11. Splitters sit on a tile boundary; they are keyed under every tile their centre touches.
+ 11. Splitters sit on a tile boundary and cover TWO tiles, so floor() alone would key only one
+     of them. Verified live: an east-running splitter reads position (-28.50,16.00) — x mid-
+     tile, y on the boundary — and a north-running one reads (-12.00,13.50). _tiles_of keys
+     both tiles from the centre, which is why it must never be handed a floored coord.
  12. THIS SERVER IS SHARED. The entity count moved 833 -> 844 during one read sweep (the
      autopilot builds while we read), so a lane can legitimately change between two traces,
      and any storage key world.py also uses WILL be clobbered mid-read. Hence caveat 10's
@@ -215,22 +220,73 @@ def _lua_bbox(x1, y1, x2, y2):
         "local s=game.surfaces[1];"
         "local BT={" + ",".join("['%s']=1" % t for t in BELT_TYPES) + "};"
         "local A={{%d,%d},{%d,%d}};" % (x1, y1, x2, y2) +
-        "local function what(p) for _,e in pairs(s.find_entities_filtered{position=p,radius=0.4}) do"
-        " if e.type~='resource' and e.type~='character' and e.type~='item-entity' then"
-        "  return {n=e.name,t=e.type,x=e.position.x,y=e.position.y,u=e.unit_number} end end end;"
+        # what_at with BOTH of control.lua's guards restored (:1379-1395), because dropping
+        # either one is wrong here. find_entities_filtered's radius is measured to the entity
+        # CENTRE (verified live), so radius=0.4 resolves 1x1 targets ONLY: every inserter
+        # facing a 2x2 stone-furnace came back nil, and all 12 real consumers on the live
+        # (-8,17) plate row reported `to: null` — a furnace was indistinguishable from bare
+        # ground. trace_entity's inside() predicate (:1379-1382) is exact at any size, so it
+        # runs first over a wider sweep; the old nearest-centre rule stays as the fallback so
+        # nothing that resolved before can stop resolving. The wider sweep is also why
+        # `e ~= target` (:1386) has to come back: at 1.6 an inserter reaches its own drop tile.
+        "local function what(p,me) local near;"
+        " for _,e in pairs(s.find_entities_filtered{position=p,radius=1.6}) do"
+        "  if e.unit_number~=me and e.type~='resource' and e.type~='character'"
+        "   and e.type~='item-entity' then"
+        "   local b=e.bounding_box;"
+        "   local r={n=e.name,t=e.type,x=e.position.x,y=e.position.y,u=e.unit_number};"
+        "   if p.x>=b.left_top.x and p.x<=b.right_bottom.x"
+        "    and p.y>=b.left_top.y and p.y<=b.right_bottom.y then return r end;"
+        "   if not near and (p.x-e.position.x)^2+(p.y-e.position.y)^2<=0.16 then near=r end"
+        "  end end;"
+        " return near end;"
         "local I={};"
         "for _,e in pairs(s.find_entities_filtered{area=A,type={'inserter','mining-drill'}}) do"
         " local r={n=e.name,t=e.type,d=e.direction,u=e.unit_number,x=e.position.x,y=e.position.y};"
         # every *_position in its own pcall, per control.lua:1287
-        " pcall(function() local p=e.drop_position;r.dx=p.x;r.dy=p.y;r.dt=what(p) end);"
+        " pcall(function() local p=e.drop_position;r.dx=p.x;r.dy=p.y;r.dt=what(p,r.u) end);"
         " if e.type=='inserter' then"
-        "  pcall(function() local p=e.pickup_position;r.px=p.x;r.py=p.y;r.pt=what(p) end) end;"
+        "  pcall(function() local p=e.pickup_position;r.px=p.x;r.py=p.y;r.pt=what(p,r.u) end) end;"
         " I[#I+1]=r end;"
         "local B={};"
         "for _,e in pairs(s.find_entities_filtered{area=A}) do if BT[e.type] then"
-        " B[#B+1]={n=e.name,t=e.type,d=e.direction,u=e.unit_number,x=e.position.x,y=e.position.y}"
+        # p = fed ACROSS its own axis, i.e. this belt is the HEAD OF A LEG rather than the
+        # continuation of a line. _split needs this for ORPHANS too (the same two belts are run
+        # tiles in one trace and orphans in another, and the answer must not depend on that), and
+        # an orphan has no predecessor to read it off. NB: no '%' anywhere in this block - it is
+        # one adjacent-literal with the table_to_json line, so a modulo would be eaten as a
+        # format spec (the same trap _lua_tail documents).
+        " local nb=e.belt_neighbours or {};local ax=(e.direction==4 or e.direction==12);local pp;"
+        " for _,q in pairs(nb.inputs or {}) do"
+        "  if ax~=(q.direction==4 or q.direction==12) then pp=1 end end;"
+        " B[#B+1]={n=e.name,t=e.type,d=e.direction,u=e.unit_number,x=e.position.x,"
+        "  y=e.position.y,p=pp}"
         " end end;"
         "%s=helpers.table_to_json({I=I,B=B});rcon.print(#%s)" % (STORE, STORE)
+    )
+
+
+def _lua_tail(tiles):
+    """Lane counts + detailed contents for a handful of named tiles. READ ONLY."""
+    spec = ";".join("%d,%d" % (t["x"], t["y"]) for t in tiles)
+    return (
+        "local s=game.surfaces[1];"
+        "local BT={" + ",".join("'%s'" % t for t in BELT_TYPES) + "};local T={};"
+        "for a,b in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+)') do"
+        " local x,y=tonumber(a),tonumber(b);"
+        " local e=s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.7,type=BT}[1];"
+        " if e then local L,D={},{};"
+        "  pcall(function() for li=1,e.get_max_transport_line_index() do"
+        "   local tl=e.get_transport_line(li);"
+        "   for _,c in pairs(tl.get_contents()) do L[#L+1]={l=li,n=c.name,c=c.count} end;"
+        "   local dc=tl.get_detailed_contents();"
+        "   for k=1,math.min(#dc,8) do"
+        "    D[#D+1]={l=li,n=dc[k].stack.name,p=dc[k].position,u=dc[k].unique_id} end"
+        "  end end);"
+        "  T[#T+1]={x=x,y=y,L=L,D=D} end end;"
+        # explicit concat: the gmatch pattern above contains %d, so a trailing % on the whole
+        # literal would try to format it
+        + ("%s=helpers.table_to_json({T=T});rcon.print(#%s)" % (STORE, STORE))
     )
 
 
@@ -295,7 +351,9 @@ def _walk(nodes, start, field, limit):
 
 def _lanes_of(node):
     """Per-tile lane contents. control.lua:1344-1352 maps i==1->left, i==2->right; an
-    underground belt has 4 lines (caveat 5), so odd indices are left and even are right."""
+    underground belt has 4 lines and a splitter 8 (both verified live), so odd indices are
+    taken as left and even as right. Exact for transport-belt; an approximation for the wider
+    entities, whose extra lines span two tiles / two sides (caveat 5)."""
     out = {"1": {}, "2": {}}
     for c in _lst(node.get("L")):
         k = "1" if int(c["l"]) % 2 else "2"
@@ -440,7 +498,14 @@ def trace(x, y, contents=True, limit=400, pad=3):
                 "d": int(b.get("d", 0)), "name": b["n"]}
                for b in belts if b["u"] not in run_uids]
 
+    # belts fed ACROSS their own axis: heads of a leg, not halves of a torn row (see _split).
+    # Taken from the engine so it is the SAME answer whether the belt landed on this run or in
+    # its orphans; the tile-order fallback keeps hand-built traces working.
+    turns = sorted({(int(math.floor(b["x"])), int(math.floor(b["y"]))) for b in belts if b.get("p")}
+                   | {(t["x"], t["y"]) for a, t in zip(tiles, tiles[1:]) if a["d"] != t["d"]})
+
     return {"start": [int(x), int(y)], "tiles": tiles, "lanes": agg, "segments": segs,
+            "turns": [list(t) for t in turns],
             "contents": bool(contents),   # False = lanes were never read; content rules must
                                           # stay silent rather than call an unread lane empty
             "upstream": [_term(n) for n in up_ends], "downstream": [_term(n) for n in down_ends],
@@ -577,6 +642,8 @@ def _starved(tr):
     """Nothing on any lane, nothing feeding the head, and no producer upstream at all."""
     if not tr["tiles"] or tr["feeders"] or not tr["flags"]["dead_start"]:
         return []
+    if not tr.get("contents", True):        # an unread lane is not an empty lane
+        return []
     if any(t["lanes"]["1"] or t["lanes"]["2"] for t in tr["tiles"]):
         return []
     h = tr["tiles"][0]
@@ -621,6 +688,15 @@ def _split(tr):
     belts = [{"x": t["x"], "y": t["y"], "d": t["d"], "name": t["name"]} for t in tr["tiles"]]
     belts += tr["orphans"]
     out = []
+    # A belt fed ACROSS its own axis is the HEAD OF A NEW LEG, never the severed half of a row:
+    # whatever sits "behind" it on that axis was never part of it. Live false positive this
+    # kills, column x=-8: (-8,10) runs north and (-8,11) runs south one tile apart, and
+    # belt_neighbours shows each fed by its OWN underground output from the west (in{(-9,10)}
+    # and in{(-9,11)}, both d=4) - two deliberate opposing lines, reported as a tear, and the
+    # only finding on an otherwise healthy 70-tile run. GOTCHAS:831's real tear has both halves
+    # continuing ALONG the row with drills feeding each, so neither half is a leg head.
+    turns = {tuple(t) for t in tr.get("turns") or []}
+    turns |= {(b["x"], b["y"]) for a, b in zip(tr["tiles"], tr["tiles"][1:]) if a["d"] != b["d"]}
     for axis, key, other in (("row", "y", "x"), ("column", "x", "y")):
         bwd, fwd = (12, 4) if axis == "row" else (0, 8)      # -axis flow, +axis flow
         groups = {}
@@ -638,6 +714,11 @@ def _split(tr):
             if not apart:
                 continue
             _, p, q = min(apart, key=lambda t: t[0])         # the closest diverging pair
+            # test the CLOSEST pair only: it is what characterises the axis. Excluding turn
+            # heads pairwise instead just lets the rule fall through to the next-nearest pair
+            # and report the same divergence from one tile further away.
+            if (p["x"], p["y"]) in turns or (q["x"], q["y"]) in turns:
+                continue
             out.append(_f("DIRECTION_SPLIT", p["x"], p["y"],
                           "%s %s=%d flows APART: d=%d at (%d,%d) vs d=%d at (%d,%d)"
                           % (axis, key, k, p["d"], p["x"], p["y"], q["d"], q["x"], q["y"]),
@@ -652,21 +733,32 @@ def lint_lane(tr, expect=None):
     error trace rather than raising - callers lint whatever they got."""
     if not isinstance(tr, dict) or tr.get("error") or not tr.get("tiles"):
         return []
-    out = _mixed(tr, expect) + _contention(tr) + _dead_end(tr) + _starved(tr) + _drain(tr) \
-        + _split(tr)
+    out = _contention(tr) + _dead_end(tr) + _starved(tr) + _drain(tr) + _split(tr)
+    if tr.get("contents", True):            # lane-content rules need lanes to have been read
+        out += _mixed(tr, expect)
     out.sort(key=lambda f: (f["sev"], f["code"], f["x"], f["y"]))
     return out
 
 
 # --------------------------------------------------------------------------- verification
-def _tail_items(tr, n=4):
-    """{(uid): position} over the last n tiles, per lane. get_detailed_contents (caveat 8) is
-    the only honest movement oracle: counts alone call a frozen full belt 'working'."""
-    out = {}
-    for t in tr["tiles"][-n:]:
-        for it in t["items"]:
-            out[(it["uid"], it["line"])] = it["pos"]
-    return out
+def _tail_items(tiles):
+    """{(item uid, line): position} over these tiles. get_detailed_contents (caveat 8) is the
+    only honest movement oracle: counts alone call a frozen full belt 'working'."""
+    return {(it["uid"], it["line"]): it["pos"] for t in tiles for it in t["items"]}
+
+
+def _sample_tail(tiles):
+    """ONE small read of these tiles' lanes + detailed contents, for verify_supply's second
+    sample. Re-tracing the whole run instead cost ~60 extra RCON round trips (18s on a live
+    70-tile run) and gave the run 18 more seconds to change under the comparison. Returns None
+    if the read failed — the caller must then decline to claim movement, never assume it."""
+    raw = _read(_lua_tail(tiles))
+    if not isinstance(raw, dict) or "T" not in raw:
+        return None
+    return [{"x": r["x"], "y": r["y"], "lanes": _lanes_of(r),
+             "items": [{"n": it["n"], "pos": it["p"], "uid": it["u"], "line": it["l"]}
+                       for it in _lst(r.get("D"))]}
+            for r in _lst(raw.get("T"))]
 
 
 def verify_supply(ore, from_xy, to_xy, settle=3.0, tol=1):
@@ -683,17 +775,17 @@ def verify_supply(ore, from_xy, to_xy, settle=3.0, tol=1):
                 "path_len": 0, "trace": tr}
     connected = any(abs(t["x"] - to_xy[0]) <= tol and abs(t["y"] - to_xy[1]) <= tol
                     for t in tr["tiles"])
-    a = _tail_items(tr)
+    tail = tr["tiles"][-4:]
+    a = _tail_items(tail)
     if settle:
         time.sleep(settle)
-    tr2 = trace(from_xy[0], from_xy[1])
-    b = _tail_items(tr2) if not tr2.get("error") else {}
-    moving = set(a) != set(b) or any(a[k] != b[k] for k in set(a) & set(b))
-    tail = (tr2 if not tr2.get("error") else tr)["tiles"][-1:]
-    arrived = sum(t["lanes"][k].get(ore, 0) for t in tail for k in ("1", "2"))
-    return {"connected": connected, "moving": bool(moving), "arrived": arrived,
-            "findings": lint_lane(tr2 if not tr2.get("error") else tr, expect=ore),
-            "path_len": len(tr["tiles"]), "trace": tr2 if not tr2.get("error") else tr}
+    s2 = _sample_tail(tail)
+    b = _tail_items(s2) if s2 else {}
+    moving = bool(s2) and (set(a) != set(b) or any(a[k] != b[k] for k in set(a) & set(b)))
+    last = (s2 or tail)[-1:]
+    arrived = sum(t["lanes"][k].get(ore, 0) for t in last for k in ("1", "2"))
+    return {"connected": connected, "moving": moving, "arrived": arrived,
+            "findings": lint_lane(tr, expect=ore), "path_len": len(tr["tiles"]), "trace": tr}
 
 
 # --------------------------------------------------------------------------- cli

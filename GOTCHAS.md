@@ -1079,3 +1079,226 @@ gets built there, and expansion is just reviving them as materials allow. Poles 
 print's own 4-tile lattice (x -6,-2,2,6,10..., y 30,34,38...) with ONE straight trunk column
 at x=-6 spaced 7 (wire reach 7.5) back to the base grid - not the opportunistic pole chains
 the bot had been laying, which Seth called out as a hack.
+
+## THE OPERATOR'S DESIGN PRINCIPLES (learned from his 2026-08-29 hand-optimization)
+
+Seth rebuilt the bot's base by hand: "the power poles have been laid out optimally, all
+coal powered drills have been replaced by electric, all unneeded belts have been removed."
+Measured (`snapshot_map.py diff before after`): entities 713 -> 619, poles 107 -> 69 (102
+removed / 64 added = RELAID, only 5 survived), belts 462 -> 421, all 11 burner drills ->
+16 electric, power plant rebuilt elsewhere, 2 labs + 1 assembler deleted, 9 wooden chests
++ 9 inserters deleted, 16 belts rotated. Production 0/0/0 -> iron 174, copper 90, coal 120.
+He did not clean up the base; he DELETED THE BOT'S SYSTEM AND REBUILT IT AS A DIFFERENT ONE.
+
+**The one line to encode: the bot's success criterion is that a placement SUCCEEDED; the
+operator's is that an ITEM ARRIVED.** Full spec with every offset: `OPERATOR-PRINCIPLES.md`.
+Machine-checkable form: `principles.py` (READ-ONLY RCON) + `test_principles.py` (44 tests).
+The cheapest complete gate is two checks - P1 flow coverage + P2 single network - run after
+every builder.
+
+- **P1. FLOW is the only success metric; entity count is not progress.** Flood-fill the belt
+  graph forward from producer drop tiles and backward from consumer pickup tiles: **bot
+  189/470 belts (40%) on a producer->consumer path, operator 408/431 (95%)**. 229 of the
+  bot's belts had no producer upstream, 80 no consumer downstream, and all 28 stone furnaces
+  had recipe `None` - they had never received an item. 713 entities produced 0/0/0; 619
+  produced all three. Measure at the CONSUMER after every builder; any sub-build with zero
+  flow is torn down in the same pass. `connect_mine_to_array` (L805) already does this
+  (`lane_moves_ore` -> `teardown_lane`) and is the ONLY builder that does -
+  `build_smelter_array`, `build_belt_supply`, `coal_to_boiler`, `setup_science_io` all
+  return success on placement.
+- **P2. ONE electric network, energized, before any electric entity exists.** The bot had
+  TWO: net 1 (105 poles, 2 engines) and **net 405 - 6 electric drills + 2 poles with NO
+  generator**. The gap from the main grid to that island was **8.06 tiles - 0.56 past the
+  7.5 wire reach** - after a 19-pole chain had been laid ~52 tiles toward it. Coal 0/min.
+  Operator: 69/69 poles on net 535, zero orphans, zero `no_power`. After placing ANY electric
+  entity, read `electric_network_id` and compare to the root's; never "get close" to a
+  network. `fle_tools.connect` (L1425) + the self-heal at L1710 INTERPOLATE pole positions
+  (`steps=ceil(sqrt(bd)/6)`) and hope the spacing lands under reach.
+- **Cap pole degree at 4 of the 5 copper slots.** A saturated pole cannot adopt a later
+  neighbour - that is exactly how the bot stranded its lab block on its own network with two
+  poles 4.0 tiles apart and no free slot to bridge. Live probe 2026-08-29 after the bot
+  resumed: degrees `1:6 2:29 3:25 4:23 5:10 6:2` - 12 poles at/past the cap.
+- **P3. Choose the GEOMETRY first, derive every entity from it** - never survey what got
+  built and rationalise a layout around it. Three exact templates, repeated verbatim:
+  MINE (9 rows) `lane-4 POLE / lane-2 drills dir S / lane BELT / lane+2 drills dir N /
+  lane+4 POLE` - drill radius 2.49 > the 2.0 offset so the belt row AND both pole rows are
+  still inside the mined band (zero waste). Verified at copper (lane -63.5) and coal (15.5).
+  SMELTER stack, 9-tile pitch in y (iron oy=3, copper oy=12): `belt / inserters+poles /
+  furnaces / inserters+poles / belt` at oy+0,+1,+2..3,+4,+5. PLANT, 2 free params (spine
+  column Sx, boiler row By): boilers `(Sx±2, By)`, engines `(Sx±2, By-3.5-5k)`, pipe
+  `(Sx, By+.5)`, pump `(Sx, By+5.5)`, pole `(Sx, By-5.5)` - and **By is DERIVED FROM THE
+  SHORELINE**. `plan_mine_geometry` (L1776) does the opposite: `lane_y =
+  Counter(d["dy"]).most_common(1)` reads the lane off wherever the drills happened to drop,
+  ratifying a bad layout instead of imposing a good one.
+- **P4. Service infrastructure rides INSIDE the machine rows and doubles as the mesh.**
+  Smelter poles sit ON the inserter rows at x-pitch 4, phase `x = 1.5 (mod 4)`; inserters are
+  at `x = 0.5 (mod 2)` and 2x2 furnaces at `x = 1.0 (mod 2)`, so **the pole takes the free
+  half-tile of every other furnace column and costs ZERO machine slots**. Pole rows within a
+  stack are 3.0 apart, between stacks 6.0 - both under 7.5, so **the service poles ARE the
+  network; zero distribution poles are needed** (smelter block 58 -> 34 poles, 17 pole rows
+  -> 4). Same idea at the plant: ONE pole at `(-31.5,40.5)`, the centroid of the 2x2 engine
+  array, powers ALL FOUR engines (the bot used 3 scattered poles for 2). Measured
+  pole->consumer incidences per consumer **2.171 -> 1.014**; consumers per pole 0.71 -> 1.07;
+  **40 of the bot's 107 poles (37%) powered nothing at all** and 34% were fully redundant -
+  and the network was STILL broken. NEVER add a dedicated pole row, a pole spine, or a pole
+  "beside" a module: `build_smelter_array` L633-634 straddles the block with two pitch-3 pole
+  rows plus a vertical spine; those 4 deleted rows are 41 of the 102 removed poles.
+  SCORING TRAP: coverage is owed to ELECTRIC CONSUMERS, not "machines" - a stone furnace is a
+  burner and needs no pole, an inserter does. Score against `electric_network_id`-bearing
+  entities or the metric inverts.
+- **P5. Every pitch is DERIVED from a prototype constant, and nothing is placed without
+  `can_place_entity`.** `create_entity` does NO collision check, so wrong geometry SUCCEEDS
+  SILENTLY. Pitches: drills 3 (`= tile_width`; can_place at 3 true, at 2 FALSE), poles in a
+  machine row 4 (supply 2.5 -> 5x5), trunk poles 7.0 (93% of wire 7.5), boiler columns 4
+  (3-wide boiler + a 1-tile shared spine), engine stack 5, smelter stack 9. Min pole
+  separation 3.0 (bot had 8 pairs at 1.0, 4 at 1.41, 42 at 2.0). Three burials, all from bare
+  `create_entity`: (1) `build_mine_outpost` L941 steps `dx = rx-n+2*k`, a pitch hardcoded for
+  the 2x2 burner drill and inherited by `electrify_mines` L2282 - the 6 iron drills at
+  x=14.5..24.5 step 2 are 3x3 and **share a whole tile column**, still live today; (2)
+  `coal_to_boiler` L2231 does `bx = floor(boiler.position.x)` and puts the fuel inserter
+  INSIDE the boiler's own footprint, treating a 3-wide entity's centre as its left edge; (3)
+  a belt row at `lane±1` lands inside the 3x3 drill footprint - **13 belts are buried at
+  y=-41.5, x=13.5..25.5, permanently unclickable**. The operator deleted every belt on that
+  row he could REACH and left precisely the buried ones. Add a cleanup pass for belts under a
+  drill footprint; a human cannot remove them.
+- **P6. SHARE every line from both sides - separation is per LANE, not per belt.** Two drill
+  rows feed ONE lane: ore per tile of row length is 0.125/s burner@2, 0.167 electric@3
+  single-sided, **0.333 electric@3 double-sided (+167%)**. Measured lane contents prove it -
+  copper `L1=4 L2=4`, coal `L1=4 L2=4`, **iron (single-sided) `L1=0 L2=4` for all 115 tiles**.
+  Ore AND fuel ride one belt: stone furnaces are burners, so two opposing side-loads at one
+  merge tile give `{L1: iron-ore, L2: coal}` at `(-7.5,8.5)`, mirrored for copper at
+  `(-7.5,17.5)`; the ratio being wildly off (a furnace wants ~13.9 ore per coal, the splitters
+  deliver ~1:1) is HARMLESS because the lanes back-pressure independently. One pipe feeds two
+  boilers (their water inputs are the SAME tile `(-32,46)`). The pitch-4 boiler columns leave
+  free column x=-32 carrying pole + pipe + risers + pump, so **both long faces of every boiler
+  stay free** (north engine, south fuel inserter, By+2 coal belt). `build_belt_supply` does
+  the opposite - a separate belt COLUMN per commodity - because the bot learned "don't mix
+  ores" and over-generalised to "don't share a belt"; it also had NO fuel path to the copper
+  array in the design at all.
+- **P7. DIRECTION IS COMPUTED FROM THE DESTINATION** - never a constant, never "keep the prior
+  heading". **13 of the 16 rotations in the diff are one row**: `y=-40.5, x=13.5..25.5, E->W`
+  - the only row the iron drills drop on, pointing EAST AWAY FROM THE BASE into a dead end,
+  every drill reading `waiting_for_space_in_destination`. Thirteen right-clicks took iron from
+  **0 to 180 ore/min** (the theoretical max for 6 drills). A merging lane's FINAL TILE POINTS
+  INTO THE TARGET BELT, not along its own travel: `(-7.5,9.5) E->N` and `(-9.5,17.5) E->S`.
+  The copper dogleg is deliberate lane engineering - to land on lane 2 the trunk runs 2 past
+  the feed row, 2 east, then back NORTH to side-load L2 only, leaving L1 free for coal (cost 7
+  belts). `build_smelter_array` hardcodes `direction=4` and the bias leaked into the mine
+  collector; `lay_belt_path` L645 ends with `tiles[-1][2]` = "last tile keeps prior direction".
+  Add a `merge_into=(x,y)` arg to `lay_belt_path` and set the final direction from it.
+- **P8. Trunks are straight, dedicated, parallel, and never cross; turns are a BUDGET.**
+  104-tile copper trunk = 1 direction change, 82-tile iron trunk = 2, all four smelter rows =
+  0; 19 turns across 429 belts. Power trunk `x=-14.5`: **14 poles, 91 tiles, gaps
+  7,7,7,7,7,7,7,7,7,7,7,7,7**; second column `x=-35.5`, gaps 7,7,7,7; both phase
+  `y = 5.5 (mod 7)`. It PARALLELS the belt corridor at fixed clearance (5.0 tiles west in open
+  ground = room to widen the corridor to 4 lanes without moving a pole; exactly 1 tile east
+  where space is tight) and terminates on module anchor poles with a SHORTENED final hop
+  (6.0, 4.12) - pitch is nominal, endpoints are hard. The invariant is ONE-SIDED: a shorter
+  hop still wires, so only EXCEEDING the pitch is a violation. Perpendicular pole-to-lane
+  offset is never 0 in `after`; the bot had 5 poles at offset 0, including one at `(-9.5,20.5)`
+  inside the main N-S belt column's own line. The bot's trunk is a staircase of one-off drops
+  at 2.72 tiles/hop that never arrives, produced by `fle_tools.connect` + the reactive
+  self-heal at L1701-1711 (on `no_power`, drop a pole and interpolate toward the nearest
+  network), which also produced 39 zero-coverage scatter poles.
+  **POLES MUST COME FROM A MODULE TEMPLATE, NEVER FROM AN ERROR HANDLER.**
+- **P9. CROSS UNDERNEATH; resolve an obstacle by replanning the corridor BEFORE it, never by
+  giving up AT it.** 3 belt crossings, 3 underground pairs, all exactly **span 2**. Fluid does
+  the same: `pipe-to-ground (-31.5,49.5)->(-31.5,47.5)` ducks the water riser under the coal
+  belt - he ducked the PIPE, not the belt, because the coal lane must stay unbroken so
+  back-pressure fills it to both boiler inserters on either side of the crossing. The sharper
+  lesson is the corridor move: the coal run does NOT descend at `x=-33.5` (inside the steam
+  engines' bounding boxes) but at **`x=-36.5`, the first clear column west of the machine
+  block**, leaving `x=-35.5` for the pole trunk. `lay_belt_path` L645 instead does
+  `gaps = gaps+1` and continues, **leaving the already-laid belts in place** - the 11-tile
+  engine block beat it, so it left a **19-belt stub down `x=-33.5` ending one tile short of
+  the engine's edge**, 19 belts pointing at a wall 12 tiles from the boiler. Its underground
+  branch wraps both `create_entity` calls in bare `pcall` with no partner verification: 3
+  unpaired N-facing inputs stacked at `(-11.5, 10.5/11.5/12.5)` and 2 E inputs sharing 1 exit
+  = a sealed dead end where coal arrived and stopped. ON A MISSING PARTNER, DESTROY THE
+  ENTRANCE. `coal_to_boiler` still hardcodes the x=-33.5 route - **if it runs again it
+  rebuilds the same dead stub**.
+- **P10. Splitters ALLOCATE, belts BUFFER, chests only TERMINATE.** A 2-level binary coal tree,
+  both splitters pure 1-in/2-out with NO priority and NO filter: A `(-28.5,16.0)` mine coal ->
+  power / smelters, B `(-12.0,13.5)` -> iron feed / copper feed. The power spur is 50 tiles
+  ending in a DEAD END and holds **392 of a max 400 coal = 7.3 min of full-plant autonomy at
+  zero mining**; while it is full, back-pressure sends ~100% east to the base, and the instant
+  the boilers eat, the spur is the only side with space. **Absolute priority up to actual
+  consumption, with no circuit network.** (Placement trick: a splitter is 2 tiles wide, so a
+  half-tile offset MANUFACTURES a second output row out of one belt row.) He removed 9 wooden
+  chests + 9 inserters - **4 complete `build_io_cell` shells whose assembler was never built**
+  - and kept exactly 2 iron chests, both at the far end of a plate belt with nothing
+  downstream. `coal_buffer()` + `refill_buffers(0.2)` (L1072-1135) make the CHARACTER WALK to
+  the plant to hand-load a wooden chest below 20% and it is the top `_gated()` priority in
+  `maintain()` - the single largest source of maintenance walking. A chest is a hard stop
+  where throughput becomes a human walking; `build_mine_outpost` and
+  `mine_layout.plan_outpost` still default to terminating a lane with `inserter + wooden-chest`.
+  Cheap runtime detector for an unbuilt machine between two shells: alternating
+  `waiting_for_space_in_destination` / `waiting_for_source_items` around a gap.
+- **P11. Ratios are EXACT; scale by DUPLICATING the module, never by lengthening it.**
+  **2 boilers : 4 engines = 3.6 MW : 3.6 MW**, replicated identically in both columns, no
+  orphan engine and no starved boiler; growth is `Sx' = Sx + 4`, a third column with the same
+  table. He even PRE-LAID the header for it: 4 water-full pipes east along `(-30.5..-27.5,
+  50.5)`, dead-ending one spine-pitch short of where a third riser would go. Refuse to place
+  the orphan (`assert engines == 2*boilers`). `_build_boiler_engine(n_engines=k)` (L267) stacks
+  engines on ONE boiler at 5-tile pitch - at k>2 a 1.8 MW boiler cannot feed 3 engines and the
+  column walks further from its water with every addition.
+- **P12. Site the plant AT THE FUEL, not at the base - and size it to the FUEL SUPPLY, not
+  today's load.** Electricity travels for the price of a pole every 7 tiles; coal must be
+  physically BELTED. Nearest-water distance: smelter array 50.3, coal patch 34.0, **plant
+  centre 8.2**. From the plant: coal ore 18.5, splitter tap 25.2, iron mine 104.6 - **he
+  accepted a 104-tile electrical run to buy a 25-tile coal belt.** Sizing is a FUEL BUDGET:
+  plant at full 3.6 MW = 54 coal/min + 28 furnaces x 1.35 = 38 -> 92/min against 120/min
+  measured supply (77%); a third boiler pair would put the system into fuel deficit even
+  though utilisation is only 37%. Also: **never route a service spur through an ore patch** -
+  the fuel spur detours 1.7x around it, hugging `y=22.5` three tiles clear of the south drill
+  band, and taps at the far downstream end of the bus past the last drill where the belt is
+  fully loaded; a belt on row 16 would have permanently blocked every future south-row drill.
+  `power()` (L211-221) takes the FIRST tile from `find_tiles_filtered{radius=14}` with land to
+  the north - no relation to the coal lane, the boiler grid or the base - and landed the pump
+  on exactly the tiles the coal lane now needs, forcing the pipe run along the boiler's south
+  face, the only face left for a fuel inserter. That is the root cause of the buried inserter
+  in P5.
+- **P13. Build order is SUPPLY -> CONSUMER, verified stage by stage; a consumer built early has
+  NEGATIVE value.** Order: power -> mine -> trunk -> smelter -> buffer -> consumer, each stage
+  measured moving material before the next starts. His finished base has **0 labs, 0
+  assemblers** and stops deliberately at "buffer". He deleted 2 labs and 1 assembler; **lab 1
+  at `(-29.5,41.5)` sat EXACTLY where the new steam engine now sits** - a measured spatial
+  conflict, not an inference - and both labs read `missing_science_packs` with no feed chest
+  anywhere near them. **Power capacity beat idle science.** The bot has NOT learned this:
+  live probe 2026-08-29 after the snapshot shows **9 labs with `research = NONE`**, 21
+  entities `waiting_for_target_to_be_built`, 35 `waiting_for_source_items`, a feed-belt column
+  connected to no plate source, and 109 ghosts. Gate a consumer on `production_stats[input] >
+  0 AND a fed inserter within reach AND a research/recipe queued`; treat a rising count of
+  `waiting_for_*` / `missing_science_packs` as a BUILD-ORDER FAILURE, not progress.
+  `build_io_cell` must be ATOMIC: chest, inserter, MACHINE, inserter, chest - or nothing.
+- **P14. Measure the BINDING constraint end to end - including the DRAIN - and tolerate ~5%
+  residue, not 0%.** The whole factory has converged on ONE number, **56/min per array =
+  exactly one yellow inserter** (0.83 items/s). The chain: drain (1 inserter -> 1 chest)
+  ~56/min **<- binding**; mine 180; furnaces 300; belt lane 450. **He did not fix this** - it
+  is the bot's original drain design, kept unexamined, and it is now the base's only real
+  bottleneck (13 of 16 iron furnaces at `full_output`). 14 of 16 drills reading
+  `waiting_for_space_in_destination` is not a fault: it is the DEFINITION of a correctly
+  saturated network. **TRANSIENT GUARD: the `iron 174 / copper 90` in the after-snapshot were
+  fill-up while the output belts were still absorbing plates** - a live probe later the same
+  session read iron 0/min, copper 53, coal 7. Sample over >=2 windows and assert production is
+  not still RISING before reporting it. Residue he left: ~21 dead belts (5%) - 13 buried under
+  the bot's overlapping drills, 6 one-tile lead-ins, 2 orphan coal tiles. Even a careful human
+  pass leaves 1-5% junk; the budget is a THRESHOLD, not zero.
+
+**Why his base works and the bot's didn't.** The bot's loop is `place -> check status ->
+patch`: locally sound at every step, globally divergent. It yields coverage without
+connection (171 pole incidences for 78 machines, and still TWO networks), volume without a
+path (470 belts, 40% connected), structure without function (4 I/O cells with no assembler,
+production 0/0/0), and constants instead of geometry. The operator's loop is `choose geometry
+-> derive placements -> assert the invariant`. **He never patched** - of 107 poles he kept 5,
+because a pole layout is not a set of independent decisions to repair one at a time, it is ONE
+OBJECT, and the right move on a broken one is to replace it. Three things follow that the bot
+has no mechanism to reach: (1) **compounding, not accumulating** - every structure does two
+jobs (the inserter row is also the pole row is also the power mesh; one belt carries ore AND
+fuel; one splitter allocates AND prioritises AND buffers), which is how the base got 13%
+SMALLER and infinitely more productive at once; (2) **slack designed in, in the right places**
+- pitch 7.0 against a 7.5 limit, degree 4 against a 5 limit, a 5-tile corridor buffer, 4
+pre-laid pipes for a boiler column that doesn't exist yet - each costs something today and
+removes a future rebuild, and the bot has margin nowhere; (3) **honest stopping** - a consumer
+ahead of its supply is a liability that occupies tiles, demands pole coverage for nothing, and
+emits a false green signal. The bot cannot stop, because its notion of progress is THINGS BUILT.

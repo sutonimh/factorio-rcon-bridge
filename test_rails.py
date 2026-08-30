@@ -171,6 +171,38 @@ def test_self_overlap_regression():
         assert rails.validate_chain(good)[0]
 
 
+def test_repair_ladder_finds_center_unique_chains():
+    """Regression: the plain-graph rungs (trim / block-a-center / admissible) raised
+    RailRouteError on goals that DO have a legal chain - blocking a colliding center bans it
+    from the whole graph, but the legal chain has to pass through that region earlier. Found
+    by a 960-goal sweep: 4 of 8 raises were false negatives. _center_unique_search carries
+    the used centers in its state, so it cannot miss them."""
+    cases = [
+        ({"piece": "half-diagonal-rail", "dir": 2, "x": 600, "y": 600},
+         {"piece": "curved-rail-b", "dir": 12, "x": 604, "y": 586}),
+        ({"piece": "half-diagonal-rail", "dir": 6, "x": 600, "y": 600},
+         {"piece": "curved-rail-a", "dir": 10, "x": 600, "y": 602}),
+        ({"piece": "curved-rail-a", "dir": 0, "x": 600, "y": 600},
+         {"piece": "half-diagonal-rail", "dir": 6, "x": 602, "y": 610}),
+        ({"piece": "curved-rail-b", "dir": 6, "x": 600, "y": 600},
+         {"piece": "half-diagonal-rail", "dir": 0, "x": 590, "y": 596}),
+    ]
+    for start, goal in cases:
+        raw = rails.route(start, goal, strict=False)
+        assert not rails.validate_chain(raw)[0], "expected upstream to break on %s" % (goal,)
+        chain = rails.route(start, goal)          # must NOT raise any more
+        ok, why = rails.validate_chain(chain)
+        assert ok, why
+        assert chain[0]["name"] == start["piece"] and chain[0]["direction"] == start["dir"]
+        assert chain[-1]["name"] == goal["piece"] and chain[-1]["direction"] == goal["dir"]
+        assert abs(chain[-1]["x"] - goal["x"]) <= 1 and abs(chain[-1]["y"] - goal["y"]) <= 1
+    # the bounded search must still give up rather than hang on a genuinely dead goal
+    assert rails._center_unique_search(
+        {"piece": "straight-rail", "dir": 2, "x": 600, "y": 600},
+        {"piece": "half-diagonal-rail", "dir": 4, "x": 604, "y": 570},
+        max_nodes=2000, max_len=14) is None
+
+
 def test_budget_and_unreachable():
     goal = {"piece": "straight-rail", "dir": 0, "x": 601, "y": 589}
     assert rails.route(START, goal, max_iter=1) is None

@@ -42,6 +42,7 @@ RCON: this module is PURE except verify_against_engine(), which does READ-ONLY p
 probes (/sc rcon.print). It never creates, destroys or ghosts anything.
 """
 import heapq
+from collections import deque
 
 import rcon
 
@@ -390,15 +391,25 @@ def route(start, goal, max_iter=20000, strict=True, heuristic="upstream"):
 
     Poses are {piece, dir, x, y} with x,y the entity CENTER. The returned list INCLUDES
     both ends. The goal test is upstream's: same piece, same direction, and within 1 tile -
-    so the last emitted pose may be +/-1 off the requested goal. Callers must not assume
-    exact goal coordinates.
+    so the last emitted pose may be +/-1 off the requested goal.
+
+    THE +/-1 IS NOT RARE AND IT MATTERS. On a 960-goal sweep only 43% of routes ended on the
+    exact requested center; 57% ended one tile off. The documented operating pattern is to
+    route BETWEEN EXISTING RAILS, and a final piece one tile off an existing rail does not
+    connect to it - it collides with it. Callers joining to real track must compare
+    chain[-1] against the goal pose and re-anchor (or drop the last piece) when they differ;
+    this function cannot tell "near enough" from "wrong" because rails snap to a 2-tile grid
+    and many requested goals are simply not on it.
 
     strict=True (default) refuses to hand a colliding chain to the game. It runs the
     upstream search, then (only if that chain is unplaceable) a repair ladder: trim the
     loop, re-search with the offending centers forbidden, re-search with the admissible
-    heuristic. Of every candidate that validates it returns the SHORTEST - fewer pieces is
-    strictly cheaper and the upstream chain has no optimality claim to preserve. If nothing
-    validates it raises RailRouteError rather than returning garbage.
+    heuristic, and finally a bounded search that carries the used centers in its state
+    (_center_unique_search - the rungs above it patch a plain-graph result and provably miss
+    chains that must reuse a blocked region earlier). Of every candidate that validates it
+    returns the SHORTEST - fewer pieces is strictly cheaper and the upstream chain has no
+    optimality claim to preserve. If nothing validates it raises RailRouteError rather than
+    returning garbage.
     strict=False is bit-for-bit upstream (defects included) - porting checks only.
 
     heuristic="upstream" is rails.js's inadmissible h=manhattan/2; "admissible" is
@@ -438,12 +449,52 @@ def route(start, goal, max_iter=20000, strict=True, heuristic="upstream"):
         alt = _trim_loops(alt)
         if validate_chain(alt)[0]:
             good.append(alt)
+    if not good:
+        exact = _center_unique_search(start, goal, max_len=max(len(path) + 4, 14))
+        if exact is not None and validate_chain(exact)[0]:
+            good.append(exact)
     if good:
         return min(good, key=len)
     raise RailRouteError(
         "no placeable chain %s|%d@(%s,%s) -> %s|%d@(%s,%s): %s"
         % (start["piece"], start["dir"], start["x"], start["y"],
            goal["piece"], goal["dir"], goal["x"], goal["y"], problem))
+
+
+def _center_unique_search(start, goal, max_nodes=120000, max_len=14):
+    """Last rung of the repair ladder: BFS whose STATE carries the centers already used, so
+    it can only ever reach a chain that validate_chain accepts. -> chain or None.
+
+    The rungs above it all search the plain (piece,dir,x,y) graph and then try to patch the
+    result, which is why they miss: blocking a colliding center bans it from the whole graph,
+    and the only legal chain often has to pass through it earlier. Measured on a 960-goal
+    sweep, 4 of route()'s 8 RailRouteErrors were false negatives with 8-9 piece legal chains.
+    Bounded by node count because the state space is exponential; ~1.9s to exhaust."""
+    s0 = (start["piece"], start["dir"], start["x"], start["y"])
+    c0 = (s0[2], s0[3])
+    q = deque([(s0, frozenset((c0,)), (s0,))])
+    seen = {(s0, frozenset((c0,)))}
+    n = 0
+    while q and n < max_nodes:
+        n += 1
+        st, used, path = q.popleft()
+        if (st[0] == goal["piece"] and st[1] == goal["dir"]
+                and abs(st[2] - goal["x"]) <= 1 and abs(st[3] - goal["y"]) <= 1):
+            return [{"name": p[0], "x": _whole(p[2]), "y": _whole(p[3]), "direction": p[1]}
+                    for p in path]
+        if len(path) >= max_len:
+            continue
+        for nb in neighbors(st[0], st[1]):
+            nx = (nb["piece"], nb["dir"], st[2] + nb["dx"], st[3] + nb["dy"])
+            c = (nx[2], nx[3])
+            if c in used:
+                continue
+            k = (nx, used | {c})
+            if k in seen:
+                continue
+            seen.add(k)
+            q.append((nx, used | {c}, path + (nx,)))
+    return None
 
 
 def _first_dup_center(pieces):
