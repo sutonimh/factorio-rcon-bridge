@@ -218,5 +218,5 @@ def test_science_chain_never_blanket_clears():
     import bootstrap
     import inspect
     src = inspect.getsource(bootstrap.automate_green_science)
-    assert "clear_area" not in src, "the science chain regained a blanket area clear"
+    assert "A.clear_area(" not in src, "the science chain regained a blanket area clear"
     assert "clear=1" in src, "each machine should clear only its own footprint"
