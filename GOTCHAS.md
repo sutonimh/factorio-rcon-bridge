@@ -915,3 +915,14 @@ ensure_lanes. FIX: the controller snapshots every belt tile when the operator co
 logoff it diffs and files every REMOVED tile into protected-tiles.json (persistent). Both
 lay_belt_path and repair_belt_gaps skip protected tiles forever. RULE: any future auto-build
 that places tiles must consult _protected_load() first.
+
+## ROOT CAUSE of duplicate lanes: re-lay never tore down its predecessor (2026-08-30)
+
+Seth: "those belts shouldn't be being placed in the first place, they're useless." Every
+connect_mine_to_array call laid a FRESH route and left the previous one standing, so each
+re-lay (architect command, ensure_lanes repair, phase pass) added another parallel lane -
+"two belts coming from both the iron and copper patches". The protected-tile registry stops
+resurrection of what the operator deletes; THIS is the creation-side fix: lay_belt_path now
+returns the tiles it laid, connect_mine_to_array (and the coal lane) register them in
+lanes.json, and teardown_lane(ore, keep=new_tiles) refund-removes the superseded lane in the
+SAME pass. Registry-scoped, so it only ever removes belts the bot itself recorded.

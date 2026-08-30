@@ -666,6 +666,7 @@ def lay_belt_path(waypoints):
         tiles.append((x, y, DIRS[((nx > x) - (nx < x), (ny > y) - (ny < y))]))
     if tiles:
         tiles.append((pts[-1][0], pts[-1][1], tiles[-1][2]))   # last tile keeps prior direction
+    laid_tiles = [(x, y) for (x, y, _d) in tiles]
     prot = _protected_load()
     if prot:
         skipped = [(x, y) for (x, y, _d) in tiles if (x, y) in prot]
@@ -686,7 +687,57 @@ def lay_belt_path(waypoints):
         "      pcall(function() s.create_entity{name='underground-belt',position={T[j][1]+0.5,T[j][2]+0.5},direction=T[j][3],type='output',force=f} end);"
         "    else gaps=gaps+1 end; i=j+1 end end;"
         "rcon.print(gaps)").strip()
-    return int(gaps or 0)
+    _ = int(gaps or 0)          # gap count is diagnostic; callers need the TILES to register
+    return laid_tiles
+
+
+def _lanes_load():
+    import json as _j
+    import pathlib as _pl
+    f = _pl.Path(__file__).resolve().parent / "lanes.json"
+    try:
+        return {k: [tuple(t) for t in v] for k, v in _j.loads(f.read_text()).items()}
+    except (OSError, ValueError):
+        return {}
+
+
+def _lanes_save(d):
+    import json as _j
+    import pathlib as _pl
+    f = _pl.Path(__file__).resolve().parent / "lanes.json"
+    try:
+        f.write_text(_j.dumps({k: [list(t) for t in v] for k, v in d.items()}))
+    except OSError:
+        pass
+
+
+def teardown_lane(ore, keep=()):
+    """Remove the PREVIOUS registered lane for `ore` (refunding belts), except tiles the new
+    route reuses. Root-cause fix for 'two belts from each patch' (Seth, 2026-08-30): every
+    re-lay used to leave its predecessor standing, so superseded parallel lanes accumulated -
+    a direct violation of the teardown-on-supersede law. No registry entry = nothing removed
+    (we never guess at belts we didn't record)."""
+    lanes = _lanes_load()
+    old = [t2 for t2 in lanes.get(ore, []) if tuple(t2) not in set(keep)]
+    if not old:
+        return 0
+    spec = ";".join(f"{x},{y}" for (x, y) in old[:600])
+    out = A._print(
+        "/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); local n=0;"
+        "for a,b in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+)') do"
+        "  local e=s.find_entities_filtered{position={tonumber(a)+0.5,tonumber(b)+0.5},radius=0.4,"
+        "    type={'transport-belt','underground-belt'}}[1];"
+        "  if e then for li=1,(e.type=='transport-belt' and e.get_max_transport_line_index() or 0) do"
+        "      local L=e.get_transport_line(li); for _,it in pairs(L.get_contents()) do inv.insert{name=it.name,count=it.count} end end;"
+        "    inv.insert{name=e.name,count=1}; e.destroy(); n=n+1 end end;"
+        "rcon.print(n)").strip()
+    try:
+        n = int(out)
+    except ValueError:
+        n = 0
+    if n:
+        status.log(f"teardown_lane({ore}): removed {n} superseded belt tiles (refunded)")
+    return n
 
 
 def connect_mine_to_array(ore):
@@ -707,7 +758,15 @@ def connect_mine_to_array(ore):
     # ox, so a single ax-1 column MERGED the ore lanes (mixed-ore law violation, 2026-08-29).
     ax, ay = ox - 1, oy + 5
     lane_x = ox - 2 - 2 * list(SMELT_ZONE).index(ore)
-    lay_belt_path([(rx + 10, ry), (lane_x, ry), (lane_x, ay), (ax, ay)])
+    laid = lay_belt_path([(rx + 10, ry), (lane_x, ry), (lane_x, ay), (ax, ay)])
+    tiles = laid if isinstance(laid, list) else []
+    # SUPERSEDE: the previous lane for this ore goes away in the SAME pass (never leave a
+    # parallel route standing), then the new route is registered as the only lane.
+    teardown_lane(ore, keep=tiles)
+    if tiles:
+        lanes = _lanes_load()
+        lanes[ore] = tiles
+        _lanes_save(lanes)
 
 
 def build_belt_supply():
@@ -729,7 +788,10 @@ def build_belt_supply():
         ox, oy = SMELT_ZONE["iron-ore"]
         # coal gets its OWN column (ox-6): ox-2/ox-4 are the per-ore ORE lanes now - a shared
         # column merges lanes (the mixed-ore bug all over again, fuel edition)
-        lay_belt_path([(int(cs[0]) + 10, int(cs[1])), (ox - 6, int(cs[1])), (ox - 6, oy + 6), (ox - 2, oy + 6)])
+        laid = lay_belt_path([(int(cs[0]) + 10, int(cs[1])), (ox - 6, int(cs[1])), (ox - 6, oy + 6), (ox - 2, oy + 6)])
+        if isinstance(laid, list) and laid:
+            teardown_lane("coal", keep=laid)      # same supersede law as the ore lanes
+            lanes = _lanes_load(); lanes["coal"] = laid; _lanes_save(lanes)
 
 
 STEEL_STACK = (14, 6)   # (ox,oy) of the steel-processing stack: output belt oy, input belt oy+5
@@ -1784,6 +1846,7 @@ def record_operator_deletions(before):
     removed = before - after
     if not removed:
         return 0
+    laid_tiles = [(x, y) for (x, y, _d) in tiles]
     prot = _protected_load() | removed
     _protected_save(prot)
     status.log(f"protected {len(removed)} operator-deleted tiles (never rebuild); total {len(prot)}")

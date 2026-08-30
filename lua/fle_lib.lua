@@ -539,11 +539,15 @@ end
 -- @chunk travelstep
 local F = fle
 -- Waypoint-queue walker, vendored from FLE move_to/server.lua
--- update_walking_queues; consumed by the on_nth_tick(5) handler (travelinit).
--- Arrival = 0.35 tiles. STUCK WATCHDOG: >60 ticks without 0.1 tiles of progress
--- toward the current waypoint -> teleport to the NEXT waypoint (arturh85's small
--- legal unstick — never travel-by-teleport); stuck on the LAST waypoint -> stop
--- and mark done+partial. All progress lives in storage.fle_travel.
+-- update_walking_queues; consumed by the on_nth_tick(2) handler (travelinit).
+-- CADENCE 2 (not FLE's 5): one walking step is speed*cadence ~ 0.15*2 = 0.3
+-- tiles, which must stay BELOW the 0.35 arrival radius or the character can
+-- step across it and bounce over the waypoint forever (seen live at cadence 5).
+-- Arrival = 0.35 tiles. STUCK WATCHDOG: >60 ticks without the distance to the
+-- current waypoint IMPROVING by 0.1 tiles -> teleport to the NEXT waypoint
+-- (arturh85's small legal unstick — never travel-by-teleport); stuck on the
+-- LAST waypoint -> stop and mark done+partial. Best-distance progress (not raw
+-- displacement) so oscillating around a waypoint still counts as stuck.
 F.travel_step = function()
   local T = storage.fle_travel
   if not T or T.done then return end
@@ -557,18 +561,17 @@ F.travel_step = function()
   if not w then T.done = true; p.walking_state = {walking = false}; return end
   local px, py = p.position.x, p.position.y
   local dx, dy = w.x - px, w.y - py
-  if dx * dx + dy * dy <= 0.1225 then          -- within 0.35 tiles: next waypoint
+  local d = math.sqrt(dx * dx + dy * dy)
+  if d <= 0.35 then                             -- arrived: next waypoint
     T.wp = T.wp + 1
-    T.sx, T.sy, T.stuck = px, py, 0
+    T.best, T.stuck = nil, 0
     if T.wp > #wps then T.done = true; p.walking_state = {walking = false}; return end
     w = wps[T.wp]; dx, dy = w.x - px, w.y - py
   else
-    if not T.sx then T.sx, T.sy, T.stuck = px, py, 0 end
-    local mx, my = px - T.sx, py - T.sy
-    if mx * mx + my * my >= 0.01 then           -- 0.1 tiles moved: watchdog reset
-      T.sx, T.sy, T.stuck = px, py, 0
+    if not T.best or d < T.best - 0.1 then      -- 0.1 tiles CLOSER: watchdog reset
+      T.best, T.stuck = d, 0
     else
-      T.stuck = (T.stuck or 0) + 5              -- this runs every 5 ticks
+      T.stuck = (T.stuck or 0) + 2              -- this runs every 2 ticks
       if T.stuck > 60 then
         if T.wp < #wps then
           local nw = wps[T.wp + 1]
@@ -576,7 +579,7 @@ F.travel_step = function()
           p.teleport(tp or {nw.x, nw.y})
           T.wp = T.wp + 1
           T.hops = (T.hops or 0) + 1
-          T.sx, T.sy, T.stuck = nil, nil, 0
+          T.best, T.stuck = nil, 0
           return
         else
           T.done = true; T.partial = true
@@ -609,7 +612,7 @@ script.on_event(defines.events.on_script_path_request_finished, function(ev)
     storage.fle_paths[ev.id] = 'not_found'
   end
 end)
-script.on_nth_tick(5, function()
+script.on_nth_tick(2, function()
   storage.fle_travel_tick = (storage.fle_travel_tick or 0) + 1   -- liveness sentinel
   if fle and fle.travel_step then fle.travel_step() end
 end)
