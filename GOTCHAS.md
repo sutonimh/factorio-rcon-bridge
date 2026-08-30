@@ -1006,3 +1006,24 @@ rebuilding shit I've deleted while I'm logged in"). Now planner.play() skips the
 program pass AND the operator BUILD_QUEUE while `game.connected_players>0`; the controller
 keeps servicing fuel/feed/research (no construction). Zero construction while a human is
 connected - full stop.
+
+## THE BUILD LAWS (Seth, 2026-08-30 — after I rebuilt his deletions twice)
+
+These are absolute. Violating them is what "shitting up the map" means.
+
+1. **NEVER build anything that doesn't do something.** Every build is VERIFIED after the fact
+   against a functional check - not "did create_entity return ok", but "does ore actually
+   move / does the machine actually reach a live state". `build_worked(check)` polls it.
+2. **If the result is nothing, REMOVE WHAT YOU BUILT, immediately, in the same pass.**
+   connect_mine_to_array tears its own lane out when no ore flows; build_io_cell removes the
+   whole cell when the assembler never goes live. No dead infrastructure is ever left standing.
+3. **OPERATOR DELETIONS ARE FINAL.** If the bot built a tile, the tile is now empty, and the
+   bot didn't remove it, a human removed it: `reconcile_removals()` (every 4th controller lap,
+   independent of login/logoff edges and restarts) protects it forever. A planned route that
+   is >=25% protected is OPERATOR-OWNED: the bot logs it and never lays it again.
+4. **Guards belong at the PLACEMENT layer, not the control layer.** Every earlier version of
+   this protection lived in the controller/planner and was bypassed by a restart, a manual
+   call, or an architect command - which is exactly how his deletions came back twice. The
+   ledger + reconcile + protected-tile checks now sit inside lay_belt_path/place().
+5. **Ore patches are for mining only** (enforced in place(), see above).
+6. **Zero construction while a human is connected** (builder AND heals, see the truce).

@@ -753,6 +753,55 @@ def teardown_lane(ore, keep=()):
     return n
 
 
+def route_is_operator_owned(waypoints, threshold=0.25):
+    """True when a meaningful share of a planned route sits on OPERATOR-PROTECTED tiles.
+    The operator deleted that path on purpose, so the bot must stop trying to lay it -
+    not retry forever (Seth: 'I delete them and you add them back')."""
+    prot = _protected_load()
+    if not prot:
+        return False
+    pts = []
+    for i in range(len(waypoints) - 1):
+        x1, y1 = waypoints[i]
+        x2, y2 = waypoints[i + 1]
+        dx = (x2 > x1) - (x2 < x1)
+        dy = (y2 > y1) - (y2 < y1)
+        for k in range(max(abs(x2 - x1), abs(y2 - y1))):
+            pts.append((x1 + dx * k, y1 + dy * k))
+    if not pts:
+        return False
+    hit = sum(1 for pt in pts if pt in prot)
+    return hit / len(pts) >= threshold
+
+
+def build_worked(check, tries=6, delay=5):
+    """Poll a post-build check (callable -> bool). Seth's law: a build must actually DO
+    something; a build that produces nothing gets removed by the caller."""
+    import time as _t
+    for _ in range(tries):
+        try:
+            if check():
+                return True
+        except Exception:
+            pass
+        _t.sleep(delay)
+    return False
+
+
+def lane_moves_ore(ore):
+    """Functional check: is this ore actually MOVING on its lane (not just connected)?"""
+    ox, oy = SMELT_ZONE[ore]
+    out = A._print(
+        f"/sc local s=game.surfaces[1]; local n=0;"
+        f"for _,b in pairs(s.find_entities_filtered{{area={{{{{ox - 12},{oy + 3}}},{{{ox + 34},{oy + 7}}}}},type='transport-belt'}}) do"
+        f"  for li=1,b.get_max_transport_line_index() do n=n+b.get_transport_line(li).get_item_count('{ore}') end end;"
+        "rcon.print(n)").strip()
+    try:
+        return int(out) > 0
+    except ValueError:
+        return False
+
+
 def connect_mine_to_array(ore):
     """Reconfigure a mine's output to feed a BELT to its smelter array's ore belt: remove the
     output inserter+chest, then lay_belt_path from the mine belt end to the array's ore-belt west
@@ -771,7 +820,11 @@ def connect_mine_to_array(ore):
     # ox, so a single ax-1 column MERGED the ore lanes (mixed-ore law violation, 2026-08-29).
     ax, ay = ox - 1, oy + 5
     lane_x = ox - 2 - 2 * list(SMELT_ZONE).index(ore)
-    laid = lay_belt_path([(rx + 10, ry), (lane_x, ry), (lane_x, ay), (ax, ay)])
+    route = [(rx + 10, ry), (lane_x, ry), (lane_x, ay), (ax, ay)]
+    if route_is_operator_owned(route):
+        status.log(f"connect_mine_to_array({ore}): route is OPERATOR-OWNED (he deleted it) - not rebuilding")
+        return
+    laid = lay_belt_path(route)
     tiles = laid if isinstance(laid, list) else []
     # SUPERSEDE: the previous lane for this ore goes away in the SAME pass (never leave a
     # parallel route standing), then the new route is registered as the only lane.
@@ -779,6 +832,14 @@ def connect_mine_to_array(ore):
     if tiles:
         lanes = _lanes_load()
         lanes[ore] = tiles
+        _lanes_save(lanes)
+    # VERIFY THE RESULT (Seth's law): a lane that neither connects nor moves ore did
+    # nothing - remove what we just built instead of leaving dead belts on the map.
+    if tiles and not build_worked(lambda: _lane_connected(ore) and lane_moves_ore(ore)):
+        status.log(f"connect_mine_to_array({ore}): lane produced NO ore flow - removing what I built")
+        teardown_lane(ore)
+        lanes = _lanes_load()
+        lanes.pop(ore, None)
         _lanes_save(lanes)
 
 
@@ -1325,6 +1386,22 @@ def build_io_cell(recipe, x, y):
     A.place("wooden-chest", x + 6, y + 1, clear=0)                   # output chest
     A.place("small-electric-pole", x + 3, y + 3, clear=0)
     A._print(f"/sc local s=game.surfaces[1]; local a=s.find_entities_filtered{{name='assembling-machine-1',position={{{x+3},{y+1}}},radius=2}}[1]; if a then pcall(function() a.set_recipe('{recipe}') end) end")
+    # VERIFY: the cell must reach a LIVE state (working, or merely waiting on ingredients -
+    # both mean it is wired and powered). no_power / no recipe = it does nothing -> remove it.
+    def _alive():
+        st = A._print(
+            f"/sc local s=game.surfaces[1]; local SN={{}}; for k,v in pairs(defines.entity_status) do SN[v]=k end;"
+            f"local a=s.find_entities_filtered{{name='assembling-machine-1',position={{{x + 3},{y + 1}}},radius=2}}[1];"
+            "rcon.print(a and (SN[a.status] or tostring(a.status)) or 'gone')").strip()
+        return st in ("working", "item_ingredient_shortage", "full_output", "no_ingredients")
+    if not build_worked(_alive, tries=3, delay=4):
+        status.log(f"build_io_cell({recipe}) @({x},{y}): cell is dead (unpowered/no recipe) - removing it")
+        A._print(
+            f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory();"
+            f"for _,e in pairs(s.find_entities_filtered{{area={{{{{x - 1},{y - 1}}},{{{x + 8},{y + 4}}}}},"
+            "  name={'assembling-machine-1','wooden-chest','inserter','small-electric-pole'}}) do"
+            "  inv.insert{name=e.name,count=1}; e.destroy() end")
+        return False
     return True
 
 
@@ -1759,6 +1836,8 @@ def ensure_lanes(lap=0):
     for ore in ("iron-ore", "copper-ore"):
         try:
             fix_mine_row_flow(ore)
+            if _LANE_RELAYS.get(ore, 0) >= 4:
+                continue                      # already gave up / operator-owned
             if not _lane_connected(ore):
                 n = _LANE_RELAYS.get(ore, 0)
                 if n >= 3:
