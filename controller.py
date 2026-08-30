@@ -41,6 +41,7 @@ _PREV = {"d": None}
 _LAST_VERDICT = {"s": "", "n": 0}
 _TRIAGE_BUSY = {"b": False}
 _OP_PREV = {"p": False}
+_OP_SNAP = {"belts": None}
 
 
 def _load_state():
@@ -271,7 +272,18 @@ def controller_loop(stop_flag):
             # OPERATOR LOGOFF HOOK: when Seth disconnects, run the cleanup he ordered
             # ('once I log off clean this shit up') + deferred layout work, once
             op_now = B.operator_present()
+            if op_now and not _OP_PREV["p"]:
+                try:                       # snapshot so we can learn what he deletes
+                    _OP_SNAP["belts"] = B.belt_tiles_now()
+                    status.log(f"operator online - layout heals suspended (snapshot {len(_OP_SNAP['belts'])} belt tiles)")
+                except Exception as e:
+                    status.log(f"operator snapshot: {e}")
             if _OP_PREV["p"] and not op_now:
+                try:                       # his deletions are INTENT: protect them forever
+                    B.record_operator_deletions(_OP_SNAP.get("belts"))
+                    _OP_SNAP["belts"] = None
+                except Exception as e:
+                    status.log(f"record deletions: {e}")
                 status.log("operator logged off - running cleanup + deferred layout work")
                 for fn in ("cleanup_orphan_cells", "repair_plate_rows", "coal_to_boiler"):
                     try:

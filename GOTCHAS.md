@@ -905,3 +905,13 @@ Companion fixes same session: world notepad rendering retired (dashboard replace
 coal_to_boiler() splitter tap + boiler burner-inserter (self-sustaining power);
 electrify_mines() burner->electric drill swap-in-place gated on the now-prioritized
 electric-mining-drill research; research queue set via f.research_queue write.
+
+## Operator deletions are INTENT, not damage: the protected-tile registry (2026-08-30)
+
+The truce stopped the bot fighting Seth WHILE he was online, but the moment he logged off the
+heals re-laid everything he had deliberately removed ("the belts I deleted seem to have
+returned") - a deleted belt is indistinguishable from a broken lane to repair_belt_gaps /
+ensure_lanes. FIX: the controller snapshots every belt tile when the operator connects; on
+logoff it diffs and files every REMOVED tile into protected-tiles.json (persistent). Both
+lay_belt_path and repair_belt_gaps skip protected tiles forever. RULE: any future auto-build
+that places tiles must consult _protected_load() first.

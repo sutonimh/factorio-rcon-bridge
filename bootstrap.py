@@ -666,6 +666,12 @@ def lay_belt_path(waypoints):
         tiles.append((x, y, DIRS[((nx > x) - (nx < x), (ny > y) - (ny < y))]))
     if tiles:
         tiles.append((pts[-1][0], pts[-1][1], tiles[-1][2]))   # last tile keeps prior direction
+    prot = _protected_load()
+    if prot:
+        skipped = [(x, y) for (x, y, _d) in tiles if (x, y) in prot]
+        if skipped:
+            status.log(f"lay_belt_path: skipping {len(skipped)} operator-protected tiles")
+        tiles = [(x, y, d) for (x, y, d) in tiles if (x, y) not in prot]
     spec = ";".join(f"{x},{y},{d}" for (x, y, d) in tiles)
     gaps = A._print(
         "/sc local s=game.surfaces[1]; local f=game.forces.player;"
@@ -1733,6 +1739,57 @@ def repair_plate_rows():
     return fixed
 
 
+
+
+
+def _protected_load():
+    """Tiles the OPERATOR deliberately cleared - the bot must never rebuild them."""
+    import json as _j
+    import pathlib as _pl
+    f = _pl.Path(__file__).resolve().parent / "protected-tiles.json"
+    try:
+        return set(tuple(x) for x in _j.loads(f.read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
+def _protected_save(tiles):
+    import json as _j
+    import pathlib as _pl
+    f = _pl.Path(__file__).resolve().parent / "protected-tiles.json"
+    try:
+        f.write_text(_j.dumps(sorted(list(tiles))))
+    except OSError:
+        pass
+
+
+def belt_tiles_now():
+    """Every belt/underground/splitter tile currently in the world (for edit diffing)."""
+    out = A._print(
+        "/sc local s=game.surfaces[1]; local o={};"
+        "for _,b in pairs(s.find_entities_filtered{type={'transport-belt','underground-belt','splitter'}}) do"
+        "  o[#o+1]=math.floor(b.position.x)..','..math.floor(b.position.y) end;"
+        "rcon.print(table.concat(o,';'))").strip()
+    return set(tuple(map(int, x.split(","))) for x in out.split(";") if "," in x)
+
+
+def record_operator_deletions(before):
+    """Diff the world against a pre-session snapshot: tiles the operator REMOVED become
+    PROTECTED forever (Seth, 2026-08-30: 'the belts I deleted seem to have returned').
+    The bot cannot distinguish a deliberate deletion from damage, so the operator's edits
+    are recorded as intent, not damage."""
+    if not before:
+        return 0
+    after = belt_tiles_now()
+    removed = before - after
+    if not removed:
+        return 0
+    prot = _protected_load() | removed
+    _protected_save(prot)
+    status.log(f"protected {len(removed)} operator-deleted tiles (never rebuild); total {len(prot)}")
+    return len(removed)
+
+
 def cleanup_orphan_cells():
     """Remove orphan io-cell furniture (chests/inserters/poles with NO assembler within 3
     tiles) in the science region - the partial cells the old build order littered. Runs on
@@ -1862,6 +1919,7 @@ def repair_belt_gaps(max_span=30):
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
         "local D={[0]={0,-1},[4]={1,0},[8]={0,1},[12]={-1,0}};"
+        "local PROT={" + ",".join("['%d:%d']=true" % (x, y) for (x, y) in sorted(_protected_load())[:400]) + "};"
         # keep a small belt stock: craft from plates+gears server-side (2 belts per gear+plate)
         "if inv.get_item_count('transport-belt')<10 then"
         "  local g=inv.get_item_count('iron-gear-wheel'); local pl=inv.get_item_count('iron-plate');"
@@ -1892,6 +1950,7 @@ def repair_belt_gaps(max_span=30):
         "        for k=1,resume-1 do"
         "          if inv.get_item_count('transport-belt')<1 then break end;"
         "          local tx,ty=bx+d[1]*k, by+d[2]*k;"
+        "          if PROT[math.floor(tx)..':'..math.floor(ty)] then break end;"
         "          local e=s.create_entity{name='transport-belt',position={tx,ty},direction=b.direction,force=f};"
         "          if e then inv.remove{name='transport-belt',count=1}; fixed=fixed+1 end end end end end end;"
         "if fixed>0 then game.print('repair_belt_gaps: bridged '..fixed..' tiles') end")
