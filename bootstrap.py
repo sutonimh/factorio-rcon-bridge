@@ -817,7 +817,10 @@ def build_mine_outpost(ore, n=8):
     nbelt, nfurn = (int(state.split(",")[0]), int(state.split(",")[1])) if "," in state else (0, 1)
     if nbelt > 0 and nfurn == 0:
         cc = A._print(f"/sc local s=game.surfaces[1]; local c=s.find_entities_filtered{{name='wooden-chest',position={{{rx},{ry}}},radius=24}}[1]; rcon.print(c and (math.floor(c.position.x)..','..math.floor(c.position.y)) or 'none')").strip()
-        return tuple(map(int, cc.split(","))) if "," in cc else None
+        # no terminal chest within 24 but belts present = connected/belt-fed state, NOT a
+        # failure (a stray chest at r24-30 made _mine_is_belt_fed and this branch disagree,
+        # so every phase pass errored "returned None" - 2026-08-30)
+        return tuple(map(int, cc.split(","))) if "," in cc else (rx, ry)
     A.now(f"Supply: scaled MINE outpost for {ore} ({n} drills -> belt -> chest) @{rx},{ry}")
     # PROVISION FIRST (while any old furnaces at the patch still produce plates to craft from)
     if _count("burner-mining-drill") < n:
