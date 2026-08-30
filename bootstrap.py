@@ -1705,13 +1705,23 @@ def fix_mine_row_flow(ore):
         "  if y==ry2 then local x=math.floor(b.position.x); if x<mn then mn=x end; if x>mx then mx=x end end end;"
         f"  local bx={bx};"
         "  exitx=(math.abs(mn-bx)<=math.abs(mx-bx)) and mn or mx end;"
+        # X-SPAN GUARD: only belts within the DRILL span (+6) belong to this mine's row.
+        # Without it the iron row (y=-42, radius 42) swept in the COPPER column's crossing
+        # tile at (-10,-42) and re-pointed it east every cycle - the invisible hand that kept
+        # breaking the copper lane all evening (2026-08-30).
+        "local dminx,dmaxx=1e9,-1e9;"
+        f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=30,type='mining-drill'}}) do"
+        "  local dx=math.floor(d.position.x); if dx<dminx then dminx=dx end; if dx>dmaxx then dmaxx=dx end end;"
+        "if dminx>dmaxx then dminx,dmaxx=exitx,exitx end;"
+        "local lo,hi=math.min(dminx,exitx)-6, math.max(dmaxx,exitx)+6;"
         "local n=0;"
         "for _,b in pairs(row) do local y=math.floor(b.position.y);"
         "  if y==ry2 then local x=math.floor(b.position.x);"
+        "    if x>=lo and x<=hi then"
         "    local want=(x>exitx) and 12 or ((x<exitx) and 4 or b.direction);"
         # never touch the exit/corner zone (exitx +-1): a bulk re-point once swept the corner
         # east and the full row dead-ended at it (copper, 2026-08-30)
-        "    if b.direction~=want and math.abs(x-exitx)>1 then b.direction=want; n=n+1 end end end;"
+        "    if b.direction~=want and math.abs(x-exitx)>1 then b.direction=want; n=n+1 end end end end;"
         "if n>0 then game.print('fix_mine_row_flow: pointed '..n..' belts at the row exit') end")
 
 

@@ -101,7 +101,7 @@ replacing fragile long-distance leg-walking in `autopilot.walk` (dispatch at
 `FAR_WALK = 40` tiles; short hops and the final approach keep the leg-walker).
 
 **The key unlock — event registration from `/sc` WORKS.** FLE registers its
-`on_script_path_request_finished` handler and `on_nth_tick(5)` walker at scenario
+`on_script_path_request_finished` handler and nth-tick walker at scenario
 load; we verified live on Factorio 2.1.17 (headless, freeplay save) that both
 `script.on_event` and `script.on_nth_tick` register fine from a `/sc` command —
 `/sc` runs in the level state, `type(script.on_event) == 'function'`, a no-op
@@ -136,15 +136,22 @@ What was taken / adapted:
   (plain data tables — storage-safe, GC'd by `travel_go`/`travel_stop` so saves
   don't bloat) instead of being shipped to Python; only the count crosses RCON.
 - **`move_to/server.lua` `update_walking_queues` → `fle.travel_step`.** Kept: the
-  nth-tick(5) `walking_state` waypoint consumer with FLE's
+  nth-tick `walking_state` waypoint consumer with FLE's
   `get_direction_with_diagonals` (as `fle.dir8`, same 0.2-tile cardinal margin,
-  16-direction constants). Changed: waypoint arrival tightened 1.0 → 0.35 tiles;
-  added the STUCK WATCHDOG (>60 ticks without 0.1 tiles of progress → teleport to
+  16-direction constants). Changed: waypoint arrival tightened 1.0 → 0.35 tiles,
+  which forced the cadence from FLE's 5 ticks to 2 — LIVE LESSON: one walking
+  step is `speed × cadence` ≈ 0.15 × 5 = 0.75 tiles, larger than 0.35, so at
+  cadence 5 the character stepped ACROSS the arrival circle and bounced over one
+  waypoint forever (seen on the first live run: 200s oscillating at wp 3/206).
+  Cadence 2 puts the step (~0.3) under the radius. The STUCK WATCHDOG was added
+  (>60 ticks without the waypoint distance IMPROVING by 0.1 tiles → teleport to
   the NEXT waypoint, arturh85's small legal unstick; stuck on the LAST waypoint →
-  stop + `done(partial)`); progress lives in `storage.fle_travel` so
-  `travel_status()` is one cheap read; the belt/pipe-laying and
-  teleport-each-waypoint "fast mode" halves of move_to were NOT vendored
-  (teleport travel is banned; laying is `fle.lay_line`'s job).
+  stop + `done(partial)`) — progress is measured as best-distance-to-waypoint,
+  not displacement, because an oscillating character moves plenty while going
+  nowhere. Progress lives in `storage.fle_travel` so `travel_status()` is one
+  cheap read; the belt/pipe-laying and teleport-each-waypoint "fast mode" halves
+  of move_to were NOT vendored (teleport travel is banned; laying is
+  `fle.lay_line`'s job).
 - **`move_to/client.py` → `travel.goto_far`.** Kept the request→poll→walk→poll
   shape and the long-poll-until-queue-empty model. Added: the displaced-goal retry
   (goal shifted 8 tiles, rotated 90° per attempt, 5 goals total — the arturh85
@@ -152,10 +159,16 @@ What was taken / adapted:
   honoring (sev-0/1 stops the travel mid-walk, same hook as `autopilot.walk`),
   and a timeout budget shared across path-compute + walk phases.
 - **One-controller rule:** `autopilot.stop()` now also clears
-  `storage.fle_travel` — the server-side walker re-sets `walking_state` every 5
+  `storage.fle_travel` — the server-side walker re-sets `walking_state` every 2
   ticks, so a bare `walking_state=false` would not stick while a travel is active.
   A killed Python process no longer produces a runaway walk at all: the walker
   finishes its queue server-side and stops at the last waypoint.
+
+Validated live (2026-08-29, autopilot container paused for the test): `goto_far`
+from (-1.4, -31.0) to the coal patch state coord (-38, 15) r=4 — 197 waypoints,
+arrived (-40.6, 12.7) = 3.48 tiles from goal in 28.1s, 0 unstick hops, including
+a long legal detour around the base/lake the old blind leg-walker could never
+route. Offline: `python3 test_travel.py` (9 tests) + `fle_tools.py selftest`.
 
 ## Factorio 2.1 compatibility (FLE targets 2.0.x; our server is 2.1.17)
 

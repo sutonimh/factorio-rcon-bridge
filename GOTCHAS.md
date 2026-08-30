@@ -892,6 +892,36 @@ as the one queue, v1 dead-weight quarantine (autopilot.maintain servicers, patro
 build_belt family, snapshot/rebuild), lay_belt_path inventory consumption, walk() callers
 checking the success flag, orders stuck 'running' startup sweep.
 
+## Native-pathfinder travel stack (2026-08-29): long walks go through surface.request_path
+
+Long-distance walking (>40 tiles) is now the FLE-style travel stack (`travel.goto_far`,
+wired into `walk()` as `walk_far`; lua in the fle_lib `travel*` chunks): corridor chunk
+pre-generation -> async `surface.request_path` with the character's own collision
+box/mask -> a server-side `on_nth_tick(2)` walker consumes the waypoints. Lessons:
+- **`script.on_event`/`on_nth_tick` registration from /sc WORKS on 2.1.17** (verified
+  live: a /sc-registered `on_script_path_request_finished` handler received a real path).
+  The old "pure /sc has no event registration" belief was WRONG. Handlers die with the
+  Lua state (save reload/restart) exactly like the `fle` global; the version-probe
+  re-push re-registers them (`travel.ensure_handlers`).
+- **Walker cadence must keep one step BELOW the arrival radius.** Step = speed x cadence
+  (~0.15 x 5 = 0.75 tiles at FLE's nth_tick(5)) vs our 0.35-tile arrival: the character
+  stepped ACROSS the circle and bounced over one waypoint for 200s. Cadence 2 (~0.3
+  tiles/step) fixed it. Corollary: a stuck watchdog must measure BEST-DISTANCE-TO-TARGET
+  improvement, never raw displacement - an oscillating character moves plenty.
+- **`A.stop()` must clear `storage.fle_travel`**, or the server-side walker re-sets
+  walking_state every 2 ticks and the stop doesn't stick (one-controller rule). Upside:
+  a killed Python process can no longer cause a runaway walk - the walker stops itself
+  at the last waypoint.
+- **Ungenerated chunks silently block the pathfinder** (`not_found`): always pre-generate
+  the corridor (every 32 tiles, radius 2 chunks + `force_generate_chunk_requests`) before
+  requesting. Unreachable goals get the displaced-goal retry (8 tiles, rotated 90 deg per
+  attempt, 5 goals).
+- **Live-testing the character requires pausing the autopilot container** (`sudo docker
+  stop factorio-autopilot`, restart after): its builder calls `A.stop()` before walks,
+  which now also clears any in-flight travel queue - two controllers WILL fight. Also
+  learned: another session deploy.sh'd this worktree's UNCOMMITTED code mid-test
+  (shared-worktree hazard) - re-check what's actually deployed before blaming the code.
+
 ## OPERATOR TRUCE (Seth, 2026-08-30): layout self-heals suspend while a player is online
 
 Seth hand-cleaned the belt mess and the self-heals kept UN-DOING his deletions: a deleted
@@ -941,3 +971,20 @@ removed) and the lane supersede teardown (never create the duplicates in the fir
 CONTAINERS: both factorio-autopilot and factorio-dash must run with `-e TZ=America/Los_Angeles`
 (python:3.12-slim ships zoneinfo, so this is all that's needed) or the log is UTC. Re-apply
 on every `docker run` recreate - and remember the netns rule: `--network container:factorio`.
+
+## NEVER register runtime event handlers: it locks human players out (2026-08-30)
+
+The FLE-style travel stack registered `script.on_event`/`script.on_nth_tick` from `/sc`. It
+works mechanically - but it mutates the LEVEL's event-handler set, and Factorio then REFUSES
+every joining client: "Cannot join. The following mod event handlers are not identical
+between you and the server ... level". Seth was locked out of his own game mid-session.
+RULE: on a server a human joins, the autopilot may NEVER register runtime handlers. All
+periodic behavior is driven from PYTHON (poll + act), which is what autopilot.walk() already
+does. Recovery if it happens: `/sc script.on_nth_tick(nil); script.on_event(defines.events.
+on_script_path_request_finished, nil)` then rejoin. The travel* lua chunks, travel.py and the
+walk_far handoff were removed entirely; the salvageable idea (corridor chunk pre-generation
+before long walks) can be added inside walk() without handlers.
+Also fixed this pass: fix_mine_row_flow re-pointed belts by ROW Y within radius 42, so the
+IRON row (y=-42) grabbed the COPPER column's crossing tile at (-10,-42) and flipped it east
+every cycle - the invisible hand that kept breaking the copper lane all evening. It now only
+touches belts within the mine's own DRILL X-SPAN (+/-6).

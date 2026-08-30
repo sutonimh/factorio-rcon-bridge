@@ -188,13 +188,10 @@ def route(sx, sy, gx, gy, pad=6):
 _route_cache = {}   # (start_region, goal) -> waypoints; reused so we don't recompute the same
                     # route every walk (Seth's rule). Invalidated when the character deviates.
 
-FAR_WALK = 40       # tiles: beyond this, walk() hands off to the native-pathfinder travel
-                    # stack (travel.goto_far) instead of leg-walking blind across the map.
-try:
-    import travel as _travel
-    walk_far = _travel.goto_far
-except ImportError:      # keep autopilot importable standalone
-    walk_far = None
+FAR_WALK = 40       # tiles: long-hop threshold (informational). The native-pathfinder
+                    # handoff was REMOVED 2026-08-30 - it needed runtime script.on_event
+                    # handlers, which lock human players out of the server (see GOTCHAS).
+walk_far = None     # intentionally disabled; leg-walking owns every distance
 
 
 def walk(tx, ty, tol=2.0, timeout=150):
@@ -206,20 +203,9 @@ def walk(tx, ty, tol=2.0, timeout=150):
     key = (round(tx), round(ty))
     try:
         px, py = pos()
-        # LONG HOPS go through the native pathfinder (travel.goto_far): real A*
-        # with corridor chunk generation + a server-side walker, instead of
-        # leg-walking blind through terrain the pad-6 route scan never saw.
-        # The leg-walker below still owns short hops and the final approach.
-        if walk_far is not None and math.hypot(tx - px, ty - py) > FAR_WALK:
-            fx, fy, far_ok = walk_far(tx, ty, radius=max(1, min(int(tol), 4)),
-                                      timeout=timeout)
-            px, py = fx, fy
-            rem = math.hypot(tx - px, ty - py)
-            if rem <= tol:
-                return px, py, True
-            if not far_ok and rem > FAR_WALK:
-                return px, py, False    # preempted / unreachable: don't leg-walk it
-            # else: close now — fall through to the leg walker for the approach
+        # NOTE: the native-pathfinder long-hop path was REMOVED 2026-08-30 - it
+        # required runtime script.on_event handlers, which lock human players out
+        # of the server (see GOTCHAS). Leg-walking owns all distances again.
         ck = (round(px / 8), round(py / 8), key[0], key[1])
         wps = _route_cache.get(ck)
         if wps is None:
