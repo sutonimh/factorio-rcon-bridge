@@ -40,6 +40,7 @@ _HIST = []                          # (wallclock, sense dict) ring for the progr
 _PREV = {"d": None}
 _LAST_VERDICT = {"s": "", "n": 0}
 _TRIAGE_BUSY = {"b": False}
+_OP_PREV = {"p": False}
 
 
 def _load_state():
@@ -267,6 +268,17 @@ def controller_loop(stop_flag):
                     _TRIAGE_BUSY["b"] = True
                     threading.Thread(target=_triage_worker, args=(d, _PREV["d"]), daemon=True).start()
                 _PREV["d"] = d
+            # OPERATOR LOGOFF HOOK: when Seth disconnects, run the cleanup he ordered
+            # ('once I log off clean this shit up') + deferred layout work, once
+            op_now = B.operator_present()
+            if _OP_PREV["p"] and not op_now:
+                status.log("operator logged off - running cleanup + deferred layout work")
+                for fn in ("cleanup_orphan_cells", "repair_plate_rows", "coal_to_boiler"):
+                    try:
+                        getattr(B, fn)()
+                    except Exception as e:
+                        status.log(f"logoff {fn}: {e}")
+            _OP_PREV["p"] = op_now
             # operator prompts are realtime, always
             try:
                 import operator2
