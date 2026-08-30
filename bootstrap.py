@@ -2272,7 +2272,7 @@ def ensure_derpface():
         "  local pos=s.find_non_colliding_position('character', {6,-10}, 40, 1) or {x=0.5,y=0.5};"
         "  local c=s.create_entity{name='character', position=pos, force='player'};"
         "  if c then storage.derpface=c; c.character_running_speed_modifier=0;"
-        "    rendering.draw_text{text='derpface', surface=s, target=c, target_offset={0,-2.2}, color={1,0.82,0.25}, scale=1.6, alignment='center'} end end;"
+        "  end end;"   # no nameplate render: the map carries NO autopilot text (dashboard only)
         "rcon.print('derpface valid='..tostring(storage.derpface and storage.derpface.valid))").strip()
     if "valid=true" not in out:
         raise RuntimeError(f"ensure_derpface failed: {out[:200]}")
