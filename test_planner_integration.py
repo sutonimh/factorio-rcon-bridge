@@ -12,7 +12,7 @@ every planner/bootstrap entry point a stage would call is stubbed. Two kinds of 
   STRUCTURAL   AST/source assertions that pin the properties the integration exists to give:
                no legacy ad-hoc builder is reachable from the phase program, every placing
                stage calls a gate, the controller's audit battery contains no mutating Lua,
-               and BUILDER_ENABLED=0 safe mode is still in play().
+               and the BUILDER_ENABLED kill switch is still in play().
   BEHAVIOURAL  each stage driven with fakes: gate blocks -> nothing is built; the build fails
                -> nothing is recorded; a duplicate lane is never laid beside its predecessor.
 """
@@ -249,7 +249,13 @@ def test_phase0_builds_through_the_planner_modules():
 
 
 def test_builder_enabled_safe_mode_intact():
-    """BUILDER_ENABLED=0 is the default and still short-circuits the build pass."""
+    """The BUILDER_ENABLED kill switch still short-circuits the build pass.
+
+    Its default is now ON: the operator withdrew "zero unrequested building" on 2026-08-30
+    ("proceed autonomously along the progression path"). What must not regress is the switch
+    itself - setting BUILDER_ENABLED=0 has to still park the builder without stopping the
+    controller, so that parking it never requires a code change.
+    """
     play = _fn_nodes("planner.py")["play"]
     guards = []
     for node in ast.walk(play):
@@ -257,7 +263,7 @@ def test_builder_enabled_safe_mode_intact():
             continue
         test = ast.dump(node.test)
         if "BUILDER_ENABLED" in test:
-            assert "'0'" in test and "'1'" in test, "the default is no longer OFF"
+            assert "'1'" in test, "the BUILDER_ENABLED guard lost its flag comparison"
             guards.append(node)
             assert any(isinstance(s, ast.Continue) for s in node.body), \
                 "the BUILDER_ENABLED guard no longer skips the build pass"

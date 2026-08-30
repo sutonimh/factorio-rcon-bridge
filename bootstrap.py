@@ -1624,12 +1624,24 @@ def service_science():
 
 
 def automate_green_science(origin=(30, -16)):
-    """Build the GREEN (logistic) science assembler chain so research advances past the green
-    wall. The generic service_science() shuffles intermediates via inventory, so we just place
-    assemblers + set recipes: copper-cable -> electronic-circuit -> inserter + transport-belt ->
-    logistic-science-pack (plus the existing gear assembler feeds gears). Powered off the base
-    network. Idempotent: skips recipes already running."""
+    """Build the science-pack assembler chain - BOTH packs - so research keeps advancing.
+
+    RED IS IN THIS LIST NOW, and its absence was the deadlock. The chain was green-only and
+    every green link already existed, so this returned immediately on every pass while NOTHING
+    on the map made automation-science-pack. The result on 2026-08-30: 28 furnaces sat at
+    full_output because no consumer drained plates, iron fell to 5/min and copper to 6/min,
+    all 10 labs read missing_science_packs, and the controller correctly diagnosed it every
+    lap - "the base needs a plate CONSUMER, not a lane repair" - with no stage able to act.
+
+    Red is also the cheapest plate sink the base has (1 copper-plate + 1 iron-gear-wheel), so
+    the same build unjams the smelters and feeds the labs.
+
+    The generic service_science() shuffles intermediates via inventory, so we just place
+    assemblers + set recipes. Powered off the base network. Idempotent: skips recipes already
+    running.
+    """
     chain = ["copper-cable", "electronic-circuit", "inserter", "transport-belt",
+             "automation-science-pack", "automation-science-pack",
              "logistic-science-pack", "logistic-science-pack"]
     existing = A._print("/sc local s=game.surfaces[1]; local r={}; for _,a in pairs(s.find_entities_filtered{type='assembling-machine'}) do local rc=a.get_recipe(); if rc then r[#r+1]=rc.name end end; rcon.print(table.concat(r,','))").strip().split(",")
     need = [r for r in chain if existing.count(r) < chain.count(r)]
@@ -2894,10 +2906,17 @@ def ensure_inventory_room(min_free=DEPOT_MIN_FREE, keep=None, force=False):
         "for a,b in ([==[" + place + "]==]):gmatch('(-?%d+),(-?%d+)') do "
         "  local x,y=tonumber(a),tonumber(b) "
         "  local e=s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.4,type='container'}[1] "
-        "  if not e and inv.get_item_count('iron-chest')>0 "
-        "     and s.can_place_entity{name='iron-chest',position={x+0.5,y+0.5},force=f} then "
-        "    e=s.create_entity{name='iron-chest',position={x+0.5,y+0.5},force=f} "
-        "    if e then inv.remove{name='iron-chest',count=1} end end "
+        # GROW WITH WHATEVER CONTAINER HE ACTUALLY HAS. This used to place iron-chest only, so
+        # a character carrying 38 WOODEN chests and no iron ones could not extend a full depot:
+        # every pass logged "items did NOT fit - the depot needs another chest" while holding
+        # the chests to build it. Inventory then stayed at 0 free stacks, and a full inventory
+        # makes can_insert false for every item, which silently blocks EVERY build in the base.
+        "  if not e then "
+        "    for _,cn in pairs({'steel-chest','iron-chest','wooden-chest'}) do "
+        "      if inv.get_item_count(cn)>0 "
+        "         and s.can_place_entity{name=cn,position={x+0.5,y+0.5},force=f} then "
+        "        e=s.create_entity{name=cn,position={x+0.5,y+0.5},force=f} "
+        "        if e then inv.remove{name=cn,count=1} break end end end end "
         "  if e then chests[#chests+1]=e end end "
         "if #chests==0 then rcon.print('ERR no depot chest') return end "
         "local moved={} local left=0 "

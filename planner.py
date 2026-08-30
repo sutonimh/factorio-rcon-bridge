@@ -1644,10 +1644,14 @@ def play():
                 status.log("operator online - builder paused (no construction while you play)")
                 time.sleep(20)
                 continue
-            if os.environ.get("BUILDER_ENABLED", "0") != "1":
-                # SAFE MODE (default since 2026-08-30): the controller keeps the base alive
-                # (fuel/feed/research/power) but NOTHING is constructed until the operator
-                # explicitly enables the builder. He asked for zero unrequested building.
+            if os.environ.get("BUILDER_ENABLED", "1") != "1":
+                # SAFE MODE, now OPT-IN rather than the default. The "zero unrequested
+                # building" instruction was WITHDRAWN by the operator on 2026-08-30: "proceed
+                # autonomously along the progression path, automate all the things."
+                #
+                # Leaving the flag in place, defaulted ON, because a kill switch that has to
+                # be re-added under pressure is a kill switch you do not have. Set
+                # BUILDER_ENABLED=0 to park the builder without stopping the controller.
                 status.log("builder disabled (BUILDER_ENABLED=0) - controller-only safe mode")
                 time.sleep(60)
                 continue

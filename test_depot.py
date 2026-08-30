@@ -182,3 +182,29 @@ if __name__ == "__main__":
                 print("FAIL %s" % name)
                 traceback.print_exc()
     sys.exit(1 if fails else 0)
+
+
+def test_depot_grows_with_any_container_it_has():
+    """The depot could only extend itself by placing iron-chest. A character carrying 38
+    WOODEN chests and no iron ones therefore could not grow a full depot: every pass logged
+    "the depot needs another chest" while holding the chests to build it, inventory sat at 0
+    free stacks, and a full inventory makes can_insert false for EVERY item - which silently
+    blocks every build in the base. Preference order, not a single hardcoded name."""
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.ensure_inventory_room)
+    assert "'steel-chest','iron-chest','wooden-chest'" in src, \
+        "the depot can only grow with one hardcoded container again"
+    assert src.index("steel-chest") < src.index("wooden-chest"), "best container should win"
+
+
+def test_the_science_chain_builds_red_as_well_as_green():
+    """The chain was green-only, and every green link already existed, so the stage returned
+    immediately while nothing on the map made automation-science-pack. 28 furnaces sat at
+    full_output with no plate consumer and all 10 labs read missing_science_packs."""
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.automate_green_science)
+    chain = src.split("chain = [", 1)[1].split("]", 1)[0]
+    assert chain.count("automation-science-pack") >= 1, "red science is missing from the chain"
+    assert chain.count("logistic-science-pack") >= 1, "green science fell out of the chain"

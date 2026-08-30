@@ -1693,3 +1693,58 @@ is occupied by the chain inserters themselves. A planner that insists on the opt
 "no routable position" and does nothing. Walk the consumers best-first and build the first one
 you can actually reach — a feed reaching 3 of 10 labs beats a perfect plan that never gets
 built, and it says so in its own log line rather than pretending it covered everything.
+
+---
+
+## A chain that is already complete is a stage that never runs
+
+`automate_green_science` held the list `copper-cable, electronic-circuit, inserter,
+transport-belt, logistic-science-pack x2`. Every one of those existed, so `need` came out
+empty and the stage returned immediately, every pass, forever. **`automation-science-pack` was
+not in the list at all**, so nothing on the map was ever going to build a red-science
+assembler.
+
+The base deadlocked around that hole on 2026-08-30:
+
+```
+28 furnaces at full_output   (no consumer drains plates)
+iron 5/min, copper 6/min     (was 175 and 226)
+10 labs missing_science_packs
+```
+
+And the diagnosis was never the problem. `fix_lanes` withheld itself correctly — *"the
+smelters are jammed at the OUTPUT, not starved at the input; the base needs a plate CONSUMER,
+not a lane repair"* — and the architect escalated to the same conclusion. Every lap. **The bot
+knew exactly what was wrong and had no stage that could act on it.**
+
+Two rules out of this:
+
+- **An idempotent "build what is missing" stage is only as good as its list.** When such a
+  stage is silent, the interesting question is not "why did it skip" but "is the thing I want
+  even *in* the list". A skip and a completed list look identical from the outside.
+- **When a diagnosis repeats verbatim for hours, the gap is an ACTUATOR, not a detector.**
+  Adding another detector, another log line or another escalation to a correctly-diagnosed
+  problem is motion without progress. Go and find the stage that should be able to fix it, and
+  if there isn't one, that absence is the bug.
+
+## Grow a buffer with whatever container you are carrying
+
+`ensure_inventory_room` could only extend the depot by placing `iron-chest`. Derpface was
+carrying **38 wooden chests and no iron ones**, so a full depot could never grow: every pass
+logged "items did NOT fit — the depot needs another chest" while holding the chests to build
+it. Inventory then sat at 0 free stacks — and a full inventory makes `can_insert` false for
+every item, which silently blocks **every build in the base**.
+
+It now tries `steel-chest, iron-chest, wooden-chest` in preference order. The general shape:
+when a routine needs a *kind* of thing, name the acceptable kinds in preference order rather
+than hardcoding the nicest one, or the base stops for want of something it is already holding.
+
+## "Zero unrequested building" was withdrawn (2026-08-30)
+
+`BUILDER_ENABLED` now defaults to **on**. The operator's instruction was *"proceed autonomously
+along the progression path, automate all the things."*
+
+The flag itself stays, defaulted on, because a kill switch you would have to re-add under
+pressure is a kill switch you do not have. `BUILDER_ENABLED=0` parks the builder while leaving
+the controller running. The operator truce is unchanged and unconditional: nothing is built
+while a human is connected.

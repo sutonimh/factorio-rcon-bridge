@@ -762,8 +762,11 @@ def test_relief_never_reaches_a_structure_that_declares_none():
 
 
 def test_the_builder_safe_mode_and_the_truce_are_untouched():
+    """The kill switch still exists and still works. Its DEFAULT flipped on 2026-08-30 when
+    the operator withdrew "zero unrequested building" - but a switch you would have to re-add
+    under pressure is a switch you do not have, so the guard itself is pinned here."""
     src = (HERE / "planner.py").read_text()
-    assert 'os.environ.get("BUILDER_ENABLED", "0") != "1"' in src
+    assert 'os.environ.get("BUILDER_ENABLED", "1") != "1"' in src
     assert src.count("B.operator_present()") >= 3           # truce: play + phase0 + queue
     assert "if not verified(rec" in src or "verified(rec" in src
     for call in ("A.place(", "A.build(", "rcon.run(", "script.on_event", "on_nth_tick"):
