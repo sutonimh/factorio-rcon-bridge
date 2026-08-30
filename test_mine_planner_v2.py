@@ -641,8 +641,9 @@ def test_verify_lane_uses_lane_lint_verify_supply(ctx):
 
     def fake(ore, from_xy, to_xy, settle=3.0, tol=1):
         seen.update(ore=ore, from_xy=tuple(from_xy), to_xy=tuple(to_xy))
-        return {"connected": True, "moving": seen.get("moving", True), "arrived": 4,
-                "path_len": 40, "findings": [{"code": "DEAD_END", "severity": "error"}]}
+        return {"connected": seen.get("connected", True), "moving": seen.get("moving", True),
+                "arrived": 4, "path_len": 40,
+                "findings": [{"code": "DEAD_END", "severity": "error"}]}
     lane_lint.verify_supply = fake
     try:
         p = copper_plan()
@@ -652,8 +653,20 @@ def test_verify_lane_uses_lane_lint_verify_supply(ctx):
         assert r["ok"] is True and "connected=True moving=True" in r["detail"]
         assert seen["ore"] == "copper-ore"
         assert seen["from_xy"] == p["from_xy"] and seen["to_xy"] == p["to_xy"]
+        # A FROZEN LANE USED TO FAIL HERE, AND THAT WAS THE BUG. `ok` gates
+        # buildplan's rollback_on_fail, so failing a CONNECTED-but-idle lane tore out correct
+        # belt whenever something downstream was stalled - and it came straight back next
+        # pass. Live on 2026-08-30 that was 83 copper belts removed and relaid nine times in
+        # twelve minutes while every copper furnace sat at full_output. `connected` is this
+        # build's own result; `moving` is the world's, and a belt cannot fix a stall that is
+        # not on the belt.
         seen["moving"] = False
-        assert MP.verify_lane(rec)["ok"] is False, "a frozen lane is never a pass"
+        r = MP.verify_lane(rec)
+        assert r["ok"] is True, "a connected lane is never rolled back for want of flow"
+        assert "KEPT" in r["detail"], r["detail"]
+        # ...but a route that never connected DID nothing, and still rolls back.
+        seen["connected"] = False
+        assert MP.verify_lane(rec)["ok"] is False, "a disconnected lane is never a pass"
     finally:
         lane_lint.verify_supply = orig
 

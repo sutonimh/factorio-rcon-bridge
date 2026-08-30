@@ -1406,3 +1406,51 @@ throughput was real, and the topology was wrong.
 entities you intended, by tile. That is a cheap read and it is the only thing that actually
 tests the topology - the operator's "check all results of building anything to make sure
 results are as expected" applied to the one property that entity status cannot show you.
+
+## A GHOST IS A RESERVATION. can_place_entity CANNOT SEE ONE (2026-08-30)
+
+The phase-1 bus was pre-flighted tile by tile and reported:
+
+    116 checked | ORE:none | BLOCKED:none
+
+It then destroyed **21 ghosts of the operator's reserved 36-lab array** — the entire service
+column at x=14 (5 poles + 12 inserters, y=30..46) and four labs at x=16. A ghost is not a
+collision, so `can_place_entity` returns TRUE over one and `create_entity` silently consumes
+it. **"Is this tile empty" and "is this tile UNCLAIMED" are different questions**, and only
+the first was being asked.
+
+`autopilot.place()` now refuses ground held by a ghost of a DIFFERENT entity
+(`GHOST_RESERVED`), and `autopilot.reserved_tiles()` is the probe a planner should call.
+Building a ghost's OWN entity is still allowed — that is how a blueprint gets fulfilled and
+`build_ghosts` depends on it.
+
+**AND THE ROUTER WAS ALREADY RIGHT.** `belt_router.scan_obstacles(..., ghosts_hard=True)` has
+treated ghosts as buildings the whole time, with a comment saying why. The bus went through the
+reservation because it was laid by a hand-rolled placement loop that called `can_place_entity`
+directly instead of routing through `belt_router`. **The bug was not a missing feature; it was
+bypassing the layer that already had it.** Route with the router. If a build needs its own
+placement loop, it must call `reserved_tiles()` first, and say in a comment why the router
+would not do.
+
+## AND: A CONNECTED LANE IS NOT A FAILED LANE (2026-08-30)
+
+Nine times in twelve minutes:
+
+    connect_mine_to_array(copper-ore): lane produced NO ore flow - removing what I built
+    teardown_lane(copper-ore): removed 83 superseded belt tiles (refunded)
+
+83 belts, torn out and rebuilt, nine times, while every copper furnace sat at `full_output`
+with nowhere to put a plate. The verify was
+`_lane_connected(ore) and lane_moves_ore(ore)` — which conflates **"this route does not
+connect"** (a real failure; remove it) with **"this route carries nothing"** (correct
+infrastructure, starved from somewhere else). Removing the second guarantees a loop: the next
+pass lays the same route, measures the same zero, and removes it again.
+
+`_verify_lane_or_remove` now separates them, and `no_flow_reason()` names the real stall
+(jammed array / blocked drills / dead patch) instead of blaming the belt.
+
+**This is the THIRD instance of one bug.** `fix_lanes` had it, `connect_mine_to_array` had it,
+and the deadlock detector's coal model had it. Every time, a downstream blockage was read as an
+upstream fault, and the "fix" could not clear its own trigger. When you find one of these,
+**grep for the others before shipping** — `lane_moves_ore`, `build_worked`, `flow(` and any
+`if not <flow> : remove` are where this family lives.

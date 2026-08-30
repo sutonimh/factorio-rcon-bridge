@@ -20,6 +20,7 @@ Usage:  python3 bootstrap.py            # run the whole sequence on the current 
 """
 import time
 import autopilot as A
+import build_gates
 import techdb
 import gamedb
 import status
@@ -852,14 +853,60 @@ def connect_mine_to_array(ore):
         lanes = _lanes_load()
         lanes[ore] = tiles
         _lanes_save(lanes)
-    # VERIFY THE RESULT (Seth's law): a lane that neither connects nor moves ore did
-    # nothing - remove what we just built instead of leaving dead belts on the map.
-    if tiles and not build_worked(lambda: _lane_connected(ore) and lane_moves_ore(ore)):
-        status.log(f"connect_mine_to_array({ore}): lane produced NO ore flow - removing what I built")
+    _verify_lane_or_remove(ore, tiles)
+
+
+def _verify_lane_or_remove(ore, tiles):
+    """VERIFY THE RESULT (Seth's law) - BUT DISTINGUISH THE TWO WAYS IT CAN FAIL.
+
+    A lane that does not CONNECT its mine to its array genuinely did nothing and comes out.
+    A lane that connects but carries no ore is CORRECT INFRASTRUCTURE starved from somewhere
+    else - blocked drills, an array jammed at full_output, an exhausted patch - and tearing it
+    out cannot fix any of those. Worse, it guarantees a loop: the next pass lays the same route,
+    measures the same zero, and removes it again.
+
+    Live, 2026-08-30: nine cycles of "lane produced NO ore flow - removing what I built" /
+    "teardown_lane(copper-ore): removed 83 superseded belt tiles", 83 belts at a time, while
+    every copper furnace sat at full_output with nowhere to put a plate. The lane was never the
+    problem. It is the same misreading `_fix_lanes` had - a blocked OUTPUT presenting as a
+    starved INPUT - and fixing it there and not here is exactly why it kept happening.
+    """
+    if not tiles:
+        return
+    if not build_worked(lambda: _lane_connected(ore), tries=3):
+        status.log("connect_mine_to_array(%s): the route does not connect the mine to the array "
+                   "- removing what I built" % ore)
         teardown_lane(ore)
         lanes = _lanes_load()
         lanes.pop(ore, None)
         _lanes_save(lanes)
+        return
+    if not build_worked(lambda: lane_moves_ore(ore), tries=3):
+        status.log("connect_mine_to_array(%s): lane is CONNECTED but no %s is moving (%s) - "
+                   "KEEPING it. A belt cannot fix a stall that is not on the belt."
+                   % (ore, ore, no_flow_reason(ore)))
+
+
+def no_flow_reason(ore):
+    """Why is a CONNECTED lane carrying nothing? Names the real stall so the log says something
+    actionable instead of blaming the belt that is working correctly."""
+    try:
+        st = build_gates.sense()
+    except Exception:
+        return "cause unknown - census unavailable"
+    jam = sum(int(((st.get("status") or {}).get(n) or {}).get("full_output", 0))
+              for n in getattr(build_gates, "FURNACE_NAMES", ()))
+    if jam >= 3:
+        return ("%d furnaces are jammed at full_output - the arrays cannot take more ore until "
+                "something CONSUMES the plates" % jam)
+    drills = (st.get("status_type") or {}).get("mining-drill") or {}
+    blocked = int(drills.get("waiting_for_space_in_destination", 0))
+    working = int(drills.get("working", 0))
+    if blocked and not working:
+        return "%d drills are blocked and none is working - the stall is upstream at the mine" % blocked
+    if not blocked and not working:
+        return "no drill is running on this patch"
+    return "drills %d working / %d blocked; the belt itself is intact" % (working, blocked)
 
 
 def build_belt_supply():
