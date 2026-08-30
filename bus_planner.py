@@ -421,3 +421,34 @@ if __name__ == "__main__":
           % (len(w.occupied), len(w.reserved), len(w.ore)))
     print(json.dumps({"bounds": w.bounds}, indent=1))
     sys.exit(0)
+
+
+def check_feed_source(x, y, item=None):
+    """REFUSE to wire a bus feed to anything but a PLATE OUTPUT belt.
+
+    Returns (ok, why). The caller must not place a single belt until this passes.
+
+    On 2026-08-30 the bus was fed from the smelter rows' INPUT belts - twice, iron and copper -
+    draining the furnaces' ore and fuel to the bus instead of carrying plates away. Lane 35 was
+    measured carrying `coal:112`. Both times the "verification" was counting items on the belt,
+    which proves a belt is moving and says nothing about what it is moving FOR. The inserters
+    beside it say exactly that, and asking them costs one query.
+
+    A bus feed must come from a belt that machines DROP onto (an output). Feeding from an input
+    belt does not just fail to deliver plates - it starves the row it taps.
+    """
+    import autopilot as A
+    r = A.belt_role(x, y)
+    if r["role"] == "output":
+        if item and r["carries"] and item not in r["carries"]:
+            return False, ("(%d,%d) is an output belt but carries %s, not %s - wrong row"
+                           % (x, y, r["carries"].strip() or "nothing", item))
+        return True, "(%d,%d) is a plate OUTPUT belt (%s)" % (x, y, r["why"])
+    if r["role"] == "input":
+        return False, ("(%d,%d) is the row's INPUT belt (%s) - feeding the bus from it would "
+                       "drain the furnaces' ore and fuel away instead of carrying plates. "
+                       "Find the belt the machines DROP onto." % (x, y, r["why"]))
+    if r["role"] == "both":
+        return False, "(%d,%d) is mixed (%s) - do not wire to it blind" % (x, y, r["why"])
+    return False, ("(%d,%d) has no inserter touching it (%s) - its role is unknown, and a bus "
+                   "feed is never wired to a belt whose purpose was guessed" % (x, y, r["why"]))

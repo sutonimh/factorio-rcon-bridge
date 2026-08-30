@@ -1454,3 +1454,52 @@ and the deadlock detector's coal model had it. Every time, a downstream blockage
 upstream fault, and the "fix" could not clear its own trigger. When you find one of these,
 **grep for the others before shipping** — `lane_moves_ore`, `build_worked`, `flow(` and any
 `if not <flow> : remove` are where this family lives.
+
+## FOUR LAWS FROM 2026-08-30, all of them destructive, all of them mine
+
+### 1. WHITELIST WHAT MAY BE DESTROYED. NEVER BLACKLIST WHAT MAY NOT.
+
+`plan_mine_geometry` cleared its lane row with *"anything that is not a belt / drill /
+resource / character"*. That silently includes **inserters** — and it removed every inserter
+taking finished plates out of the iron smelters. An area clear that names what it SPARES will
+eventually eat something nobody thought to name. Debris (trees, rocks, ground items) comes
+out; **machinery never does**. Poles get relocated. Anything else is left standing and
+reported, and the lane routes around it.
+
+### 2. NEVER TURN A BELT THAT IS CARRYING SOMETHING.
+
+Seth: *"you turned a belt for some reason, never do that without measuring the outcome."* A
+loaded belt is evidence that something upstream feeds it and something downstream expects it,
+and neither is visible from a row scan. `fix_mine_row_flow` now re-points only EMPTY tiles and
+reports the loaded ones it left alone. Turning an empty tile is recoverable; turning a live one
+silently re-routes a working line into the wrong destination.
+
+### 3. A BUS FEED COMES FROM THE PLATE OUTPUT BELT. ASK THE INSERTERS WHICH ONE THAT IS.
+
+The bus was wired to the smelter rows' **INPUT** belts — twice, iron and copper — draining the
+furnaces' ore and fuel away instead of carrying plates. Lane 35 was measured carrying
+`coal:112`. Both times the "verification" was counting items on the belt, which proves a belt
+is *moving* and says nothing about what it is moving *for*.
+
+A belt has no intrinsic purpose; the machines beside it decide. An inserter that PICKS UP from
+it is feeding a machine → INPUT. One that DROPS onto it is draining a machine → OUTPUT.
+`autopilot.belt_role(x, y)` reads exactly that, and `bus_planner.check_feed_source(x, y, item)`
+refuses to wire anything that is not a matching output. **Call it before placing one belt.**
+
+### 4. ASSEMBLERS PULL FROM THE BUS. THEY ARE NOT HAND-PLACED BESIDE A SMELTER.
+
+Seth: *"assemblers should be planned to pull from the main bus, reference the Nilaus
+blueprints."* The 2026-08-30 gear+science pair improvised next to the iron row is exactly what
+not to do: it has no bus tap, it sits in the smelter block's working space, and it had to be
+tunnelled under later. Assembler blocks come from a blueprint (`bootstrap-red-science`,
+`bootstrap-green-science` in the library), sited beside the bus with taps off it.
+
+### AND THE POLE RULE, RESTATED
+
+*"Never place more power poles than absolutely needed, no overlap ever ... always use the
+minimum amount of power poles needed to power anything at the base."* The smelter stack ran 50
+poles where 23 cover every consumer; 27 came out on 2026-08-30 (`unpowered=0/125`,
+`networks=1`). A pole is redundant only when every consumer in its supply area is covered by
+another pole AND removing it does not split the network — and the connectivity test must
+include the poles OUTSIDE the area being culled as anchors, or the cull fragments the grid
+(that failure once left 8 networks and 57 dark machines).

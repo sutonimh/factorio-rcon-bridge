@@ -1881,6 +1881,7 @@ def plan_mine_geometry(ore, apply=True):
     # 1) clear the lane row of NON-belt obstructions (my own poles ended up here), collect items
     A._print(
         f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); local moved=0;"
+        "local kept=0; local keptnames='';"
         f"for _,e in pairs(s.find_entities_filtered{{area={{{{{lo},{lane_y}}},{{{hi},{lane_y + 1}}}}}}}) do"
         "  local ty=e.type;"
         "  if ty=='item-entity' then local st=e.stack; if st and st.valid_for_read then inv.insert{name=st.name,count=st.count} end; e.destroy(); moved=moved+1"
@@ -1891,9 +1892,20 @@ def plan_mine_geometry(ore, apply=True):
         "      if inv.get_item_count(nm)>0 and s.can_place_entity{name=nm,position={px+off[1],py+off[2]},force='player'} then"
         "        local np=s.create_entity{name=nm,position={px+off[1],py+off[2]},force='player'};"
         "        if np then inv.remove{name=nm,count=1}; break end end end; moved=moved+1"
-        "  elseif ty~='transport-belt' and ty~='underground-belt' and ty~='mining-drill' and ty~='resource' and e.name~='character' then"
-        "    inv.insert{name=e.name,count=1}; e.destroy(); moved=moved+1 end end;"
-        "if moved>0 then game.print('lane row cleared: '..moved) end")
+        # WHITELIST WHAT MAY BE DESTROYED; NEVER BLACKLIST WHAT MAY NOT. This clause used to
+        # read "anything that is not a belt / drill / resource / character", which silently
+        # included INSERTERS - and it removed every inserter taking finished plates out of the
+        # iron smelters (Seth, 2026-08-30: "another fucking dumb mistake"). An area clear that
+        # names what it SPARES will always eat something nobody thought to name. Debris comes
+        # out; MACHINERY never does - the lane routes around it or the caller re-sites.
+        "  elseif ty=='tree' or ty=='simple-entity' then"
+        "    inv.insert{name=e.name,count=1}; e.destroy(); moved=moved+1"
+        "  elseif ty~='transport-belt' and ty~='underground-belt' and ty~='mining-drill'"
+        "         and ty~='resource' and e.name~='character' then"
+        "    kept=kept+1; keptnames=keptnames..e.name..' ' end end;"
+        "if moved>0 then game.print('lane row cleared: '..moved..' debris') end;"
+        "if kept>0 then game.print('lane row: LEFT '..kept..' machine(s) standing ('..keptnames"
+        "..')- a lane routes AROUND machinery, it does not bulldoze it') end")
     # 2) fill the lane across the span (direction set later by fix_mine_row_flow)
     A._print(
         f"/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory(); local made=0;"
@@ -1974,15 +1986,28 @@ def fix_mine_row_flow(ore):
         # the iron row's exit at x=-8 made its span reach x=-14, so it re-pointed the COPPER
         # column's tile at (-10,-42) east on every cycle - the copper lane's true killer.
         "local lo,hi=dminx-2, dmaxx+2;"
-        "local n=0;"
+        "local n=0; local skipped=0;"
         "for _,b in pairs(row) do local y=math.floor(b.position.y);"
         "  if y==ry2 then local x=math.floor(b.position.x);"
         "    if x>=lo and x<=hi then"
         "    local want=(x>exitx) and 12 or ((x<exitx) and 4 or b.direction);"
         # never touch the exit/corner zone (exitx +-1): a bulk re-point once swept the corner
         # east and the full row dead-ended at it (copper, 2026-08-30)
-        "    if b.direction~=want and math.abs(x-exitx)>1 then b.direction=want; n=n+1 end end end end;"
-        "if n>0 then game.print('fix_mine_row_flow: pointed '..n..' belts at the row exit') end")
+        # A BELT CARRYING ITEMS IS ALREADY DOING A JOB, AND ROTATING IT ENDS THAT JOB. Only
+        # re-point a tile that is EMPTY: a loaded belt is evidence that something upstream is
+        # feeding it and something downstream is meant to receive it, and neither of those is
+        # visible from a row scan. Seth, 2026-08-30: "you turned a belt for some reason, never
+        # do that without measuring the outcome" - the turn that put raw copper ore onto the
+        # PLATE OUTPUT belt. Turning an empty tile is recoverable; turning a live one silently
+        # re-routes a working line into the wrong destination.
+        "    local carrying=0;"
+        "    for li=1,b.get_max_transport_line_index() do carrying=carrying+#b.get_transport_line(li) end;"
+        "    if b.direction~=want and math.abs(x-exitx)>1 then"
+        "      if carrying>0 then skipped=skipped+1"
+        "      else b.direction=want; n=n+1 end end end end end;"
+        "if n>0 then game.print('fix_mine_row_flow: pointed '..n..' EMPTY belts at the row exit') end;"
+        "if skipped>0 then game.print('fix_mine_row_flow: left '..skipped..' LOADED belt(s) alone"
+        " - a belt with items on it is already carrying for someone') end")
 
 
 _LANE_RELAYS = {}

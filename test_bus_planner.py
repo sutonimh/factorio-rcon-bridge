@@ -212,3 +212,61 @@ if __name__ == "__main__":
                 print("FAIL %s" % name)
                 traceback.print_exc()
     sys.exit(1 if fails else 0)
+
+
+# ------------------------------------- a bus feed comes from an OUTPUT belt, never an input
+def test_a_bus_feed_is_refused_from_an_input_belt():
+    """The 2026-08-30 mistake, made twice: the bus was fed from the smelter rows' INPUT belts,
+    draining ore and fuel to the bus. Lane 35 was measured carrying coal:112."""
+    import autopilot as A
+    old = A.belt_role
+    A.belt_role = lambda x, y, radius=2: {
+        "role": "input", "picks": 12, "drops": 0, "carries": "coal:100 copper-ore:7",
+        "why": "12 inserter(s) PICK UP from it -> it feeds machines"}
+    try:
+        ok, why = BP.check_feed_source(0, 17)
+    finally:
+        A.belt_role = old
+    assert ok is False
+    assert "INPUT belt" in why and "starv" not in why.lower() or "drain" in why
+
+
+def test_a_bus_feed_is_accepted_from_an_output_belt():
+    import autopilot as A
+    old = A.belt_role
+    A.belt_role = lambda x, y, radius=2: {
+        "role": "output", "picks": 0, "drops": 12, "carries": "copper-plate:4",
+        "why": "12 inserter(s) DROP onto it -> it drains machines"}
+    try:
+        ok, why = BP.check_feed_source(0, 12, item="copper-plate")
+    finally:
+        A.belt_role = old
+    assert ok is True and "OUTPUT" in why
+
+
+def test_a_bus_feed_is_refused_when_the_role_is_unknown():
+    """A belt whose purpose was GUESSED is never wired to. Counting items on it proves it
+    moves, not what it moves for."""
+    import autopilot as A
+    old = A.belt_role
+    A.belt_role = lambda x, y, radius=2: {
+        "role": "unknown", "picks": 0, "drops": 0, "carries": "iron-plate:4",
+        "why": "no inserter touches this tile"}
+    try:
+        ok, why = BP.check_feed_source(0, 3)
+    finally:
+        A.belt_role = old
+    assert ok is False and "guessed" in why
+
+
+def test_a_bus_feed_is_refused_from_the_wrong_rows_output():
+    import autopilot as A
+    old = A.belt_role
+    A.belt_role = lambda x, y, radius=2: {
+        "role": "output", "picks": 0, "drops": 8, "carries": "iron-plate:4",
+        "why": "8 inserter(s) DROP onto it"}
+    try:
+        ok, why = BP.check_feed_source(0, 8, item="copper-plate")
+    finally:
+        A.belt_role = old
+    assert ok is False and "wrong row" in why

@@ -1443,3 +1443,53 @@ if __name__ == "__main__":
         print(mine(name, n))
     else:
         print(__doc__); sys.exit(2)
+
+
+def belt_role(x, y, radius=2):
+    """What is this belt FOR: 'input', 'output', or 'unknown'? Read from the INSERTERS.
+
+    A belt has no intrinsic direction of purpose; the machines beside it decide. An inserter
+    that PICKS UP from the belt is feeding a machine, so the belt is an INPUT. One that DROPS
+    onto it is draining a machine, so the belt is an OUTPUT. `pickup_position` and
+    `drop_position` say which, exactly, and cost one query.
+
+    THIS EXISTS BECAUSE GUESSING COST A WHOLE MORNING (2026-08-30). The copper smelter row was
+    read backwards - y=17 assumed to be the plate output when it is the ore+coal INPUT, y=12
+    assumed the input when it is the plate OUTPUT. On that reading the bus feed was wired to
+    the row's INPUT belt, draining the furnaces' ore and fuel away to the bus (lane 35 was
+    measured carrying coal:112, not plates), and a separate "fix" turned the ore lane onto the
+    PLATE belt. Both changes were confidently verified by counting items on a belt - which
+    tells you a belt is moving, never what it is moving FOR.
+
+    Call this before wiring anything to a row you did not build.
+    """
+    out = _print(
+        "/sc local s=game.surfaces[1] local picks,drops=0,0 local names='' "
+        "for _,e in pairs(s.find_entities_filtered{position={%d.5,%d.5},radius=%d,"
+        "type='inserter'}) do "
+        "  local p=e.pickup_position local d=e.drop_position "
+        "  if math.floor(p.x)==%d and math.floor(p.y)==%d then picks=picks+1 end "
+        "  if math.floor(d.x)==%d and math.floor(d.y)==%d then drops=drops+1 end end "
+        "for _,b in pairs(s.find_entities_filtered{position={%d.5,%d.5},radius=0.4,"
+        "type={'transport-belt','underground-belt'}}) do "
+        "  for li=1,b.get_max_transport_line_index() do "
+        "    for _,it in pairs(b.get_transport_line(li).get_contents()) do "
+        "      names=names..it.name..':'..it.count..' ' end end end "
+        "rcon.print(picks..' '..drops..' '..names)"
+        % (x, y, radius, x, y, x, y, x, y)).strip()
+    parts = out.split(" ", 2)
+    try:
+        picks, drops = int(parts[0]), int(parts[1])
+    except (ValueError, IndexError):
+        return {"role": "unknown", "picks": 0, "drops": 0, "carries": "",
+                "why": "could not read the inserters around (%d,%d)" % (x, y)}
+    carries = parts[2].strip() if len(parts) > 2 else ""
+    if picks and not drops:
+        role, why = "input", "%d inserter(s) PICK UP from it -> it feeds machines" % picks
+    elif drops and not picks:
+        role, why = "output", "%d inserter(s) DROP onto it -> it drains machines" % drops
+    elif picks and drops:
+        role, why = "both", "%d pick up, %d drop - mixed; do not wire to it blind" % (picks, drops)
+    else:
+        role, why = "unknown", "no inserter touches this tile"
+    return {"role": role, "picks": picks, "drops": drops, "carries": carries, "why": why}

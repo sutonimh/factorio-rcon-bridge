@@ -142,32 +142,28 @@ module is the unit, and we build one. Current output is 6/min from a single
 assembling-machine-1, so one red module is ~15× the present rate and roughly matches what 28
 furnaces can actually feed.
 
-## 5b. PHASE 2 STATUS (2026-08-30)
+## 5b. PHASE 2 STATUS — REVERTED, and why (2026-08-30)
 
-**IRON IS ON THE BUS.** Routed by `belt_router`, not by hand: the direct y=8 run collides with
-the science-assembler build's inserter (28,8) and pole (29,8), and the router tunnelled UNDER
-them with an underground pair (in at 27, out at 30) rather than bulldozing them. `plan_to_lua`
-emits no destroy at all, which is the whole reason to route with the router instead of a
-hand-rolled placement loop.
+**BOTH FEEDS WERE WIRED TO THE WRONG BELT AND ARE UNDONE.** Phase 2a took the iron row's y=8
+and phase 2b the copper row's y=17, and BOTH of those are the rows' ore+coal **INPUT** belts,
+not their plate outputs. The bus was therefore draining the furnaces' feedstock away instead of
+carrying plates: lane 35 was measured carrying `coal:112`. A third change turned the copper ore
+lane east onto y=12, putting raw ore on the **plate output** belt.
 
-    belts 25,26 -> underground 27..30 -> belt 31 -> side-loads lane 32 at (32,8)
+The rows, measured from the inserters rather than assumed:
 
-Measured immediately after: furnaces jammed at full_output **28 -> 0**, working **0 -> 10**,
-78 items moving on lane 32.
+    IRON    y=3  plate OUTPUT      y=8  ore+coal INPUT
+    COPPER  y=12 plate OUTPUT      y=17 ore+coal INPUT
 
-**COPPER IS NOT DONE, DELIBERATELY.** Both plate belts approach the bus from the WEST, so both
-side-load the same lane (32) and would put two ores on one belt. Copper needs to cross lane 32
-- an underground under the bus - and the exit tile then lands ON a lane, which is a real design
-choice about which lane each ore owns and where a lane BEGINS. That is phase 2b, not something
-to improvise while iron is half-built.
+Every one of those changes was "verified" by counting items on the belt, which proves a belt is
+moving and says nothing about what it moves FOR. `autopilot.belt_role()` now answers that from
+the adjacent inserters, and `bus_planner.check_feed_source()` refuses to wire a feed to
+anything that is not a matching plate output. See GOTCHAS law 3.
 
-**LANES 33, 34 AND 35 CURRENTLY CARRY NOTHING.** They are belt that does nothing, which the
-standing rule forbids leaving on the map. They stay only until phase 2b assigns copper a lane;
-if phase 2b is deferred, they come out.
+The operator repaired the map himself; lane 32 now carries `iron-plate` from the real output.
 
-**AND THE BUFFER IS FINITE.** Lane 32 is ~37 tiles - a few hundred items. It drains the iron
-row now because the lane is empty; once it fills, the row jams again. The bus is not a
-consumer. Phase 4 (the red-science module) is what actually fixes the jam.
+**WHEN PHASE 2 IS REDONE** it feeds from y=3 (iron) and y=12 (copper), and `check_feed_source`
+gates it before a single belt is placed.
 
 ## 6. Build order
 
