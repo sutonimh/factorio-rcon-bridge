@@ -22,6 +22,7 @@ import time
 import autopilot as A
 import build_gates
 import techdb
+import feed_planner
 import gamedb
 import pole_cull
 import status
@@ -2746,6 +2747,15 @@ def maintain(laps=0, lap_hook=None):
                     pole_cull.apply(A, log=status.log)
                 except Exception as e:
                     status.log(f"pole cull error: {e}")
+            if i % 20 == 7:
+                # A product piling up at a dead end while something that eats it goes hungry
+                # is a connection the bot can work out and build. It was doing the analysis
+                # and then writing it into a document for a person to action, which is how
+                # red science came to sit on a belt while every lab read missing_science_packs.
+                try:
+                    feed_planner.feed_stalled(A, log=status.log)
+                except Exception as e:
+                    status.log(f"feed error: {e}")
             if i % 10 == 0:
                 gamedb.dump_excess()   # overflow inventory -> buffer chests (server-side)
                 gamedb.snapshot()      # refresh the structures + chest-inventory DB
