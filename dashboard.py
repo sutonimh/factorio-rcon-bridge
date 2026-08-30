@@ -58,9 +58,12 @@ def live_metrics():
         "local ps=f.get_item_production_statistics(s);"
         "local function pm(n) return ps.get_flow_count{name=n,category='input',precision_index=defines.flow_precision_index.one_minute} end;"
         "local r=f.current_research;"
+        "local pw=0; for _,e in pairs(s.find_entities_filtered{name='steam-engine'}) do"
+        "  local ok,g=pcall(function() return e.energy_generated_last_tick end); if ok and g then pw=pw+g end end;"
         "rcon.print(helpers.table_to_json({tick=game.tick,"
         "research=r and r.name or '',research_pct=r and math.floor(f.research_progress*100) or 0,"
-        "iron_pm=pm('iron-plate'),copper_pm=pm('copper-plate'),"
+        "power_kw=math.floor(pw*60/1000),"
+        "iron_pm=pm('iron-plate'),copper_pm=pm('copper-plate'),coal_pm=pm('coal'),"
         "red_pm=pm('automation-science-pack'),green_pm=pm('logistic-science-pack')}))"
     ), ttl=5)
     try:

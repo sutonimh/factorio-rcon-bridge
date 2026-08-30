@@ -24,3 +24,4 @@ proposals/
 llm-activity.jsonl
 operator-inbox.jsonl
 action.json
+protected-tiles.json

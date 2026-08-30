@@ -38,7 +38,7 @@
   .ph.done { border-color:var(--ok); color:var(--ok); }
   .ph.done::before { content:"✓ "; }
   .conn { width:22px; height:1px; background:var(--line); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; align-items:start; }
   .card { background:var(--panel); border:1px solid var(--line); padding:13px 14px; overflow:auto; min-width:0; }
   .card h2 { font:600 13px Rajdhani,sans-serif; text-transform:uppercase; letter-spacing:.14em;
              color:var(--dim); margin:0 0 9px; }
@@ -52,7 +52,7 @@
   .tile { background:var(--panel2); border:1px solid var(--line); padding:8px 10px 5px; }
   .tile .v { font:600 20px Rajdhani,sans-serif; color:var(--ink); }
   .tile .l { font-size:11px; color:var(--faint); text-transform:uppercase; letter-spacing:.08em; }
-  .tile svg { display:block; width:100%; height:22px; margin-top:2px; }
+  .tile svg { display:block; width:100%; height:40px; margin-top:3px; }
   .chip { display:inline-block; padding:1px 9px; border:1px solid var(--line); margin:2px 4px 2px 0; font-size:12px; }
   .chip.y { border-color:var(--ok); color:var(--ok); } .chip.n { border-color:var(--bad); color:var(--bad); }
   .chip.role { border-color:var(--blue); color:var(--blue); }
@@ -103,9 +103,11 @@
 
 <div id="tab-overview" class="grid">
   <div class="card"><h2>Status</h2><div class="kv" id="status"></div></div>
-  <div class="card"><h2>Production /min</h2><div class="tiles" id="prod"></div></div>
+  <div class="card" style="grid-column:span 2"><h2>Production /min</h2><div class="tiles" id="prod" style="grid-template-columns:repeat(3,1fr)"></div></div>
   <div class="card"><h2>Phase gates</h2><div id="gates"></div></div>
-  <div class="card"><h2>Architect</h2><pre id="arch"></pre></div>
+  <details class="card" style="grid-column:1/-1">
+    <summary style="cursor:pointer;font:600 13px Rajdhani,sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--dim)">Architect <span id="archhint" style="color:var(--faint);text-transform:none;letter-spacing:0"></span></summary>
+    <pre id="arch" style="margin-top:9px"></pre></details>
   <details class="card" style="grid-column:1/-1" id="lessonswrap">
     <summary style="cursor:pointer;font:600 13px Rajdhani,sans-serif;text-transform:uppercase;letter-spacing:.14em;color:var(--dim)">Lessons <span id="lessonscount" style="color:var(--faint)"></span></summary>
     <pre id="lessons" style="margin-top:9px"></pre></details>
@@ -199,8 +201,8 @@ function note(id, msg) { const c=$(id), g=c.getContext("2d");
 function spark(hist, color) {
   if (hist.length < 2) return "";
   const max = Math.max(...hist, 1), pts = hist.map((v,i) =>
-    `${(i/(hist.length-1))*100},${22 - (v/max)*20}`).join(" ");
-  return `<svg viewBox="0 0 100 22" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
+    `${(i/(hist.length-1))*100},${38 - (v/max)*35}`).join(" ");
+  return `<svg viewBox="0 0 100 38" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
 }
 
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
@@ -210,7 +212,7 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   if (t.dataset.tab==="live") { view.fitted=false; drawMap(); drawDerp(); }
 });
 
-let logFilter = null, hist = {iron:[], copper:[], red:[], green:[]};
+let logFilter = null, hist = {iron:[], copper:[], red:[], green:[], coal:[], power:[]};
 async function tick() {
   try {
     const s = await (await fetch("/api/state", {cache:"no-store"})).json();
@@ -235,15 +237,19 @@ async function tick() {
       drills: st.drills??"—",
       research: `${m.research||st.research?.current||"—"} <span class="acc">${m.research_pct??""}%</span>`});
     pushH("iron", m.iron_pm); pushH("copper", m.copper_pm); pushH("red", m.red_pm); pushH("green", m.green_pm);
+    pushH("coal", m.coal_pm); pushH("power", m.power_kw);
     $("prod").innerHTML = [
       tile("iron plate", m.iron_pm, hist.iron, "#7fa8c9"), tile("copper plate", m.copper_pm, hist.copper, "#d47f4a"),
-      tile("red science", m.red_pm, hist.red, "#d4614d"), tile("green science", m.green_pm, hist.green, "#7bb661")].join("");
+      tile("coal", m.coal_pm, hist.coal, "#9a9a9a"),
+      tile("red science", m.red_pm, hist.red, "#d4614d"), tile("green science", m.green_pm, hist.green, "#7bb661"),
+      tile("power kW", m.power_kw, hist.power, "#e8c15a")].join("");
     const gates = ((s.phase||{}).gates||{})[String(ph)] || {};
     $("gates").innerHTML = Object.keys(gates).length
       ? Object.entries(gates).map(([k,v])=>`<span class="chip ${v?"y":"n"}">${v?"✓":"✗"} ${k}</span>`).join("")
       : '<span style="color:var(--faint)">(no gate evaluated yet)</span>';
     $("arch").textContent = (s.architect_summary||"(no report yet)") + "\n\n" +
       arr(s.architect_actions).map(a=>`${a.rank}. ${a.type?`[${a.type}] `:""}${a.action}`).join("\n");
+    $("archhint").textContent = s.architect_summary ? "— " + s.architect_summary.slice(0,80) + "…" : "(no report yet)";
     const ls = arr(s.lessons);
     $("lessons").textContent = ls.slice(-20).map(
       l=>`[${l.count}x] ${l.condition} -> ${l.rule}`).join("\n") || "(none yet)";
