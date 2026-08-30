@@ -435,6 +435,7 @@ def controller_loop(stop_flag):
                         _save_state()
                         status.log(f"issue {top.id} cleared after retries")
                 PREEMPT["want"] = None
+                _slow_upkeep(lap)
             else:
                 PREEMPT["want"] = None
                 # quiet lap: cheap upkeep that keeps automation fed (server-side only)
@@ -449,26 +450,7 @@ def controller_loop(stop_flag):
                 if lap % 10 == 0:
                     B.reap_dead_drills()
                     B.keep_power()
-                if lap % 60 == 11 and not B.operator_present():
-                    # Redundant poles are UPKEEP, not construction, so this runs even in
-                    # builder-safe-mode: it only ever removes what it can prove is spare and
-                    # re-wires what the removal breaks. It lives HERE, in the loop that
-                    # actually runs, because the same capability was written three times
-                    # before (optimize_poles.py, remove_redundant.py, dedupe_poles) and every
-                    # one of them was hung off something nothing calls. The map reached 165
-                    # poles for a base needing ~100, 53 supplying nothing whatsoever.
-                    try:
-                        pole_cull.apply(A, log=status.log)
-                    except Exception as e:
-                        status.log(f"pole cull error: {e}")
-                if (lap % 80 == 23 and not B.operator_present()
-                        and os.environ.get("BUILDER_ENABLED", "0") == "1"):
-                    # Connecting a stranded product to something that eats it IS construction,
-                    # so it obeys the safe-mode flag the operator set.
-                    try:
-                        feed_planner.feed_stalled(A, log=status.log)
-                    except Exception as e:
-                        status.log(f"feed error: {e}")
+                _slow_upkeep(lap)
                 if (lap % 5 == 0 and not _INV["busy"] and not B.operator_present()
                         and time.monotonic() - _INV["t"] > INVARIANT_PERIOD_S):
                     # STRUCTURAL audit, on its own slow clock and its own thread: it is
@@ -575,6 +557,39 @@ def controller_loop(stop_flag):
         except Exception as e:
             status.log(f"controller lap error: {e}\n{traceback.format_exc()[-400:]}")
         time.sleep(max(0.5, 3.0 - (time.monotonic() - t0)))
+
+
+def _slow_upkeep(lap):
+    """Housekeeping on its own slow clock, run on EVERY lap - busy or quiet.
+
+    It must not live in the quiet-lap branch. That branch only runs when no issue is
+    pending, and a single stuck issue starves it indefinitely: the base was carrying a
+    permanent `inventory_clogged` (free_slots=0), so quiet laps essentially never came and
+    the pole culler sat unfired through four minutes of watching. Upkeep that only happens
+    when nothing is wrong is upkeep that stops exactly when it is most needed.
+
+    Everything here is cheap (one read), independent of the issue queue, and stands down
+    while the operator is connected.
+    """
+    if B.operator_present():
+        return
+    if lap % 60 == 11:
+        # Redundant poles are UPKEEP, not construction, so this runs even in builder
+        # safe-mode: it only removes what it can prove is spare and re-wires what the
+        # removal breaks. The map reached 165 poles for a base needing ~100, 53 of them
+        # supplying nothing at all, because the three earlier cleaners were each hung off
+        # something nothing calls.
+        try:
+            pole_cull.apply(A, log=status.log)
+        except Exception as e:
+            status.log(f"pole cull error: {e}")
+    if lap % 80 == 23 and os.environ.get("BUILDER_ENABLED", "0") == "1":
+        # Connecting a stranded product to something that eats it IS construction, so it
+        # obeys the safe-mode flag the operator set.
+        try:
+            feed_planner.feed_stalled(A, log=status.log)
+        except Exception as e:
+            status.log(f"feed error: {e}")
 
 
 def _escalate(issue, d):
