@@ -24,6 +24,14 @@ SHORTLIST = [
     ("city-block-elevated",           "school", "-OE19hywPpVuQWsFJexu", []),
     ("tileable-labs",                 "school", "-OAA94aHsDaXcxqAAjKo", []),
     ("raynquist-balancers-fall2025",  "factoriobin", "cgn0od", []),
+    # MAIN BUS + SCIENCE ARRAY (MAIN-BUS-PLAN.md). The science book is 0.17 vintage and is
+    # migrated on the way in; its red/green children are the array's unit modules. Both use
+    # fast-inserter, which this base has not researched - see bootstrap-*-science in the
+    # library for the tier-downgraded variants that actually stamp.
+    ("tileable-science-early-mid",    "school", "-KnQ865j-qQ21WoUPbd3",
+        ["automation science", "logistic science"]),
+    ("mainbus-splitters",             "school", "-Kzd-fbMeZaBtIuz7D7R", []),
+    ("mainbus-4lane-t-junction",      "school", "-OC4gl7J2NQqgr0h1JDv", []),
 ]
 
 

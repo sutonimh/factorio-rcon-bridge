@@ -680,6 +680,27 @@ def on_ore(tile_x, tile_y, w=1, h=1):
         return False
 
 
+def reserved_tiles(x1, y1, x2, y2, ignore=None):
+    """Tiles in the box that are RESERVED by a blueprint ghost. Empty list when free.
+
+    `can_place_entity` answers "is this tile empty", which is not the question a builder needs
+    to ask. A ghost is not a collision: can_place_entity returns TRUE over one, and
+    create_entity then destroys it. Anything planning a route or a footprint must ask THIS as
+    well, or it will lay itself straight through a reservation and report success.
+
+    `ignore` is the entity name being built - a ghost of that same name is the reservation
+    being FULFILLED, not violated, so it does not count as a conflict.
+    """
+    skip = ("and g.ghost_name~='%s' " % ignore) if ignore else ""
+    out = _print(
+        "/sc local s=game.surfaces[1] local o={} "
+        "for _,g in pairs(s.find_entities_filtered{area={{%d,%d},{%d,%d}},type='entity-ghost'}) do "
+        "  if true %s then o[#o+1]=g.ghost_name..'@'..math.floor(g.position.x)..','"
+        "..math.floor(g.position.y) end end "
+        "rcon.print(table.concat(o,' '))" % (x1, y1, x2, y2, skip)).strip()
+    return [t for t in out.split() if "@" in t]
+
+
 def place(name, tile_x, tile_y, direction=0, clear=10):
     """Place an entity by its TOP-LEFT footprint tile, auto-centering by size.
     Conservative: removes one from the real inventory. Returns a status string
@@ -696,6 +717,19 @@ def place(name, tile_x, tile_y, direction=0, clear=10):
         "local proto=prototypes.item[item]; local ename=(proto and proto.place_result and proto.place_result.name) or item;"
         "local ep=prototypes.entity[ename]; local cx=tx+ep.tile_width/2; local cy=ty+ep.tile_height/2;"
         "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
+        # A GHOST IS A RESERVATION, AND can_place_entity CANNOT SEE IT. A ghost is not a
+        # collision, so can_place_entity returns TRUE over one and create_entity then silently
+        # consumes it. On 2026-08-30 a 116-belt bus was pre-flighted tile by tile, reported
+        # "116 checked, BLOCKED: none", and destroyed 21 ghosts of the operator's reserved
+        # 36-lab array - a whole service column and four labs - because "is this tile empty"
+        # and "is this tile UNCLAIMED" are different questions and only the first was asked.
+        # Building the ghost's OWN entity is how a blueprint gets fulfilled, so that is allowed;
+        # anything else is someone else's ground and the build MOVES.
+        "local gh=s.find_entities_filtered{area={{cx-ep.tile_width/2,cy-ep.tile_height/2},"
+        "{cx+ep.tile_width/2,cy+ep.tile_height/2}},type='entity-ghost'};"
+        "for _,g in pairs(gh) do if g.ghost_name~=ename then"
+        "  rcon.print('GHOST_RESERVED '..g.ghost_name..' @tile('..tx..','..ty..') - that ground is "
+        "reserved for a blueprint; MOVE the build') return end end;"
         "if not s.can_place_entity{name=ename,position={cx,cy},direction=dir,force=p.force} then rcon.print('CANT_PLACE '..ename..' @tile('..tx..','..ty..')') return end;"
         "local e=s.create_entity{name=ename,position={cx,cy},direction=dir,force=p.force};"
         "if e then inv.remove{name=item,count=1}; rcon.print('BUILT '..ename..' @('..e.position.x..','..e.position.y..')') else rcon.print('CREATE_FAILED '..item) end"

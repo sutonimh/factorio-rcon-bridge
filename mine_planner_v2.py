@@ -886,7 +886,20 @@ def verify_lane(rec):
     detail = ("connected=%s moving=%s arrived=%s path=%d findings=%s"
               % (r.get("connected"), r.get("moving"), r.get("arrived"), r.get("path_len", 0),
                  [f.get("code") for f in sev][:6]))
-    return {"ok": bool(r.get("connected") and r.get("moving")), "detail": detail}
+    # CONNECTED IS THIS BUILD'S OWN RESULT; MOVING IS THE WORLD'S. `ok` gates
+    # rollback_on_fail, so returning `connected and moving` tears out a CORRECT lane whenever
+    # something downstream is stalled - a jammed array, blocked drills, an exhausted patch -
+    # none of which a belt can fix, and all of which return next pass. That is the misreading
+    # that had connect_mine_to_array remove 83 copper belts nine times in twelve minutes on
+    # 2026-08-30 while every copper furnace sat at full_output.
+    #
+    # A lane that does not CONNECT genuinely failed and still rolls back. A connected one stays,
+    # and the detail carries the real stall so the log accuses the right thing.
+    ok = bool(r.get("connected"))
+    if ok and not r.get("moving"):
+        import bootstrap
+        detail += " | KEPT: connected but idle - %s" % bootstrap.no_flow_reason(a["ore"])
+    return {"ok": ok, "detail": detail}
 
 
 def build(plan, *, tries=6, delay=5, rollback_on_fail=True, place_fn=None, verify_fn=None,

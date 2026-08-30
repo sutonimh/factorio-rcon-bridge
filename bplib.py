@@ -138,6 +138,12 @@ def migrate_pre2(bp):
             notes.append(f"doubled {turned} directions (8-way -> 16-way)")
         for k, v in renamed.items():
             notes.append(f"renamed {k} -> {PRE2_RENAMES[k]} (x{v})")
+    # STAMP THE BOOK TOO. _walk_blueprints yields the blueprint dicts and never the
+    # blueprint_book holding them, so a migrated BOOK kept its pre-2.0 version stamp: every
+    # consumer that asks game_version() - save()'s meta, the dashboard's version badge, the
+    # 2.x check on a re-import - was told "0.17" about a book whose contents are now 2.0.
+    if "blueprint_book" in bp:
+        bp["blueprint_book"]["version"] = 2 << 48
     return notes
 
 

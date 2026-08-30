@@ -1,0 +1,15 @@
+{
+  "source_url": null,
+  "label": "Automation Science 1.5/s",
+  "use_for": "red science module, bus-fed - tier-downgraded to what this base has researched",
+  "downgrades": [
+    "fast-inserter -> inserter (x3)"
+  ],
+  "fetched": "2026-08-30T07:00:01-0700",
+  "game_version": "2.0",
+  "entity_count": 104,
+  "footprint_wh": [
+    19,
+    12
+  ]
+}
