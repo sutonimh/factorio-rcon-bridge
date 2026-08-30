@@ -1140,8 +1140,11 @@ def stage_science(p):
     was sitting at full_output because nothing consumed gears."""
     if not gate("science_assembler", 1, params={"recipe": "automation-science-pack"}):
         return
-    A.purpose("phase 0: automating green science assemblers")
-    B.automate_green_science()
+    # automate_green_science is NOT called here any more. It builds a tightly-packed row at
+    # (30,-16), and setup_science_io's whole job is to replace that layout with I/O-chest cells
+    # and tear the old row down - so the two ran back to back, one building exactly what the
+    # other destroyed, every pass. SCIENCE_CHAIN already contains both pack recipes, so the
+    # cell path covers red science on its own; the packed row was pure churn.
     A.purpose("phase 0: science I/O cells + powering them")
     B.setup_science_io()
     B.ensure_science_cells()   # delta-build any recipe cells the all-or-nothing pass missed

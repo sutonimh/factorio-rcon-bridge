@@ -1520,7 +1520,9 @@ def setup_science_io():
     cols = SCIENCE_COLS
     nrows = (n + cols - 1) // cols
     A.stop(); A.walk(bx, by + 5, tol=3.0)
-    A.clear_area(bx + cols * 4, by + nrows * 2, cols * 4 + 12)
+    # No blanket clear_area here either - see automate_green_science. build_io_cell clears its
+    # own footprint; a radius that grows with the number of cells is a bigger demolition the
+    # more work there is to do.
     # COMPACT GRID (Seth: stacked rows, not one long row) - minimizes character run distance.
     for k, recipe in enumerate(SCIENCE_CHAIN):
         col, row = k % cols, k // cols
@@ -1531,12 +1533,22 @@ def setup_science_io():
     # tear down the OLD scattered science assemblers (anything making a chain recipe outside the
     # new cell row) + their stray chests/inserters, refunding to inventory
     chainset = "{" + ",".join("['%s']=true" % r for r in set(SCIENCE_CHAIN)) + "}"
+    # NEVER TEAR DOWN CAPABILITY THAT HAS NOT BEEN REPLACED. This used to destroy every
+    # chain-recipe assembler below the grid unconditionally, on the assumption that the cells
+    # above had just been built. When cell construction does not complete - short materials, a
+    # walk that does not arrive - it deletes the only working producers on the map and the base
+    # loses the recipe entirely. On 2026-08-30 that ran head-on into automate_green_science
+    # rebuilding the same row each pass: 8 assemblers built and destroyed on a loop, forever.
+    # Now an old assembler is removed only once a cell INSIDE the grid makes the same recipe.
     A._print(f"/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory(); local CH={chainset}; "
+             f"local G={{}}; "
+             f"for _,a in pairs(s.find_entities_filtered{{type='assembling-machine',"
+             f"area={{{{{bx-2},{by-2}}},{{{bx+cols*8+2},{by+nrows*5+2}}}}}}}) do "
+             "  local r=a.get_recipe(); if r then G[r.name]=(G[r.name] or 0)+1 end end; "
              f"for _,a in pairs(s.find_entities_filtered{{type='assembling-machine'}}) do local r=a.get_recipe(); "
-             f"if r and CH[r.name] and a.position.y > {by+6} then "
+             f"if r and CH[r.name] and a.position.y > {by+6} and (G[r.name] or 0) > 0 then "
              "local oi=a.get_output_inventory(); if oi then for _,c in pairs(oi.get_contents()) do inv.insert{name=c.name,count=c.count} end end; "
-             "inv.insert{name='assembling-machine-1',count=1}; a.destroy() end end")
-    dedupe_poles()
+             "inv.insert{name='assembling-machine-1',count=1}; a.destroy(); G[r.name]=G[r.name]-1 end end")
 
 
 def ensure_science_cells():

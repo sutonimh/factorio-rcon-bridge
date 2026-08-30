@@ -220,3 +220,17 @@ def test_science_chain_never_blanket_clears():
     src = inspect.getsource(bootstrap.automate_green_science)
     assert "A.clear_area(" not in src, "the science chain regained a blanket area clear"
     assert "clear=1" in src, "each machine should clear only its own footprint"
+
+
+def test_science_io_never_tears_down_unreplaced_capability():
+    """setup_science_io destroyed every chain-recipe assembler below the grid unconditionally,
+    assuming the cells above had just been built. When cell construction does not complete it
+    deletes the only working producers on the map. On 2026-08-30 this ran head-on into
+    automate_green_science rebuilding the same row: 8 assemblers built and destroyed on a loop.
+    An old assembler may only go once a cell inside the grid makes the same recipe."""
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.setup_science_io)
+    assert "A.clear_area(" not in src, "setup_science_io regained a blanket area clear"
+    assert "(G[r.name] or 0) > 0" in src, "the teardown no longer requires a replacement cell"
+    assert "G[r.name]=G[r.name]-1" in src, "replacements must be consumed, not reused per victim"

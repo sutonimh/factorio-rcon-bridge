@@ -205,7 +205,7 @@ def test_every_stage_that_places_also_gates():
     builds = {"mine_planner_v2.build", "mine_planner_v2.upgrade_to_electric",
               "plant_planner.build", "power_planner.apply", "supply_planner.build",
               "B.build_smelter_array", "B.red_science", "B.smelting_base",
-              "B.automate_green_science", "B.setup_science_io", "B.ensure_science_cells"}
+              "B.setup_science_io", "B.ensure_science_cells"}
     gates = {"gate", "gate_bootstrap"}
     fns = _fn_nodes("planner.py")
     for name in PHASE_FNS:
@@ -921,7 +921,12 @@ def test_stage_science_is_gated_on_the_converter_not_the_lab(ctx):
               flows={"iron-plate": 200.0, "copper-plate": 120.0},
               status={"stone-furnace": {"working": 20}})
     planner.stage_science({})
-    assert ran == ["automate_green_science", "setup_science_io", "ensure_science_cells"]
+    # automate_green_science is deliberately NOT in this list: it builds a packed row at
+    # (30,-16) that setup_science_io exists to replace and then tears down, so the two ran back
+    # to back with one building exactly what the other destroyed - 8 assemblers cycling on a
+    # loop. SCIENCE_CHAIN carries both pack recipes, so the cell path covers red on its own.
+    assert ran == ["setup_science_io", "ensure_science_cells"]
+    assert "automate_green_science" not in ran, "the packed-row builder is back in the stage"
 
 
 # ===================================================== BEHAVIOURAL: phase0 orchestration

@@ -1748,3 +1748,55 @@ The flag itself stays, defaulted on, because a kill switch you would have to re-
 pressure is a kill switch you do not have. `BUILDER_ENABLED=0` parks the builder while leaving
 the controller running. The operator truce is unchanged and unconditional: nothing is built
 while a human is connected.
+
+---
+
+## Two builders for the same thing will fight forever
+
+`stage_science` called `automate_green_science()` and then `setup_science_io()` on the same
+pass. The first builds a tightly-packed assembler row at (30,-16). The second exists
+specifically to *replace* that layout with I/O-chest cells, and ends by tearing the old row
+down. So every pass built eight assemblers and destroyed eight assemblers, forever:
+
+```
+asm=9  red=2 green=2
+asm=1  red=0 green=0
+asm=1  red=0 green=0
+asm=9  red=2 green=2      <- and round again
+```
+
+Neither function was wrong on its own. The stage was wrong for calling both. **When two
+routines can produce the same capability, exactly one of them owns it** — and the one that
+tears the other's work down is announcing which.
+
+### The teardown clause is the dangerous half
+
+```lua
+if r and CH[r.name] and a.position.y > by+6 then a.destroy() end
+```
+
+That destroys every chain-recipe assembler below the grid **on the assumption that the cells
+above were just built**. When cell construction does not complete — short materials, a walk
+that never arrives — it deletes the only working producers on the map and the base loses the
+recipe outright. It now requires a cell inside the grid making that same recipe, and decrements
+as it consumes them so one replacement cannot justify deleting five originals.
+
+**Never tear down capability you have not confirmed is replaced.** Not "should have been
+replaced by the code above" — confirmed, by reading the world back.
+
+## A demolition radius that grows with the size of the job
+
+Twice in the same file:
+
+```python
+A.clear_area(ox + n * 2, oy, n * 2 + 10)            # automate_green_science
+A.clear_area(bx + cols * 4, by + nrows * 2, cols * 4 + 12)   # setup_science_io
+```
+
+The more there is to build, the more of the base gets flattened first. Both had lain dormant
+because their functions returned early on a complete chain; adding one recipe woke the first
+one up and it destroyed the two assemblers it was walking over to reach.
+
+**Clear footprints, never areas.** `A.place` already refuses ground it cannot legally build
+on, so the loop should walk forward looking for a free slot rather than making room by force.
+An occupied tile is information, not an obstacle to be removed.
