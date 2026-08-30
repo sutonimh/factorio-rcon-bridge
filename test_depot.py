@@ -101,10 +101,16 @@ def test_the_depot_tiles_are_fixed_and_central():
     assert len(B.DEPOT_TILES) >= 4
     xs = [x for x, _ in B.DEPOT_TILES]
     ys = [y for _, y in B.DEPOT_TILES]
-    assert max(xs) - min(xs) <= 4 and max(ys) - min(ys) <= 4, "the depot must be one block"
+    # ONE BLOCK, but one that can GROW. Six chests filled within hours and the offload then
+    # reported "the depot needs another chest" every pass while free_slots stayed at 0 - and at
+    # 0 free slots nothing can be crafted or placed. It extends southward from the same corner
+    # rather than scattering, so it is still the one findable place.
+    assert max(xs) - min(xs) <= 4, "the depot must stay one narrow column block"
+    assert max(ys) - min(ys) <= 16, "it grows southward, it does not sprawl"
+    assert len(B.DEPOT_TILES) >= 12, "it must have room to grow past the first fill"
     # between the plate chests (y 3..12) and the lab array (y 36..44), near the x=0 lab column
     assert 0 <= min(xs) and max(xs) <= 12, B.DEPOT_TILES
-    assert 12 <= min(ys) and max(ys) <= 30, B.DEPOT_TILES
+    assert 12 <= min(ys) and max(ys) <= 34, B.DEPOT_TILES   # room to grow southward
 
 
 def test_the_manifest_records_what_is_in_each_chest(tmp_path):

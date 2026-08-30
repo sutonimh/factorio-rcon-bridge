@@ -2777,7 +2777,16 @@ def bootstrap():
 # `maintain()`, which only `patrol.py` calls, and nothing imports patrol - it died with the
 # maintain loop (GOTCHAS "THE SWEEP"). It also only ever offloaded five hardcoded item names,
 # none of which were the belts and gears that actually filled the bag.
-DEPOT_TILES = [(2, 20), (3, 20), (4, 20), (2, 21), (3, 21), (4, 21)]
+# A DEPOT THAT CANNOT GROW IS A DEPOT THAT FILLS. The first six chests filled within hours, and
+# the offload then reported "6145 items did NOT fit - the depot needs another chest" on every
+# pass while free_slots sat at 0 - and at 0 free slots nothing can be crafted or placed at all,
+# which is the hard stop this whole mechanism exists to prevent. Detecting a condition and not
+# acting on it is not a guard, it is a log line.
+#
+# The block grows ROW BY ROW southward from the same corner, so it stays the one findable place
+# the operator asked for. Chests are only ever PLACED as needed - ensure_inventory_room walks
+# these tiles in order and stops at the first one that can take the overflow.
+DEPOT_TILES = [(x, y) for y in range(20, 32) for x in (2, 3, 4)]
 
 # The working set: what a build actually needs in hand. Everything above this goes to the depot.
 # Generous on purpose - the point is free SLOTS, not a minimal loadout, and a build that has to
