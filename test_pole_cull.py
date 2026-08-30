@@ -222,3 +222,50 @@ def test_dark_hint_never_sacrifices_a_powered_consumer():
     keep = set(range(len(poles))) - gone
     cov = PC.coverage(poles, consumers)
     assert cov[1] & keep, "the still-powered consumer lost its last pole"
+
+
+# --------------------------------------------------------------------------- straight runs
+def test_pole_bridges_are_straight_axis_aligned_runs():
+    """Every bridge in bootstrap.py used to interpolate a line in 2-D:
+
+        for k=1,steps do x = ex + (tx-ex)*k/steps ; y = ey + (ty-ey)*k/steps
+
+    which for any diagonal separation lays a STAIRCASE of single poles - the dotted diagonal
+    running clear across the operator's map. His standing rule is straight lines and the
+    minimum number of poles; a dogleg gives both, and shares the corner pole."""
+    import bootstrap
+    lua = bootstrap.bridge_lua()
+    assert "lay(x1,y0)" in lua and "lay(x1,y1)" in lua, "not a dogleg"
+    assert "*k/steps" not in lua and "*i/steps" not in lua, "still interpolating diagonally"
+    assert str(bootstrap.POLE_PITCH) in lua
+    # Check the real emitters, not the module text - bridge_lua's own docstring quotes the
+    # old pattern as the thing it replaced, and a blanket grep matches that quotation.
+    import inspect
+    for fn in (bootstrap.fix_unpowered, bootstrap.ensure_grid_connected,
+               bootstrap.restock_coal if hasattr(bootstrap, "restock_coal") else bootstrap.fix_unpowered):
+        src = inspect.getsource(fn)
+        assert "k/steps" not in src and "i/steps" not in src, \
+            "%s still interpolates a diagonal pole line" % fn.__name__
+        if "bridge(" in src:
+            assert "bridge_lua()" in src, "%s calls bridge without defining it" % fn.__name__
+
+
+def test_pole_pitch_is_within_wire_reach():
+    """Wire reach is 7.5 and the operator's measured trunk pitch is exactly 7. A pitch that
+    exceeds reach lays a line of poles that is not a network."""
+    import bootstrap
+    import power_planner as PP
+    assert bootstrap.POLE_PITCH <= PP.wire_reach("small-electric-pole")
+    assert bootstrap.POLE_PITCH == PP.max_hop("small-electric-pole")
+
+
+def test_negative_coordinates_are_parenthesised_in_lua():
+    """`"(p.position.y-" + "-32" + ")"` produces `y--32`, and `--` opens a Lua comment that
+    swallows the rest of the line - and /sc is ONE line, so the whole command dies with
+    "')' expected near <eof>". The repo already banned `--` comments in RCON Lua; a negative
+    number landing after a minus sign is that same bug wearing a different hat."""
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.connect_to_grid)
+    assert '-(" + xs + "))' in src and '-(" + ys + "))' in src, \
+        "an interpolated coordinate is not parenthesised; a negative one will comment out the line"

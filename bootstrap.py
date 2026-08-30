@@ -1490,7 +1490,8 @@ def power_row(x1, x2, y, spacing=5):
         "local rp=s.find_entities_filtered{type='electric-pole',position={" + f"{(x1+x2)//2},{y}" + "},radius=8}[1]; if not rp or rp.electric_network_id==enet then return end;"
         # walk a chain of poles from the row pole toward a base-network pole
         "local bp,bd; for _,q in pairs(s.find_entities_filtered{type='electric-pole'}) do if q.electric_network_id==enet then local d=(q.position.x-rp.position.x)^2+(q.position.y-rp.position.y)^2; if not bd or d<bd then bd=d; bp=q end end end;"
-        "if bp then local steps=math.ceil(math.sqrt(bd)/6); for i=1,steps do local x=math.floor(rp.position.x+(bp.position.x-rp.position.x)*i/steps); local yy=math.floor(rp.position.y+(bp.position.y-rp.position.y)*i/steps); if s.can_place_entity{name='small-electric-pole',position={x+0.5,yy+0.5},force=p.force} and inv.get_item_count('small-electric-pole')>0 then s.create_entity{name='small-electric-pole',position={x+0.5,yy+0.5},force=p.force}; inv.remove{name='small-electric-pole',count=1} end end end")
+        "local f=p.force " + bridge_lua() +
+        "if bp then bridge(rp.position.x,rp.position.y,bp.position.x,bp.position.y) end")
     time.sleep(2)
     np = int(A._print(f"/sc local s=game.surfaces[1]; local n=0; for _,e in pairs(s.find_entities_filtered{{area={{{{{x1-2},{y-5}}},{{{x2+2},{y+2}}}}},type={{'assembling-machine','lab','inserter'}}}}) do if e.prototype.electric_energy_source_prototype and e.status==58 then n=n+1 end end; rcon.print(n)").strip() or 0)
     return np
@@ -1689,6 +1690,44 @@ def automate_green_science(origin=(30, -16)):
     return placed
 
 
+# Wire reach is 7.5, and the operator's own measured trunk pitch is exactly 7.
+POLE_PITCH = 7
+
+
+def bridge_lua(fn_name="bridge", pole="small-electric-pole", clear_trees=True):
+    """Lua defining `fn_name(ex,ey,tx,ty)`: lay poles from one point to another in STRAIGHT
+    AXIS-ALIGNED RUNS - along x at the start row, then along y at the end column.
+
+    Every bridge in this file used to interpolate a straight line in 2-D:
+
+        for k=1,steps do x = ex + (tx-ex)*k/steps ; y = ey + (ty-ey)*k/steps ...
+
+    which for any diagonal separation lays a STAIRCASE of single poles - the dotted diagonal
+    the operator pointed at running clear across the map. Interpolation gives the shortest
+    path; it does not give a line you can read, extend, or lay a second row beside. His
+    standing rule is straight lines and the minimum number of poles, and a dogleg satisfies
+    both: two runs at POLE_PITCH, and the corner pole is shared.
+    """
+    return (
+        "local function " + fn_name + "(ex,ey,tx,ty) "
+        "  local x0,y0=math.floor(ex),math.floor(ey) "
+        "  local x1,y1=math.floor(tx),math.floor(ty) "
+        "  local function lay(x,y) "
+        + ("    for _,t in pairs(s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.4,"
+           "type={'tree','simple-entity'}}) do t.destroy() end "
+           if clear_trees else "") +
+        "    if inv and inv.get_item_count('" + pole + "')<1 then return end "
+        "    if s.can_place_entity{name='" + pole + "',position={x+0.5,y+0.5},force=f} then "
+        "      local e=s.create_entity{name='" + pole + "',position={x+0.5,y+0.5},force=f} "
+        "      if e and inv then inv.remove{name='" + pole + "',count=1} end end end "
+        "  local sx=(x1>=x0) and 1 or -1 "
+        "  local x=x0 while (sx>0 and x<x1) or (sx<0 and x>x1) do lay(x,y0) x=x+sx*" + str(POLE_PITCH) + " end "
+        "  lay(x1,y0) "
+        "  local sy=(y1>=y0) and 1 or -1 "
+        "  local y=y0 while (sy>0 and y<y1) or (sy<0 and y>y1) do lay(x1,y) y=y+sy*" + str(POLE_PITCH) + " end "
+        "  lay(x1,y1) end ")
+
+
 def _network_count():
     """Number of DISTINCT electric networks among all poles. A unified grid is 1; fragmentation
     (generator islanded from the base) shows up as >1. dedupe_poles uses this to refuse any removal
@@ -1779,6 +1818,44 @@ def keep_power():
     fix_unpowered()
 
 
+
+def connect_to_grid(x, y):
+    """Tie a point into the main electric network with a STRAIGHT dogleg trunk.
+
+    The recurring need after stamping a blueprint block: the print brings its own poles but
+    nothing joins them to the grid, and the self-heals then improvise a diagonal staircase to
+    the nearest pole. This lays the run the operator asks for - two axis-aligned lines at
+    POLE_PITCH - then wires every pair in reach, since script-placed poles do not auto-wire.
+
+    Built by concatenation with str(), never %-formatting: `"a" + f() + "b" % t` formats ONLY
+    the last literal, because % binds tighter than +. That silently truncated this command's
+    Lua and cost a round trip.
+    """
+    xs, ys = str(int(x)), str(int(y))
+    out = A._print(
+        "/sc local s=game.surfaces[1] local f=game.forces.player "
+        "local dp=storage.derpface local inv=dp and dp.valid and dp.get_main_inventory() "
+        + bridge_lua() +
+        "local cnt={} for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do "
+        "  cnt[p.electric_network_id]=(cnt[p.electric_network_id] or 0)+1 end "
+        "local main,best=nil,-1 for id,c in pairs(cnt) do if c>best then best=c main=id end end "
+        "local near,bd=nil,1e9 "
+        "for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do "
+        "  if p.electric_network_id==main then "
+        # PARENTHESISE THE INTERPOLATED NUMBER. With ys="-32", "(p.position.y-" + ys + ")"
+        # produces `y--32`, and `--` opens a Lua comment that swallows the rest of the line -
+        # and /sc is ONE line, so the whole command dies with "')' expected near <eof>". The
+        # repo already had "no -- comments in RCON Lua" as a rule; a negative number arriving
+        # after a minus sign is the same bug wearing a different hat.
+        "    local d=(p.position.x-(" + xs + "))^2+(p.position.y-(" + ys + "))^2 "
+        "    if d<bd then bd=d near=p end end end "
+        "if not near then rcon.print('no grid') return end "
+        "bridge(" + xs + "," + ys + ",near.position.x,near.position.y) "
+        "rcon.print('bridged to '..math.floor(near.position.x)..','..math.floor(near.position.y))")
+    status.log("connect_to_grid(" + xs + "," + ys + "): " + out.strip()[:80])
+    return out.strip()
+
+
 def fix_unpowered(limit=8):
     """Consumer-side power self-heal: for electric consumers reading no_power, place a small
     pole adjacent (from carried poles; script-crafts a few from plates when short) and bridge
@@ -1789,6 +1866,7 @@ def fix_unpowered(limit=8):
         return 0
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
+        + bridge_lua() +
         "local eng=s.find_entities_filtered{name='steam-engine'}[1]; if not eng or eng.energy<=0 then return end; local main=eng.electric_network_id;"
         # wood fallback: cleared base land has no trees in pocket - harvest a few server-side
         "if inv.get_item_count('wood')<2 and inv.get_item_count('small-electric-pole')<1 then"
@@ -1808,9 +1886,7 @@ def fix_unpowered(limit=8):
         "        if np then inv.remove{name='small-electric-pole',count=1}; fixed=fixed+1;"
         "          if np.electric_network_id~=main then local near,bd=nil,1e9;"
         "            for _,q in pairs(s.find_entities_filtered{type='electric-pole'}) do if q.electric_network_id==main then local d=(q.position.x-np.position.x)^2+(q.position.y-np.position.y)^2; if d<bd then bd=d; near=q end end end;"
-        "            if near then local ex,ey,tx,ty=np.position.x,np.position.y,near.position.x,near.position.y; local steps=math.ceil(math.sqrt(bd)/6);"
-        "              for k=1,steps do if inv.get_item_count('small-electric-pole')<1 then break end; local bx,by=math.floor(ex+(tx-ex)*k/steps)+0.5,math.floor(ey+(ty-ey)*k/steps)+0.5;"
-        "                if s.can_place_entity{name='small-electric-pole',position={bx,by},force=f} then s.create_entity{name='small-electric-pole',position={bx,by},force=f}; inv.remove{name='small-electric-pole',count=1} end end end end;"
+        "            if near then bridge(np.position.x,np.position.y,near.position.x,near.position.y) end end;"
         "          break end end end end end")
 
 
@@ -2561,12 +2637,13 @@ def ensure_grid_connected():
         return
     A._print(
         "/sc local s=game.surfaces[1]; local f=game.forces.player;"
+        "local dp=storage.derpface; local inv=dp and dp.valid and dp.get_main_inventory();"
+        + bridge_lua() +
         "local cnt={}; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do cnt[p.electric_network_id]=(cnt[p.electric_network_id] or 0)+1 end;"
         "local main,best=nil,-1; for id,c in pairs(cnt) do if c>best then best=c; main=id end end; if not main then return end;"
         "for _,e in pairs(s.find_entities_filtered{name='steam-engine'}) do if e.electric_network_id~=main then"
         "  local near,bd=nil,1e9; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do if p.electric_network_id==main then local d=(p.position.x-e.position.x)^2+(p.position.y-e.position.y)^2; if d<bd then bd=d; near=p end end end;"
-        "  if near then local ex,ey,tx,ty=e.position.x,e.position.y,near.position.x,near.position.y; local dist=math.sqrt((tx-ex)^2+(ty-ey)^2); local steps=math.ceil(dist/6);"
-        "    for k=1,steps do local x=math.floor(ex+(tx-ex)*k/steps)+0.5; local y=math.floor(ey+(ty-ey)*k/steps)+0.5; for _,t in pairs(s.find_entities_filtered{position={x,y},radius=0.4,type={'tree','simple-entity'}}) do t.destroy() end; if s.can_place_entity{name='small-electric-pole',position={x,y},force=f} then s.create_entity{name='small-electric-pole',position={x,y},force=f} end end end end end")
+        "  if near then bridge(e.position.x,e.position.y,near.position.x,near.position.y) end end end")
 
 
 def fuel_arrays():
