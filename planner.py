@@ -10,6 +10,7 @@ Phase programs build through bootstrap.py primitives + builds_v2 (registered int
 Phase state persists to phase.json (runtime file, gitignored) so a container restart resumes.
 """
 import json
+import os
 import pathlib
 import time
 import traceback
@@ -310,6 +311,13 @@ def play():
             if B.operator_present():
                 status.log("operator online - builder paused (no construction while you play)")
                 time.sleep(20)
+                continue
+            if os.environ.get("BUILDER_ENABLED", "0") != "1":
+                # SAFE MODE (default since 2026-08-30): the controller keeps the base alive
+                # (fuel/feed/research/power) but NOTHING is constructed until the operator
+                # explicitly enables the builder. He asked for zero unrequested building.
+                status.log("builder disabled (BUILDER_ENABLED=0) - controller-only safe mode")
+                time.sleep(60)
                 continue
             program(p)
         except Exception as e:

@@ -1727,13 +1727,16 @@ def _lane_connected(ore):
         f"for _,b in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='transport-belt'}}) do q[#q+1]=b end;"
         "local n=0;"
         "local DV={[0]={0,-1},[4]={1,0},[8]={0,1},[12]={-1,0}};"
-        "while #q>0 and n<800 do local b=table.remove(q); n=n+1;"
+        # dedupe BEFORE pushing and raise the cap: the old version pushed duplicates and
+        # burned its 800-pop budget before reaching the array, so a PERFECTLY CONTINUOUS
+        # copper lane kept reading "NOT connected" and triggering pointless re-lays.
+        "while #q>0 and n<6000 do local b=table.remove(q); n=n+1;"
         "  local k=math.floor(b.position.x)..':'..math.floor(b.position.y);"
         "  if not seen[k] then seen[k]=true;"
         f"    local d=math.abs(b.position.x-({ax}))+math.abs(b.position.y-({ay}));"
         "    if d<best then best=d end;"
         "    for _,o in pairs(b.belt_neighbours.outputs) do"
-        "      if o.type=='transport-belt' then q[#q+1]=o"
+        "      if o.type=='transport-belt' and not seen[math.floor(o.position.x)..':'..math.floor(o.position.y)] then q[#q+1]=o"
         # geometric underground hop: 2.1 belt_neighbours omits the partner entirely
         "      elseif o.type=='underground-belt' and o.belt_to_ground_type=='input' then"
         "        local dv=DV[o.direction];"
@@ -1901,7 +1904,10 @@ def fix_mine_row_flow(ore):
         f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=30,type='mining-drill'}}) do"
         "  local dx=math.floor(d.position.x); if dx<dminx then dminx=dx end; if dx>dmaxx then dmaxx=dx end end;"
         "if dminx>dmaxx then dminx,dmaxx=exitx,exitx end;"
-        "local lo,hi=math.min(dminx,exitx)-6, math.max(dmaxx,exitx)+6;"
+        # span = THE DRILLS ONLY (+2). Including exitx dragged the span across other lanes:
+        # the iron row's exit at x=-8 made its span reach x=-14, so it re-pointed the COPPER
+        # column's tile at (-10,-42) east on every cycle - the copper lane's true killer.
+        "local lo,hi=dminx-2, dmaxx+2;"
         "local n=0;"
         "for _,b in pairs(row) do local y=math.floor(b.position.y);"
         "  if y==ry2 then local x=math.floor(b.position.x);"

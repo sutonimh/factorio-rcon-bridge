@@ -548,6 +548,7 @@ async function submitBP() {
       body: JSON.stringify({name: $("bpname").value, string: $("bpstring").value})})).json();
     out.textContent = r.error ? ("REJECTED: " + r.error)
       : `saved as ${r.saved} — v${r.game_version}, ${r.entity_count} entities, buildable now ${r.research_ready_pct}%` +
+        ((r.migration && r.migration.length) ? `\nmigrated from pre-2.0: ${r.migration.join("; ")}` : "") +
         (r.role ? `\ndetected role: ${r.role} (${r.role_why})` : "") +
         (r.missing_techs.length ? `\nmissing research: ${r.missing_techs.join(", ")}` : "");
     loadBPs();

@@ -385,9 +385,15 @@ class H(BaseHTTPRequestHandler):
                            for ch in (body.get("name") or "user-print").lower())[:48]
             s = (body.get("string") or "").strip()
             try:
-                bplib.verify_2x(s)
+                d = bplib.verify_2x(s)           # migrates pre-2.0 prints instead of refusing
+                notes = d.pop("_migration_notes", [])
+                if notes:
+                    s = bplib.encode(d)          # store the MIGRATED string
                 a = analyze_bp(s, techdb, _researched(), _producing())
-                bplib.save("user-" + name, s, {"source_url": "dashboard-submit", "label": body.get("name", name)})
+                a["migration"] = notes
+                bplib.save("user-" + name, s, {"source_url": "dashboard-submit",
+                                               "label": body.get("name", name),
+                                               "migration": notes})
                 _cache.pop(("bpcat",), None)
                 self._send({"saved": "user-" + name, **a})
             except Exception as e:

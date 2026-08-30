@@ -91,17 +91,116 @@ def game_version(bp_dict):
     return (v >> 48) & 0xFFFF, (v >> 32) & 0xFFFF
 
 
-def verify_2x(bp_string):
-    """Raise unless the string decodes to a 2.x blueprint. 1.1 rail BPs are DEAD in 2.x
-    (new rail geometry) and 1.1 non-rail stamps degrade silently -- nothing pre-2.0 is
-    admitted to the library. Returns the decoded dict on success."""
+# 1.1/0.x -> 2.0 entity renames. 2.0 doubled the direction space (8-way -> 16-way) and
+# renamed/removed a few entities; everything else imports as-is.
+PRE2_RENAMES = {
+    "stack-inserter": "bulk-inserter",
+    "stack-filter-inserter": "bulk-inserter",
+    "filter-inserter": "inserter",              # 2.0 folded filters into the base inserter
+    "fast-filter-inserter": "fast-inserter",
+    "logistic-chest-active-provider": "active-provider-chest",
+    "logistic-chest-passive-provider": "passive-provider-chest",
+    "logistic-chest-storage": "storage-chest",
+    "logistic-chest-buffer": "buffer-chest",
+    "logistic-chest-requester": "requester-chest",
+}
+RAIL_NAMES = {"straight-rail", "curved-rail", "rail", "rail-signal", "rail-chain-signal",
+              "train-stop", "locomotive", "cargo-wagon", "fluid-wagon", "artillery-wagon"}
+
+
+def _walk_blueprints(node):
+    """Yield every blueprint dict inside a blueprint or blueprint_book."""
+    if "blueprint_book" in node:
+        for child in node["blueprint_book"].get("blueprints", []):
+            yield from _walk_blueprints(child)
+    elif "blueprint" in node:
+        yield node["blueprint"]
+
+
+def migrate_pre2(bp):
+    """Migrate a pre-2.0 blueprint IN PLACE to the 2.0 format: double every direction
+    (2.0 uses 16 directions where 1.1 used 8) and apply the entity renames. Returns a list
+    of human-readable notes. Rails are NOT migratable - 2.0 changed rail geometry and there
+    is no converter - so a rail-bearing pre-2.0 print is refused by verify_2x instead."""
+    notes = []
+    for b in _walk_blueprints({"blueprint": bp} if "entities" in bp or "label" in bp else bp):
+        renamed, turned = {}, 0
+        for e in b.get("entities", []):
+            if "direction" in e and e["direction"]:
+                e["direction"] = (e["direction"] * 2) % 16
+                turned += 1
+            nm = e.get("name")
+            if nm in PRE2_RENAMES:
+                e["name"] = PRE2_RENAMES[nm]
+                renamed[nm] = renamed.get(nm, 0) + 1
+        b["version"] = 2 << 48
+        if turned:
+            notes.append(f"doubled {turned} directions (8-way -> 16-way)")
+        for k, v in renamed.items():
+            notes.append(f"renamed {k} -> {PRE2_RENAMES[k]} (x{v})")
+    return notes
+
+
+def verify_2x(bp_string, migrate=True):
+    """Return the decoded dict, MIGRATING a pre-2.0 blueprint when possible.
+
+    Pre-2.0 prints are not garbage - they just use the 8-way direction space and a few old
+    entity names, both mechanically convertible (that is what the game itself does on
+    import). Only RAILS are genuinely dead (2.0 rail geometry, no converter), so a
+    rail-bearing pre-2.0 print is still refused. Sets `_migration_notes` on the returned
+    dict when anything was changed. Pass migrate=False for a strict check.
+    """
     bp = decode(bp_string)
     major, minor = game_version(bp)
-    if major != 2:
+    if major == 2:
+        return bp
+    if not migrate:
+        raise ValueError("blueprint is game version %d.%d, not 2.x" % (major, minor))
+    rails = [e.get("name") for b in _walk_blueprints(bp) for e in b.get("entities", [])
+             if e.get("name") in RAIL_NAMES]
+    if rails:
         raise ValueError(
-            "blueprint is game version %d.%d, not 2.x -- refusing to admit it to the "
-            "library (1.1 rails are dead in 2.x; 1.1 stamps degrade silently)" % (major, minor))
+            "blueprint is game version %d.%d and contains rails (%s) -- 2.0 changed rail "
+            "geometry and there is no converter, so this one genuinely cannot be used"
+            % (major, minor, ", ".join(sorted(set(rails))[:4])))
+    notes = migrate_pre2(bp)
+    bp["_migration_notes"] = notes or ["no changes needed"]
     return bp
+
+
+def tier_downgrade(bp, researched):
+    """Substitute un-researched tiers for their researched equivalents so a print can be
+    BUILT now and upgraded later (fast-inserter -> inserter, fast belts -> belts, ...).
+    `researched` is the set of enabled recipe names. Returns notes."""
+    LADDER = {
+        "fast-inserter": ["inserter"],
+        "bulk-inserter": ["fast-inserter", "inserter"],
+        "long-handed-inserter": ["inserter"],
+        "fast-transport-belt": ["transport-belt"],
+        "express-transport-belt": ["fast-transport-belt", "transport-belt"],
+        "fast-underground-belt": ["underground-belt"],
+        "express-underground-belt": ["fast-underground-belt", "underground-belt"],
+        "fast-splitter": ["splitter"],
+        "express-splitter": ["fast-splitter", "splitter"],
+        "steel-chest": ["iron-chest", "wooden-chest"],
+        "medium-electric-pole": ["small-electric-pole"],
+        "assembling-machine-3": ["assembling-machine-2", "assembling-machine-1"],
+        "assembling-machine-2": ["assembling-machine-1"],
+        "steel-furnace": ["stone-furnace"],
+        "electric-furnace": ["steel-furnace", "stone-furnace"],
+    }
+    notes = {}
+    for b in _walk_blueprints(bp):
+        for e in b.get("entities", []):
+            nm = e.get("name")
+            if nm in researched or nm not in LADDER:
+                continue
+            for alt in LADDER[nm]:
+                if alt in researched:
+                    e["name"] = alt
+                    notes[f"{nm} -> {alt}"] = notes.get(f"{nm} -> {alt}", 0) + 1
+                    break
+    return [f"{k} (x{v})" for k, v in notes.items()]
 
 
 # ---------------------------------------------------------------- fetchers (Mac-side)

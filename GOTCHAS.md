@@ -1051,3 +1051,31 @@ can't work. Reverting an upgrade is the last resort, never the first move. elect
 now calls this after a swap, so a footprint change repairs the routing instead of undoing the
 upgrade. Two self-inflicted wounds this taught: my pole line was placed ON the mine's belt
 row (blocking it), and a burner<->electric revert shifted drills onto the lane itself.
+
+## Pre-2.0 blueprints are MIGRATABLE, not garbage; and script-placed poles don't auto-wire (2026-08-30)
+
+Two import lessons from Seth's lab-array print:
+1. bplib.verify_2x REFUSED every pre-2.0 blueprint outright ("game version 0.16, not 2.x").
+   Wrong: 2.0 only doubled the direction space (8-way -> 16-way) and renamed a few entities
+   (stack-inserter -> bulk-inserter, filter-inserter -> inserter, logistic-chest-* ->
+   *-chest). `migrate_pre2()` does exactly that and the print imports fine. ONLY RAILS are
+   genuinely dead (2.0 rail geometry, no converter), so a rail-bearing pre-2.0 print is still
+   refused - with a message that says why. Separately, `tier_downgrade(bp, researched)` swaps
+   un-researched tiers for buildable ones (fast-inserter -> inserter, fast belts -> belts) so
+   a print can be built NOW and upgraded in place later.
+2. create_entity-placed electric poles do NOT reliably auto-connect: two small poles 4.0 tiles
+   apart (wire reach 7.5) sat on different electric_network_ids until wired explicitly via
+   `p.get_wire_connector(defines.wire_connector_id.pole_copper, true).connect_to(other, false)`.
+   This is almost certainly behind several "islanded grid" mysteries tonight. RULE: after any
+   scripted pole placement, wire every pair within reach explicitly, then verify by comparing
+   electric_network_id - never assume placement implies connection.
+
+## Lab array build (2026-08-30): reserve the full footprint, build a fraction
+
+Seth's 36-lab print was stamped whole as GHOSTS at (10,40) - 13 tiles of clear padding south
+of the copper array - but only 9 labs were revived (the 3 westmost in the 3 rows nearest the
+feed). The remaining 110 ghosts ARE the reservation: they hold the footprint so nothing else
+gets built there, and expansion is just reviving them as materials allow. Poles follow the
+print's own 4-tile lattice (x -6,-2,2,6,10..., y 30,34,38...) with ONE straight trunk column
+at x=-6 spaced 7 (wire reach 7.5) back to the base grid - not the opportunistic pole chains
+the bot had been laying, which Seth called out as a hack.

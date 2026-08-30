@@ -1,0 +1,12 @@
+{
+  "source_url": "operator paste 2026-08-29",
+  "label": "Operator lab array (36 labs) - tier-downgraded",
+  "note": "0.16 print: directions doubled, tiers downgraded to researched",
+  "fetched": "2026-08-29T19:25:50-0700",
+  "game_version": "2.0",
+  "entity_count": 213,
+  "footprint_wh": [
+    30,
+    20
+  ]
+}
