@@ -1215,21 +1215,33 @@ SCIENCE_CELL = (0, -34)   # top-left of the I/O-chest science GRID
 SCIENCE_COLS = 5          # cells per row -> a compact grid (not one long row) to minimize runs
 
 
+def have_all(req):
+    """ALL-OR-NOTHING build precondition (Seth, 2026-08-30: 'if you're missing materials,
+    WAIT - don't build partial nonsense'). req = {item: count}. True only when EVERY item
+    is in inventory."""
+    return all(_count(item) >= n for item, n in req.items())
+
+
 def build_io_cell(recipe, x, y):
     """One assembler UNIT with input/output chests + inserters (Seth's rule). Layout (7 wide,
     mid-row y+1): [input chest][in inserter][assembler 3x3][out inserter][output chest], + a
-    pole. The inserters push/pull from the chests (hardware); maintenance fills inputs + empties
-    outputs. Returns True if the assembler was built."""
+    pole. ALL-OR-NOTHING: materials verified up front and the ASSEMBLER goes first - the old
+    order placed chests/inserters even when the assembler failed, littering orphan cells
+    (the 2026-08-30 'what is this mess' screenshot). Returns True if the cell was built."""
+    req = {"assembling-machine-1": 1, "wooden-chest": 2, "inserter": 2, "small-electric-pole": 1}
+    if not have_all(req):
+        status.log(f"build_io_cell({recipe}): missing materials {[k for k, n in req.items() if _count(k) < n]} - waiting, building NOTHING")
+        return False
+    r = A.place("assembling-machine-1", x + 2, y, clear=0).strip()   # assembler FIRST (3x3)
+    if "BUILT" not in r:
+        return False                                                  # site bad: nothing placed
     A.place("wooden-chest", x, y + 1, clear=0)                       # input chest
     A.place("inserter", x + 1, y + 1, direction=12, clear=0)         # in: pick W chest, drop E asm
-    r = A.place("assembling-machine-1", x + 2, y, clear=0).strip()   # assembler (3x3)
     A.place("inserter", x + 5, y + 1, direction=12, clear=0)         # out: pick W asm, drop E chest
     A.place("wooden-chest", x + 6, y + 1, clear=0)                   # output chest
     A.place("small-electric-pole", x + 3, y + 3, clear=0)
-    if "BUILT" in r:
-        A._print(f"/sc local s=game.surfaces[1]; local a=s.find_entities_filtered{{name='assembling-machine-1',position={{{x+3},{y+1}}},radius=2}}[1]; if a then pcall(function() a.set_recipe('{recipe}') end) end")
-        return True
-    return False
+    A._print(f"/sc local s=game.surfaces[1]; local a=s.find_entities_filtered{{name='assembling-machine-1',position={{{x+3},{y+1}}},radius=2}}[1]; if a then pcall(function() a.set_recipe('{recipe}') end) end")
+    return True
 
 
 def power_row(x1, x2, y, spacing=5):
@@ -1692,6 +1704,57 @@ def operator_present():
     except ValueError:
         pass
     return _OP_CACHE["present"]
+
+
+def repair_plate_rows():
+    """Fill missing PLATE-output belt tiles on each smelter array's top row (the furnaces'
+    output inserters were dropping onto bare ground - partial array builds; Seth's screenshot
+    2026-08-30). Lays east-flowing belts from the array start to the drain chest column."""
+    fixed = 0
+    for ore, (ox, oy) in SMELT_ZONE.items():
+        out = A._print(
+            f"/sc local s=game.surfaces[1]; local p=storage.derpface; local inv=p.get_main_inventory(); local f=p.force; local n=0;"
+            f"for x={ox - 1},{ox + 33} do"
+            "  local tx=x+0.5;"
+            f"  local has=#s.find_entities_filtered{{position={{tx,{oy}+0.5}},radius=0.4,type={{'transport-belt','underground-belt','splitter'}}}}>0;"
+            f"  local blocked=#s.find_entities_filtered{{position={{tx,{oy}+0.5}},radius=0.4}}>0;"
+            "  if not has and not blocked then"
+            "    if inv.get_item_count('transport-belt')<1 then break end;"
+            f"    local e=s.create_entity{{name='transport-belt',position={{tx,{oy}+0.5}},direction=4,force=f}};"
+            "    if e then inv.remove{name='transport-belt',count=1}; n=n+1 end end end;"
+            "rcon.print(n)").strip()
+        try:
+            n = int(out)
+        except ValueError:
+            n = 0
+        if n:
+            status.log(f"repair_plate_rows: {ore} array plate row +{n} belts")
+            fixed += n
+    return fixed
+
+
+def cleanup_orphan_cells():
+    """Remove orphan io-cell furniture (chests/inserters/poles with NO assembler within 3
+    tiles) in the science region - the partial cells the old build order littered. Runs on
+    operator logoff (Seth: 'once I log off clean this shit up'). Refunds everything."""
+    bx, by = SCIENCE_CELL
+    out = A._print(
+        f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); local n=0;"
+        f"for _,e in pairs(s.find_entities_filtered{{area={{{{{bx - 4},{by - 4}}},{{{bx + 90},{by + 40}}}}},name={{'wooden-chest','inserter','small-electric-pole'}}}}) do"
+        "  local a=s.find_entities_filtered{type='assembling-machine',position=e.position,radius=3.5}[1];"
+        "  local l=s.find_entities_filtered{name='lab',position=e.position,radius=3.5}[1];"
+        "  if not a and not l then"
+        "    local ci=e.get_inventory and (e.get_inventory(defines.inventory.chest) or e.get_inventory(defines.inventory.fuel));"
+        "    if ci then for _,c in pairs(ci.get_contents()) do inv.insert{name=c.name,count=c.count} end end;"
+        "    inv.insert{name=e.name,count=1}; e.destroy(); n=n+1 end end;"
+        "rcon.print(n)").strip()
+    try:
+        n = int(out)
+    except ValueError:
+        n = 0
+    if n:
+        status.log(f"cleanup_orphan_cells: removed {n} orphaned cell pieces (refunded)")
+    return n
 
 
 def coal_to_boiler():
