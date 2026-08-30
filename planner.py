@@ -1610,6 +1610,20 @@ def play():
     _restore_state(p)
     A.stop()                    # clear any stuck walking_state from a mid-walk restart
     controller.start()
+    # WHAT CHANGED WHILE WE WERE DOWN IS THE OPERATOR'S. The login/logoff hook can only see a
+    # transition it is running to observe, and the bot is most often stopped exactly when he
+    # logs in to repair something - on 2026-08-30 he rebuilt both smelter-array output belts
+    # while the container was down, and the next session rediscovered those facts from scratch
+    # and reported them back to him as news. Diffing the durable baseline at startup is the
+    # only moment that can catch an edit made in our absence, and his removals are INTENT:
+    # they go straight into the protected set so nothing rebuilds over them.
+    try:
+        d = B.diff_since_baseline()
+        if d.get("removed") or d.get("added"):
+            status.log("startup: the world changed while the builder was down - treating it as "
+                       "the operator's work, not as damage to repair")
+    except Exception as e:
+        status.log("startup baseline diff failed (%s: %s)" % (type(e).__name__, str(e)[:120]))
     status.log(f"play(): builder resuming at phase {p['phase']} (controller running)")
     while True:
       try:                       # EVERYTHING in the try: builder crashes outside a try were

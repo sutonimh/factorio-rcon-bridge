@@ -1503,3 +1503,31 @@ poles where 23 cover every consumer; 27 came out on 2026-08-30 (`unpowered=0/125
 another pole AND removing it does not split the network — and the connectivity test must
 include the poles OUTSIDE the area being culled as anchors, or the cull fragments the grid
 (that failure once left 8 networks and 57 dark machines).
+
+## NEVER STOP THE BOT BEFORE THE OPERATOR LOGS IN. HIS LOGIN IS THE STOP.
+
+Seth, 2026-08-30: *"never stop before i login just let my login trigger the stop, why are you
+doing this kind of shit that circumvents the rules im giving you."*
+
+`docker stop factorio-autopilot` before he plays is not a safety measure, it is a bypass of the
+mechanism he asked for. The truce IS the design: `operator_present()` pauses the builder and
+withholds every actuator while he is connected. Stopping the container instead does three bad
+things at once:
+
+  * it substitutes an ad-hoc guard for the one that is tested and codified;
+  * it hides whether the truce actually works — every manual stop is a test not run;
+  * **and it blinds the learning hook.** The login/logoff snapshot in `controller.py` can only
+    see a transition it is RUNNING to observe. Stop the bot before he logs in and there is no
+    snapshot on login, no diff on logout, and his repairs are invisible. On 2026-08-30 he
+    rebuilt both smelter-array output belts while the container was down; the next session
+    then rediscovered those same facts from scratch and reported them back to him as news.
+
+**THE RULE: leave the bot running. His login stops the builder; his logout resumes it and
+triggers the diff.** If the truce is not trustworthy enough to leave running, fix the truce —
+do not paper over it with a manual stop.
+
+The one exception is a deploy, which restarts the container by its nature.
+
+BACKSTOP, because a hook can only observe what it is running for: `bootstrap.diff_since_baseline()`
+keeps a durable on-disk baseline and `planner.play()` diffs it at STARTUP, so an edit made
+while the bot was down is still caught, attributed to the operator, and his removals protected.

@@ -235,3 +235,65 @@ def test_verify_lane_still_fails_a_disconnected_lane():
     finally:
         undo()
     assert r["ok"] is False, "a lane that never connected must still roll back"
+
+
+# ------------------------------- the operator's edits must be noticed even if we were DOWN
+def test_the_baseline_diff_reports_what_changed_while_we_were_stopped():
+    """Seth, 2026-08-30: "i already fixed the smelter array output belts, you should have
+    caught that change when i logged out."
+
+    The login/logoff hook can only see a transition it is RUNNING to observe, and the bot is
+    most often stopped exactly when he logs in to repair something. A durable on-disk baseline
+    is the only thing that can catch an edit made in our absence."""
+    import tempfile, pathlib as _pl
+    before = {"transport-belt|1|1|4", "inserter|2|2|0", "lab|3|3|0"}
+    now = {"transport-belt|1|1|4", "splitter|9|9|8"}          # inserter+lab gone, splitter new
+    with tempfile.TemporaryDirectory() as td:
+        target = _pl.Path(td) / "operator-baseline.json"
+        undos = [_patch(B, "_baseline_path", lambda: target),
+                 _patch(B, "world_snapshot", lambda: before),
+                 _patch(B, "_protected_load", lambda: set()),
+                 _patch(B, "_protected_save", lambda s: None)]
+        said = []
+        undos.append(_patch(B.status, "log", lambda m: said.append(str(m))))
+        try:
+            first = B.diff_since_baseline()
+            assert first.get("first_run") is True, "the first call just records a baseline"
+            B.world_snapshot = lambda: now                     # ...the operator edits while down
+            d = B.diff_since_baseline()
+        finally:
+            for u in undos:
+                u()
+    assert d["removed"] == 2 and d["added"] == 1, d
+    assert any("OPERATOR EDITS" in s for s in said), said
+    assert any("protected" in s for s in said), "his removals are INTENT and must be protected"
+
+
+def test_the_builder_diffs_the_baseline_at_startup():
+    """A guard that is not wired into the live path is not a guard - the same failure as
+    autopilot.manage_inventory."""
+    import pathlib as _pl
+    src = (_pl.Path(__file__).resolve().parent / "planner.py").read_text()
+    head = src[src.index("controller.start()"):]
+    head = head[:head.index("while True:")]
+    assert "diff_since_baseline()" in head, \
+        "startup is the only moment that can catch an edit made while the bot was stopped"
+
+
+def test_record_operator_deletions_has_no_undefined_reference():
+    """It raised NameError on EVERY logoff - "record deletions: name 'tiles' is not defined" -
+    so no deletion was ever recorded and the learn-from-edits hook behind it never ran."""
+    import inspect
+    src = inspect.getsource(B.record_operator_deletions)
+    assert "laid_tiles" not in src, "the dead line referencing an undefined `tiles` is gone"
+    calls = []
+    undos = [_patch(B, "belt_tiles_now", lambda: {(1, 1)}),
+             _patch(B, "_protected_load", lambda: set()),
+             _patch(B, "_protected_save", lambda s: calls.append(s)),
+             _patch(B.status, "log", lambda m: None)]
+    try:
+        n = B.record_operator_deletions({(1, 1), (2, 2)})
+    finally:
+        for u in undos:
+            u()
+    assert n == 1 and calls and (2, 2) in calls[0]

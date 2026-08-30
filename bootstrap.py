@@ -2288,7 +2288,12 @@ def record_operator_deletions(before):
     removed = before - after
     if not removed:
         return 0
-    laid_tiles = [(x, y) for (x, y, _d) in tiles]
+    # A dead line here referenced an undefined `tiles` and raised NameError on EVERY operator
+    # logoff - "record deletions: name 'tiles' is not defined" in the live log - so no deletion
+    # was ever recorded, and the learn-from-edits hook behind it never ran either. It computed
+    # nothing anything used, so it is deleted rather than repaired. THE LESSON is not the typo:
+    # the logoff hook's only report of failure was one status line nobody read, in the one code
+    # path whose whole job is to notice what the operator changed.
     prot = _protected_load() | removed
     _protected_save(prot)
     status.log(f"protected {len(removed)} operator-deleted tiles (never rebuild); total {len(prot)}")
@@ -2917,3 +2922,87 @@ def depot_take(item, count):
 
 if __name__ == "__main__":
     print(bootstrap())
+
+
+# ------------------------------------------------- THE OPERATOR BASELINE (durable, on disk)
+# The login/logoff hook in controller.py can only see a transition it is RUNNING to observe.
+# Every time the bot is stopped - which is exactly when the operator logs in to repair
+# something - no snapshot is taken, no diff is computed, and his changes are invisible.
+# 2026-08-30: he rebuilt both smelter-array output belts while the container was down and the
+# bot never noticed; the next session then "discovered" the same facts from scratch and
+# reported them back to him as news.
+#
+# So the baseline lives ON DISK and is refreshed continuously. A diff is then available at any
+# time, including across a restart, and anything that changed while we were down is by
+# definition not ours.
+def _baseline_path():
+    import pathlib as _pl
+    return _pl.Path(__file__).resolve().parent / "operator-baseline.json"
+
+
+def save_baseline(snap=None):
+    """Persist the world snapshot so a later diff survives a restart. Cheap; call on a slow
+    clock. Returns the number of entities recorded."""
+    import json as _json
+    snap = world_snapshot() if snap is None else snap
+    if not snap:
+        return 0
+    _baseline_path().write_text(_json.dumps(
+        {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "ents": sorted(snap)}))
+    return len(snap)
+
+
+def load_baseline():
+    import json as _json
+    p = _baseline_path()
+    if not p.exists():
+        return None, None
+    try:
+        d = _json.loads(p.read_text())
+        return set(tuple(e) if isinstance(e, list) else e for e in d.get("ents", [])), d.get("at")
+    except Exception:
+        return None, None
+
+
+def diff_since_baseline(protect=True):
+    """What changed since the stored baseline. Anything here happened while WE were not
+    building, so it is the operator's - his removals are INTENT and get protected forever.
+
+    Returns a dict, and logs a readable summary. Safe to call at any time; on the first run
+    (no baseline yet) it just records one."""
+    before, at = load_baseline()
+    now = world_snapshot()
+    if not now:
+        return {"error": "could not read the world"}
+    if before is None:
+        n = save_baseline(now)
+        status.log("operator baseline: first run, recorded %d entities" % n)
+        return {"first_run": True, "recorded": n}
+    removed, added = before - now, now - before
+    if not removed and not added:
+        save_baseline(now)
+        return {"removed": 0, "added": 0}
+
+    def summarise(s):
+        k = {}
+        for e in s:
+            nm = e.split("|")[0] if isinstance(e, str) else str(e[0])
+            k[nm] = k.get(nm, 0) + 1
+        return ", ".join("%s x%d" % kv for kv in sorted(k.items(), key=lambda kv: -kv[1])[:6])
+
+    status.log("OPERATOR EDITS since %s: %d removed (%s) | %d added (%s)"
+               % (at or "?", len(removed), summarise(removed) or "-",
+                  len(added), summarise(added) or "-"))
+    if protect and removed:
+        try:
+            gone = {(int(p[1]), int(p[2])) for p in
+                    (e.split("|") for e in removed if isinstance(e, str)) if len(p) >= 3}
+            prot = _protected_load() | gone
+            _protected_save(prot)
+            status.log("protected %d operator-removed tiles (never rebuild); total %d"
+                       % (len(gone), len(prot)))
+        except Exception as e:
+            status.log("baseline: could not protect removals (%s)" % e)
+    save_baseline(now)
+    return {"removed": len(removed), "added": len(added),
+            "removed_summary": summarise(removed), "added_summary": summarise(added)}
