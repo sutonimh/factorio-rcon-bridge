@@ -1027,3 +1027,14 @@ These are absolute. Violating them is what "shitting up the map" means.
    ledger + reconcile + protected-tile checks now sit inside lay_belt_path/place().
 5. **Ore patches are for mining only** (enforced in place(), see above).
 6. **Zero construction while a human is connected** (builder AND heals, see the truce).
+
+## Swapping entity TIERS moves the drop tile - verify it, or the mine dies silently (2026-08-30)
+
+electrify_mines swapped burner (2x2) drills for electric (3x3) at the same position. The
+larger footprint MOVES drop_position, so six copper drills dumped ore onto bare ground
+("waiting_for_space_in_destination -> item-on-ground") and copper supply died while every
+status read looked plausible. Now the swap checks the new drop_position lands on a
+belt/underground/container and undoes itself if not, and separately verifies power (an
+unpowered electric drill mines nothing) and reverts to a fuelled burner drill if it cannot be
+powered. GENERAL RULE: any tier swap must re-verify the ENTIRE interface it participates in -
+footprint, drop/pickup tiles, power, and fuel - not just that create_entity succeeded.

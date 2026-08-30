@@ -2215,6 +2215,13 @@ def electrify_mines():
             "  local fi=d.get_fuel_inventory(); if fi then for _,c in pairs(fi.get_contents()) do inv.insert{name=c.name,count=c.count} end end;"
             "  inv.insert{name='burner-mining-drill',count=1}; d.destroy();"
             "  local e=s.create_entity{name='electric-mining-drill',position=pos,direction=dir,force=f};"
+            # DROP-TARGET CHECK: electric drills are 3x3 vs burner 2x2, so the drop tile
+            # MOVES - six copper drills silently dumped ore on the ground and the mine died
+            # (2026-08-30). If the new drop tile isn't a belt/chest, undo the swap here.
+            "  if e then local dp=e.drop_position; local ok=false;"
+            "    for _,q in pairs(s.find_entities_filtered{position=dp,radius=0.5}) do"
+            "      if q.type=='transport-belt' or q.type=='underground-belt' or q.type=='container' then ok=true end end;"
+            "    if not ok then e.destroy(); e=nil end end;"
             "  if e then inv.remove{name='electric-mining-drill',count=1}; n=n+1"
             "  else local rb=s.create_entity{name='burner-mining-drill',position=pos,direction=dir,force=f};"
             "    if rb then inv.remove{name='burner-mining-drill',count=1} end end end;"
