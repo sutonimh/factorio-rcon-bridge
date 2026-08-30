@@ -1598,6 +1598,11 @@ def gate3():
     return phase3_grid.gate(load())
 
 
+# A pause the operator (or a session) can set WITHOUT a redeploy or a container restart:
+# `touch builder-paused` in the app dir parks the builder on its next lap, `rm` resumes it.
+# BUILDER_ENABLED needs the container recreated to change, which is useless in a hurry.
+PAUSE_FILE = pathlib.Path(__file__).resolve().parent / "builder-paused"
+
 PHASES = {0: (phase0, gate0), 1: (phase1, gate1), 2: (phase2, gate2), 3: (phase3, gate3)}
 
 
@@ -1647,7 +1652,7 @@ def play():
                 status.log("operator online - builder paused (no construction while you play)")
                 time.sleep(20)
                 continue
-            if os.environ.get("BUILDER_ENABLED", "1") != "1":
+            if PAUSE_FILE.exists() or os.environ.get("BUILDER_ENABLED", "1") != "1":
                 # SAFE MODE, now OPT-IN rather than the default. The "zero unrequested
                 # building" instruction was WITHDRAWN by the operator on 2026-08-30: "proceed
                 # autonomously along the progression path, automate all the things."

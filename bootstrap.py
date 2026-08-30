@@ -2341,11 +2341,22 @@ def cleanup_orphan_cells():
     tiles) in the science region - the partial cells the old build order littered. Runs on
     operator logoff (Seth: 'once I log off clean this shit up'). Refunds everything."""
     bx, by = SCIENCE_CELL
+    # THE SWEEP IS THE SCIENCE GRID, NOT A 90x74 SLAB OF THE BASE. It used to run from
+    # (bx-4, by-4) to (bx+90, by+40) = (-4,-38)..(90,6), which swallowed the IRON SMELTER ROW
+    # at y=6. Nothing in a furnace row is an "orphan cell piece"; it was simply in the box.
+    x2 = bx + SCIENCE_COLS * 8 + 4
+    y2 = by + ((len(SCIENCE_CHAIN) + SCIENCE_COLS - 1) // SCIENCE_COLS) * 5 + 4
     out = A._print(
         f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); local n=0;"
-        f"for _,e in pairs(s.find_entities_filtered{{area={{{{{bx - 4},{by - 4}}},{{{bx + 90},{by + 40}}}}},name={{'wooden-chest','inserter','small-electric-pole'}}}}) do"
-        "  local a=s.find_entities_filtered{type='assembling-machine',position=e.position,radius=3.5}[1];"
-        "  local l=s.find_entities_filtered{name='lab',position=e.position,radius=3.5}[1];"
+        f"for _,e in pairs(s.find_entities_filtered{{area={{{{{bx - 4},{by - 4}}},{{{x2},{y2}}}}},name={{'wooden-chest','inserter','small-electric-pole'}}}}) do"
+        # AND A FURNACE IS A MACHINE TOO. Anchoring only on assembling-machine and lab meant
+        # every inserter serving a furnace read as orphaned furniture, so this deleted all 16
+        # output inserters off the iron smelter row - the second time that exact damage was
+        # done to the operator's base, by a different function than the first time.
+        "  local a=s.find_entities_filtered{type={'assembling-machine','furnace','lab',"
+        "    'mining-drill','boiler','generator','radar','beacon','rocket-silo'},"
+        "    position=e.position,radius=3.5}[1];"
+        "  local l=nil;"
         "  if not a and not l then"
         "    local ci=e.get_inventory and (e.get_inventory(defines.inventory.chest) or e.get_inventory(defines.inventory.fuel));"
         "    if ci then for _,c in pairs(ci.get_contents()) do inv.insert{name=c.name,count=c.count} end end;"

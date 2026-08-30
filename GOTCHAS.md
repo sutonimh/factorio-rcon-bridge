@@ -1834,3 +1834,42 @@ Result: 101 → 99 poles, and `networks` back to 1.
 tends to forbid the repair as firmly as the damage.** State it as a comparison against the
 state you found instead, and the cleanup can run on a base that is already broken — which is
 the only base that needs it.
+
+---
+
+## The iron smelter output inserters, destroyed a SECOND time (2026-08-30)
+
+The first time it was `plan_mine_geometry` clearing by blacklist. The second time was a
+different function entirely, `cleanup_orphan_cells`:
+
+```lua
+area = {{bx-4, by-4}, {bx+90, by+40}}     -- (-4,-38) .. (90,6)
+anchor = assembling-machine OR lab within 3.5 tiles, else DESTROY
+```
+
+Two independent faults, either of which alone would have been enough:
+
+1. **The sweep was a 90x74 slab of the base**, not the science grid it was written to tidy.
+   The iron smelter row sits at y=6. It was inside the box.
+2. **A furnace is not an `assembling-machine`.** Every inserter serving that row had no anchor
+   by this definition, so all sixteen read as orphaned furniture and were refunded and deleted.
+
+The area is now derived from `SCIENCE_COLS`/`SCIENCE_CHAIN` — the grid it exists to clean — and
+the anchor list covers furnaces, drills, boilers, generators, radars and beacons.
+
+### The rule this makes for every sweeper
+
+A destructive sweep has two parameters and **both** are load-bearing:
+
+- **Its bounds must be derived from the thing it maintains**, never a hardcoded span that
+  happens to be big enough. `bx+90` is not a description of anything; it is a guess that
+  quietly annexed a smelter row.
+- **Its "is this in use" test must accept every legitimate owner**, and the safe direction is
+  to name the *entity types that count as machines*, not the two you happened to be thinking
+  about. An inserter is furniture only when nothing at all is on the other end of it.
+
+Three functions in this file have now destroyed working base infrastructure by deciding, from
+an incomplete definition, that it was not being used: this one, `plan_mine_geometry`'s
+blacklist clear, and `setup_science_io`'s unconditional teardown. **When code deletes things,
+the burden of proof runs the other way: it must positively establish disuse, and anything it
+cannot classify is in use.**

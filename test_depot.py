@@ -234,3 +234,26 @@ def test_science_io_never_tears_down_unreplaced_capability():
     assert "A.clear_area(" not in src, "setup_science_io regained a blanket area clear"
     assert "(G[r.name] or 0) > 0" in src, "the teardown no longer requires a replacement cell"
     assert "G[r.name]=G[r.name]-1" in src, "replacements must be consumed, not reused per victim"
+
+
+def test_orphan_cleanup_anchors_on_furnaces_and_stays_in_the_grid():
+    """cleanup_orphan_cells swept (bx-4,by-4)..(bx+90,by+40) = (-4,-38)..(90,6) and treated
+    anything without an assembling-machine or lab within 3.5 tiles as orphaned furniture. The
+    IRON SMELTER ROW sits at y=6, inside that box, and furnaces are neither - so it deleted
+    all 16 of the row's output inserters. Second time that exact damage was done to the
+    operator's base, by a different function than the first time."""
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.cleanup_orphan_cells)
+    assert "bx + 90" not in src and "by + 40" not in src, "the 90x74 slab sweep is back"
+    assert "'furnace'" in src, "a furnace is not recognised as a machine worth serving"
+    for t in ("mining-drill", "boiler"):
+        assert t in src, "%s inserters would still read as orphans" % t
+
+
+def test_orphan_cleanup_box_is_bounded_by_the_grid_size():
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.cleanup_orphan_cells)
+    assert "SCIENCE_COLS" in src and "SCIENCE_CHAIN" in src, \
+        "the sweep is not derived from the grid it is meant to clean"
