@@ -1651,3 +1651,45 @@ Two corollaries:
 And check the last step's direction. The router picks `goal_dir` freely, so a trunk can arrive
 pointing into whatever happens to sit past the goal — in this case a dead underground belt that
 would have swallowed every science pack. Pass `goal_dir` explicitly when the terminus matters.
+
+---
+
+## Do not write a document asking the operator a question the map can answer
+
+Red science was piling up on a belt while every lab read `missing_science_packs`. What came
+out of that was a plan document setting out three options for where to inject it and saying
+"the choice is yours, not mine".
+
+It was not the operator's choice. Where a feed goes is a question about the map:
+
+- **Which consumer** — consumers chain. An inserter picking out of lab A and dropping into
+  lab B is an edge; the grid's flood direction falls straight out of that graph. Reading it
+  found the true head at lab (0,40), reaching 9 of 10 labs — a lab my own hand analysis had
+  not picked.
+- **Where the inserter goes** — a free tile against the consumer whose far side is also free.
+  Enumerate the pairs, route to each, take the cheapest.
+- **Where the product leaves** — a belt carrying the item whose downstream tile is bare
+  ground. A terminus, not a junction.
+
+All three are measurable, so all three belong in code. `feed_planner.py` does this and the
+maintenance loop calls it.
+
+**The general rule: when you catch yourself writing "this is your call" into a document, check
+whether the map already answers it.** If it does, the document is the bug — you have converted
+work the bot should do into a task for a person, and the base sits stalled until they get to
+it. Genuine operator decisions are about *intent* ("should this base make red science at all"),
+never about geometry.
+
+The same failure produced three unused pole cleaners. `optimize_poles.py`, `remove_redundant.py`
+and `dedupe_poles()` all existed; none ran, because the last one had been commented out of the
+loop as "a human decision now". The pole count drifted to 165 on a base needing ~100, 53 of
+them supplying nothing at all. Cleanup that depends on a human remembering to run it is
+cleanup that does not happen.
+
+### And when the head is walled in, take the next best — do not stop
+
+The best consumer to feed is often unreachable: on the live map every tile around lab (0,40)
+is occupied by the chain inserters themselves. A planner that insists on the optimum reports
+"no routable position" and does nothing. Walk the consumers best-first and build the first one
+you can actually reach — a feed reaching 3 of 10 labs beats a perfect plan that never gets
+built, and it says so in its own log line rather than pretending it covered everything.
