@@ -142,6 +142,33 @@ module is the unit, and we build one. Current output is 6/min from a single
 assembling-machine-1, so one red module is ~15× the present rate and roughly matches what 28
 furnaces can actually feed.
 
+## 5b. PHASE 2 STATUS (2026-08-30)
+
+**IRON IS ON THE BUS.** Routed by `belt_router`, not by hand: the direct y=8 run collides with
+the science-assembler build's inserter (28,8) and pole (29,8), and the router tunnelled UNDER
+them with an underground pair (in at 27, out at 30) rather than bulldozing them. `plan_to_lua`
+emits no destroy at all, which is the whole reason to route with the router instead of a
+hand-rolled placement loop.
+
+    belts 25,26 -> underground 27..30 -> belt 31 -> side-loads lane 32 at (32,8)
+
+Measured immediately after: furnaces jammed at full_output **28 -> 0**, working **0 -> 10**,
+78 items moving on lane 32.
+
+**COPPER IS NOT DONE, DELIBERATELY.** Both plate belts approach the bus from the WEST, so both
+side-load the same lane (32) and would put two ores on one belt. Copper needs to cross lane 32
+- an underground under the bus - and the exit tile then lands ON a lane, which is a real design
+choice about which lane each ore owns and where a lane BEGINS. That is phase 2b, not something
+to improvise while iron is half-built.
+
+**LANES 33, 34 AND 35 CURRENTLY CARRY NOTHING.** They are belt that does nothing, which the
+standing rule forbids leaving on the map. They stay only until phase 2b assigns copper a lane;
+if phase 2b is deferred, they come out.
+
+**AND THE BUFFER IS FINITE.** Lane 32 is ~37 tiles - a few hundred items. It drains the iron
+row now because the lane is empty; once it fills, the row jams again. The bus is not a
+consumer. Phase 4 (the red-science module) is what actually fixes the jam.
+
 ## 6. Build order
 
 Each phase must leave the base working; none of them may be half-built.
