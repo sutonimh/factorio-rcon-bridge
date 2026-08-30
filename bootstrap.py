@@ -23,6 +23,7 @@ import autopilot as A
 import build_gates
 import techdb
 import gamedb
+import pole_cull
 import status
 
 SPAWN = (6, -14)          # base hub: spawn is the most central point on a fresh world
@@ -2730,9 +2731,21 @@ def maintain(laps=0, lap_hook=None):
                 # nothing gated, nothing to build -> light upkeep; science strand drives research
                 refill_buffers()
                 haul_ore()
-            # if i % 15 == 0:
-            #     dedupe_poles()             # DISABLED: removes poles -> fights the operator's hand-built power/pole layout.
-            #                                  Pole cleanup is a human decision now.
+            if i % 15 == 0:
+                # Pole cleanup is the BOT's job. This was disabled because the old
+                # dedupe_poles fought the operator's layout: it guessed redundancy by
+                # proximity (<2.0 tiles), which both missed the real duplicates (a small pole
+                # covers 5x5 and wires 7.5, so poles FOUR apart can be redundant) and deleted
+                # connectors, islanding the steam engine. Calling it "a human decision" then
+                # let the count drift to 165 poles on a base that needs ~100.
+                # pole_cull decides by proof: a pole goes only when everything it supplies is
+                # still supplied and the grid can still be made whole. It re-wires the chains
+                # the removal breaks, stands down while the operator is logged in, and puts
+                # the entire batch back if the game disagrees with the plan.
+                try:
+                    pole_cull.apply(A, log=status.log)
+                except Exception as e:
+                    status.log(f"pole cull error: {e}")
             if i % 10 == 0:
                 gamedb.dump_excess()   # overflow inventory -> buffer chests (server-side)
                 gamedb.snapshot()      # refresh the structures + chest-inventory DB
