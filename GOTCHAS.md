@@ -1384,3 +1384,25 @@ declines with a reason.
 clearing its own trigger, the diagnosis is wrong. Repetition is the evidence.** `lessons.add`
 already counts repeat verdicts at 5 and 20 — that counter firing is a signal to re-diagnose, not
 to keep actuating.
+
+## `create_entity{direction=}` on an inserter points at the PICKUP, not the drop (2026-08-30)
+
+Building the red-science chain, every one of five inserters was placed backwards. The output
+inserter, placed at (30,10) with `direction=defines.direction.east`, reported:
+
+    pickup=31,10 (the chest)   drop=29,10 (the assembler)
+
+It was moving finished packs OUT of the chest and back INTO the machine. So `direction` faces
+the SOURCE, which is the opposite of the mental model most of us carry from the game ("the
+inserter faces where it puts things").
+
+**AND IT LOOKED FINE.** The assemblers reported `working` and the production statistics showed
+33 gears/min and 3 packs/min — because the build had PRIMED both machines by hand. The chain
+was running on its seed stock while the inserters drained it backwards. Status was green,
+throughput was real, and the topology was wrong.
+
+**RULE: never accept `status == working` as proof a chain is connected.** Read
+`pickup_position` and `drop_position` off every inserter you place and assert they are the two
+entities you intended, by tile. That is a cheap read and it is the only thing that actually
+tests the topology - the operator's "check all results of building anything to make sure
+results are as expected" applied to the one property that entity status cannot show you.

@@ -1,0 +1,13 @@
+{
+  "source_url": "https://www.factorio.school/view/-OC4gl7J2NQqgr0h1JDv",
+  "use_for": "4-lane bus T-junction with a built-in balancer",
+  "migration": [],
+  "label": "4 Lane T-Junction",
+  "fetched": "2026-08-30T06:58:15-0700",
+  "game_version": "2.0",
+  "entity_count": 141,
+  "footprint_wh": [
+    17.0,
+    16.0
+  ]
+}
