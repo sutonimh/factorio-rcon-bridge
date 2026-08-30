@@ -891,3 +891,17 @@ STILL OPEN (next batch): registry-first servicing for arrays/power/science, exec
 as the one queue, v1 dead-weight quarantine (autopilot.maintain servicers, patrol.py,
 build_belt family, snapshot/rebuild), lay_belt_path inventory consumption, walk() callers
 checking the success flag, orders stuck 'running' startup sweep.
+
+## OPERATOR TRUCE (Seth, 2026-08-30): layout self-heals suspend while a player is online
+
+Seth hand-cleaned the belt mess and the self-heals kept UN-DOING his deletions: a deleted
+belt is a "dead end" to repair_belt_gaps (re-bridged), a cleared route is "disconnected" to
+ensure_lanes (re-laid), and build_belt_supply re-placed array belts every pass. Root rule:
+the bot cannot distinguish "broken" from "being edited" - so while game.connected_players>0
+(cached 10s), EVERY layout-modifying routine no-ops: repair_belt_gaps, ensure_lanes +
+fix_mine_row_flow, fix_unpowered, ensure_grid_connected, build_belt_supply, coal_to_boiler.
+Fuel/feed/research servicing continues. Heals resume when the operator disconnects.
+Companion fixes same session: world notepad rendering retired (dashboard replaces it);
+coal_to_boiler() splitter tap + boiler burner-inserter (self-sustaining power);
+electrify_mines() burner->electric drill swap-in-place gated on the now-prioritized
+electric-mining-drill research; research queue set via f.research_queue write.

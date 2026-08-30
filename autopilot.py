@@ -788,6 +788,8 @@ def now(action, plan=None):
         "(biters OFF, crash debris cleared)",
     ]
     lines = [("> " + str(action), True), ("-- queue --", False)] + [(t, False) for t in plan]
+    _ = lines  # world-space notepad RETIRED (Seth, 2026-08-30): the dashboard shows action
+    # + queue now; the in-game floating text was clutter. action.json write below stays.
     # live current-action feed for the dashboard (world render is invisible off-game)
     try:
         import json as _json, pathlib as _pl
@@ -796,7 +798,7 @@ def now(action, plan=None):
                          "why": PURPOSE["text"], "plan": list(plan)}))
     except Exception:
         pass
-    return _render_notes(lines)
+    return None
 
 
 def notepad(lines):
