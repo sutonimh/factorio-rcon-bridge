@@ -113,13 +113,32 @@ def setup_world():
     A.clear_spaceship_debris()
 
 
-def scout():
+SCOUT_RESOURCES = ("iron-ore", "copper-ore", "stone", "coal", "water")
+
+
+def scout(only=None):
     """Find the RICHEST tile of each ore + nearest water; cache in STATE. Generates chunks
-    out to 384 tiles first so resources exist to scan."""
-    A.now("Bootstrap: scouting richest deposits + water")
+    out to 384 tiles first so resources exist to scan.
+
+    `only` restricts the scan to the named resources, and it is the normal case: a patch we
+    already recorded does not move. This used to run in full at the top of EVERY planner pass,
+    re-deriving positions that `planner._load` had just restored from phase.json a few lines
+    earlier - a 625-chunk force-generate plus five radius-160 scans, per pass, to arrive at the
+    same four coordinates. It was also the slowest step in the pass, so the dashboard's "current
+    action" was almost always "scouting richest deposits + water" on a base whose whole problem
+    was that it needed to BUILD (Seth, 2026-08-30: "we dont need to scout any deposits right now
+    we have everything we need").
+    """
+    want = tuple(only) if only else SCOUT_RESOURCES
+    if not want:
+        return STATE
+    A.now("Bootstrap: scouting %s" % ", ".join(want))
     A._print("/sc local s=game.surfaces[1]; for cx=-12,12 do for cy=-12,12 do s.request_to_generate_chunks({x=cx*32,y=cy*32},0) end end; s.force_generate_chunk_requests()")
     for ore in ("iron-ore", "copper-ore", "stone", "coal"):
-        STATE[ore] = A.richest_spot(ore, 0, 0, radius=160)
+        if ore in want:
+            STATE[ore] = A.richest_spot(ore, 0, 0, radius=160)
+    if "water" not in want:
+        return STATE
     w = A._print("/sc local s=game.surfaces[1]; local w; for r=20,200,8 do local t=s.find_tiles_filtered{position={0,0},radius=r,name={'water','deepwater'},limit=1}; if #t>0 then w=t[1]; break end end; rcon.print(w and (math.floor(w.position.x)..','..math.floor(w.position.y)) or 'none')").strip()
     STATE["water"] = tuple(map(int, w.split(","))) if "," in w else None
     return STATE

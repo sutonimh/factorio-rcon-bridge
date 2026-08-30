@@ -150,6 +150,71 @@ def test_classification_is_not_suppressed_only_actuation():
         "gate the actuator, not the classifier - the verdict itself is read-only"
 
 
+
+
+# ------------------------------------------------------- scouting what is already known
+def test_a_known_patch_is_not_rescouted():
+    """Seth, 2026-08-30, looking at the dashboard: "why does the dashboard say derpface is
+    scouting deposits? we dont need to scout any deposits right now we have everything we need
+    we should be working on building out the bootstrap base."
+
+    _load restores every recorded patch from phase.json into B.STATE, and a patch does not
+    move. Re-running the full scan cost a 625-chunk force-generate plus five radius-160 scans
+    per pass, at the FRONT of the pass, ahead of everything that builds."""
+    import planner as P
+    scouted = []
+    undos = [_patch(P.B, "scout", lambda only=None: scouted.append(only)),
+             _patch(P, "_persist_state", lambda p: None),
+             _patch(P.status, "log", lambda m: None),
+             _patch(P.A, "purpose", lambda *a, **k: None)]
+    old_state = dict(P.B.STATE)
+    try:
+        P.B.STATE.update({k: (1, 1) for k in P.B.SCOUT_RESOURCES})
+        P._scout_guarded({})
+        assert scouted == [], "a fully-scouted world must not scan at all"
+    finally:
+        P.B.STATE.clear()
+        P.B.STATE.update(old_state)
+        for u in undos:
+            u()
+
+
+def test_only_the_missing_resource_is_scanned():
+    import planner as P
+    scouted = []
+    undos = [_patch(P.B, "scout", lambda only=None: scouted.append(list(only or []))),
+             _patch(P, "_persist_state", lambda p: None),
+             _patch(P.status, "log", lambda m: None),
+             _patch(P.A, "purpose", lambda *a, **k: None),
+             _patch(P.A, "_print", lambda *a, **k: "")]
+    old_state = dict(P.B.STATE)
+    try:
+        P.B.STATE.clear()
+        P.B.STATE.update({k: (1, 1) for k in P.B.SCOUT_RESOURCES if k != "coal"})
+        try:
+            P._scout_guarded({})
+        except RuntimeError:
+            pass                      # the widen path still raises when coal is truly absent
+        assert scouted and scouted[0] == ["coal"], scouted
+    finally:
+        P.B.STATE.clear()
+        P.B.STATE.update(old_state)
+        for u in undos:
+            u()
+
+
+def test_the_purpose_line_is_not_set_when_nothing_is_scouted():
+    """A status line set unconditionally is not status - it is what made the dashboard report
+    'scouting richest deposits + water' as the current action forever."""
+    import pathlib
+    import planner as P
+    src = pathlib.Path(P.__file__).read_text()
+    body = src[src.index("def stage_world("):]
+    body = body[:body.index("_scout_guarded(p)")]
+    assert "scouting the richest ore patches" not in body, \
+        "the scout purpose must be set inside the guard, only when a scan actually happens"
+
+
 if __name__ == "__main__":
     import traceback
     fails = 0

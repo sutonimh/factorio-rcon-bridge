@@ -26,54 +26,7 @@
    21
   ]
  ],
- "captured_at": "2026-08-30 06:27:24",
- "by_chest": {
-  "2,20": {
-   "wooden-chest": 82,
-   "iron-chest": 7,
-   "transport-belt": 1149,
-   "burner-inserter": 2,
-   "inserter": 439,
-   "small-electric-pole": 120,
-   "pipe": 15,
-   "burner-mining-drill": 9,
-   "electric-mining-drill": 6,
-   "stone-furnace": 12
-  },
-  "3,20": {
-   "assembling-machine-1": 23,
-   "lab": 1,
-   "wood": 36,
-   "coal": 144,
-   "stone": 210,
-   "iron-plate": 1000,
-   "copper-plate": 250,
-   "iron-gear-wheel": 700
-  },
-  "4,20": {
-   "iron-gear-wheel": 33,
-   "firearm-magazine": 8
-  }
- },
- "totals": {
-  "wooden-chest": 82,
-  "iron-chest": 7,
-  "transport-belt": 1149,
-  "burner-inserter": 2,
-  "inserter": 439,
-  "small-electric-pole": 120,
-  "pipe": 15,
-  "burner-mining-drill": 9,
-  "electric-mining-drill": 6,
-  "stone-furnace": 12,
-  "assembling-machine-1": 23,
-  "lab": 1,
-  "wood": 36,
-  "coal": 144,
-  "stone": 210,
-  "iron-plate": 1000,
-  "copper-plate": 250,
-  "iron-gear-wheel": 733,
-  "firearm-magazine": 8
- }
+ "captured_at": "2026-08-30 06:35:36",
+ "by_chest": {},
+ "totals": {}
 }
