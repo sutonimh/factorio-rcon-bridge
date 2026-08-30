@@ -326,7 +326,15 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path in ("/", "/index.html"):
             try:
-                self._send((HERE / "dashboard.html").read_bytes(), "text/html; charset=utf-8")
+                # no-store: a cached page kept serving stale UI after fixes shipped
+                data = (HERE / "dashboard.html").read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+                return
             except OSError:
                 self._send(b"dashboard.html missing", "text/plain")
         elif self.path == "/api/state":
