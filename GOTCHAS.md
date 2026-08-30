@@ -1569,3 +1569,49 @@ is exactly the move this guard exists to stop.
 `mine_planner_v2.verify_lane`, and now the flows gate. A blocked OUTPUT presents identically to
 a starved INPUT one step downstream, and the two have opposite fixes. When you find one, grep
 for the rest.
+
+## CHECK A BELT IS CONTINUOUS BEFORE ANALYSING WHAT IS ON IT
+
+Contents tell you about COMPETITION. Continuity tells you whether delivery is possible at all,
+and **the second question comes first**.
+
+2026-08-30, the copper row. The input belt read `copper-ore:2 coal:112`, which invites a story
+about coal crowding ore off the belt — and I told that story for several rounds, reasoning about
+corner-turns versus side-loads, moving a power pole, adding a belt to fix lane ownership. The
+actual fault was a **one-tile gap at (-9,17)**. Ore entered the belt at (-10,17), hit the hole,
+and stopped; coal joined *east* of the hole at (-8,17), so coal reached the furnaces and ore
+never could. 309 ore stood backed up on the lane with all six drills blocked.
+
+The gap was visible in the FIRST map I printed — `x=-10: b4  x=-9: .  x=-8: b4` — and I read that
+row for ore-versus-coal ratios without ever checking it for holes.
+
+**THE CHECK, and it is one query:**
+
+    for x=<from>,<to> do
+      if #s.find_entities_filtered{area={{x,y},{x+1,y+1}},
+           type={'transport-belt','underground-belt','splitter'}}==0 then gap end end
+
+Use an AREA, never `position=` with a small radius: a splitter sits on a tile EDGE and a
+0.4-radius probe misses it, which reports two false gaps on every tapped lane.
+
+**AND THE TELL THAT SHOULD HAVE SENT ME THERE SOONER:** clearing the belt and watching what
+refilled it. Coal came back in 100 seconds; ore came back **zero**. Zero is not "outcompeted",
+zero is *blocked* — a losing item still trickles. A cheap experiment answered in two minutes
+what analysis had not answered in ten rounds. When a reading is absolute rather than merely
+lopsided, stop theorising about ratios and go looking for a break in the path.
+
+### The three faults that were stacked here, because untangling them is the general lesson
+
+1. **A break in the path** — ore could not physically arrive. Nothing else mattered until it
+   was closed.
+2. **Both feeds on one lane** — ore and coal both side-loading from the NORTH, competing on
+   lane 1 while lane 2 sat empty, coal outnumbering ore 14:1. Coal now dives under the ore belt
+   and side-loads from the SOUTH, so each owns a lane. A belt has two lanes and the side a
+   side-load arrives from picks which one.
+3. **A buffer that could not drain** — 108 stale coal frozen on lane 1 even after the reroute,
+   because starved furnaces barely burn fuel: the blockage prevented the consumption that would
+   have cleared the blockage.
+
+**Fault 3 is the one that generalises hardest: fixing a supply does not clear what is already
+stuck in front of it.** The same shape appeared twice today — this, and the bus lanes filling
+solid because there was no consumer. Reroute AND clear; a reroute alone leaves the deadlock.
