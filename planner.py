@@ -303,6 +303,14 @@ def play():
         program, gate = PHASES[phase]
         try:
             status.write_status(B.BUILD_QUEUE)
+            # FULL BUILDER PAUSE while the operator is in-game (Seth, 2026-08-30: 'you are
+            # rebuilding shit I've deleted while I'm logged in'). Gating only the self-heals
+            # was not enough - the phase PROGRAM builds too. Nothing is constructed while a
+            # human is connected; the controller still services fuel/feed/research.
+            if B.operator_present():
+                status.log("operator online - builder paused (no construction while you play)")
+                time.sleep(20)
+                continue
             program(p)
         except Exception as e:
             status.log(f"phase {phase} program error: {e}")
@@ -310,7 +318,7 @@ def play():
                         rule="see traceback in autopilot.log", evidence=traceback.format_exc()[-1500:],
                         phase=phase, tags=("phase-program",))
         # operator-queued build tasks run between passes (controller only queues them)
-        while B.BUILD_QUEUE:
+        while B.BUILD_QUEUE and not B.operator_present():
             task = B.BUILD_QUEUE.pop(0)
             name = getattr(task, "__name__", "task")
             status.log(f"builder: operator task {name}")

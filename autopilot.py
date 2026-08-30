@@ -610,6 +610,11 @@ def build(name, x, y, direction=0, walk_first=True, reach_tol=3.0, clear=10):
         "/sc local p=storage.derpface; local s=p.surface; local inv=p.get_main_inventory();"
         "local item='" + name + "'; local pos={" + str(x) + "," + str(y) + "}; local dir=" + str(int(direction)) + ";"
         "if inv.get_item_count(item)<1 then rcon.print('NO_ITEM '..item) return end;"
+        # ORE ZONING: refuse non-mining builds whose footprint touches a resource
+        "local OREOK={" + ",".join("['%s']=true" % n for n in sorted(ORE_OK)) + "};"
+        "if not OREOK[ename] then"
+        "  local res=s.find_entities_filtered{area={{tx,ty},{tx+ep.tile_width,ty+ep.tile_height}},type='resource',limit=1};"
+        "  if #res>0 then rcon.print('ON_ORE '..ename..' @tile('..tx..','..ty..') - ore patches are for mining only') return end end;"
         "local proto=prototypes.item[item]; local ename=proto and proto.place_result and proto.place_result.name or item;"
         "if not s.can_place_entity{name=ename,position=pos,direction=dir,force=p.force} then rcon.print('CANT_PLACE '..item..' at '..pos[1]..','..pos[2]) return end;"
         "local e=s.create_entity{name=ename,position=pos,direction=dir,force=p.force};"
@@ -647,6 +652,33 @@ def craft(recipe, count, timeout=90):
 # Inserter `direction` is its PICKUP side (dir=12/west picks from the west tile,
 # drops east). `drill.drop_position` / `inserter.pickup_position`/`drop_position`
 # are readable - use them to verify, unlike fluidbox.
+
+# ORE-PATCH ZONING (Seth's hard rule, 2026-08-30): ONLY mining drills and the infrastructure
+# that serves them may stand on an ore patch. Everything else (smelting, assembly, power,
+# labs, storage) belongs at the base. This is enforced in place() - a documented convention
+# was not enough; furnaces and assemblers kept landing on ore.
+ORE_OK = {
+    "burner-mining-drill", "electric-mining-drill", "big-mining-drill", "pumpjack",
+    "transport-belt", "fast-transport-belt", "express-transport-belt",
+    "underground-belt", "fast-underground-belt", "express-underground-belt",
+    "splitter", "fast-splitter", "express-splitter",
+    "burner-inserter", "inserter", "fast-inserter", "long-handed-inserter", "bulk-inserter",
+    "small-electric-pole", "medium-electric-pole", "big-electric-pole", "substation",
+    "pipe", "pipe-to-ground", "wooden-chest", "iron-chest", "steel-chest",
+    "gun-turret", "laser-turret", "stone-wall", "radar", "electric-pole",
+}
+
+
+def on_ore(tile_x, tile_y, w=1, h=1):
+    """True if the footprint overlaps any resource tile (ore/oil)."""
+    out = _print(
+        f"/sc local s=game.surfaces[1]; rcon.print(#s.find_entities_filtered{{"
+        f"area={{{{{tile_x},{tile_y}}},{{{tile_x + w},{tile_y + h}}}}},type='resource'}})").strip()
+    try:
+        return int(out) > 0
+    except ValueError:
+        return False
+
 
 def place(name, tile_x, tile_y, direction=0, clear=10):
     """Place an entity by its TOP-LEFT footprint tile, auto-centering by size.

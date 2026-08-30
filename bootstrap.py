@@ -1301,6 +1301,9 @@ def build_io_cell(recipe, x, y):
     pole. ALL-OR-NOTHING: materials verified up front and the ASSEMBLER goes first - the old
     order placed chests/inserters even when the assembler failed, littering orphan cells
     (the 2026-08-30 'what is this mess' screenshot). Returns True if the cell was built."""
+    if A.on_ore(x, y, 8, 4):
+        status.log(f"build_io_cell({recipe}) @({x},{y}) is ON AN ORE PATCH - refusing (mining only)")
+        return False
     req = {"assembling-machine-1": 1, "wooden-chest": 2, "inserter": 2, "small-electric-pole": 1}
     if not have_all(req):
         status.log(f"build_io_cell({recipe}): missing materials {[k for k, n in req.items() if _count(k) < n]} - waiting, building NOTHING")

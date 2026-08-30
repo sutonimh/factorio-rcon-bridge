@@ -988,3 +988,21 @@ Also fixed this pass: fix_mine_row_flow re-pointed belts by ROW Y within radius 
 IRON row (y=-42) grabbed the COPPER column's crossing tile at (-10,-42) and flipped it east
 every cycle - the invisible hand that kept breaking the copper lane all evening. It now only
 touches belts within the mine's own DRILL X-SPAN (+/-6).
+
+## ORE PATCHES ARE FOR MINING ONLY - now enforced in code (Seth, 2026-08-30)
+
+"Never build anything except mining drills and supporting infrastructure on top of ore
+patches." This was a documented BUILD CONVENTION that nothing enforced, so furnaces/
+assemblers kept landing on ore. Now `autopilot.place()` refuses server-side: any entity NOT
+in `autopilot.ORE_OK` (drills, pumpjacks, belts/undergrounds/splitters, inserters, poles/
+substations, pipes, chests, turrets/walls/radar) whose FOOTPRINT touches a resource tile
+returns `ON_ORE ... - ore patches are for mining only` and places nothing. `build_io_cell`
+also refuses an ore site up front.
+
+## The truce must pause the BUILDER too, not just the heals (2026-08-30)
+
+Gating only the self-heals left the phase PROGRAM building while Seth played ("you are
+rebuilding shit I've deleted while I'm logged in"). Now planner.play() skips the entire
+program pass AND the operator BUILD_QUEUE while `game.connected_players>0`; the controller
+keeps servicing fuel/feed/research (no construction). Zero construction while a human is
+connected - full stop.
