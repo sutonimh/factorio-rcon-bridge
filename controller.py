@@ -41,7 +41,7 @@ _PREV = {"d": None}
 _LAST_VERDICT = {"s": "", "n": 0}
 _TRIAGE_BUSY = {"b": False}
 _OP_PREV = {"p": False}
-_OP_SNAP = {"belts": None}
+_OP_SNAP = {"belts": None, "world": None}
 
 
 def _load_state():
@@ -273,17 +273,25 @@ def controller_loop(stop_flag):
             # ('once I log off clean this shit up') + deferred layout work, once
             op_now = B.operator_present()
             if op_now and not _OP_PREV["p"]:
-                try:                       # snapshot so we can learn what he deletes
+                try:                       # snapshot so we can learn what he changes
                     _OP_SNAP["belts"] = B.belt_tiles_now()
-                    status.log(f"operator online - layout heals suspended (snapshot {len(_OP_SNAP['belts'])} belt tiles)")
+                    _OP_SNAP["world"] = B.world_snapshot()
+                    status.log(f"operator online - layout heals suspended (snapshot {len(_OP_SNAP['belts'])} belts / {len(_OP_SNAP['world'])} entities)")
                 except Exception as e:
                     status.log(f"operator snapshot: {e}")
             if _OP_PREV["p"] and not op_now:
                 try:                       # his deletions are INTENT: protect them forever
                     B.record_operator_deletions(_OP_SNAP.get("belts"))
-                    _OP_SNAP["belts"] = None
                 except Exception as e:
                     status.log(f"record deletions: {e}")
+                # ...and his edits are TEACHING: infer why, store durable rules (threaded so
+                # the 35B call never delays the resumed heals)
+                _w = _OP_SNAP.get("world")
+                _OP_SNAP["belts"] = None
+                _OP_SNAP["world"] = None
+                if _w:
+                    threading.Thread(target=lambda: B.learn_from_operator_edits(_w),
+                                     daemon=True).start()
                 status.log("operator logged off - running cleanup + deferred layout work")
                 for fn in ("cleanup_orphan_cells", "repair_plate_rows", "coal_to_boiler"):
                     try:

@@ -1835,6 +1835,88 @@ def belt_tiles_now():
     return set(tuple(map(int, x.split(","))) for x in out.split(";") if "," in x)
 
 
+def world_snapshot():
+    """Compact snapshot of every player entity (name, tile, direction) for edit diffing."""
+    out = A._print(
+        "/sc local s=game.surfaces[1]; local o={};"
+        "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
+        "  if e.name~='character' and #o<4000 then"
+        "    o[#o+1]=e.name..'|'..math.floor(e.position.x)..'|'..math.floor(e.position.y)..'|'..(e.direction or 0) end end;"
+        "storage._snap=table.concat(o,';'); rcon.print(#storage._snap)").strip()
+    try:
+        n = int(out)
+    except ValueError:
+        return {}
+    parts, i = [], 1
+    while i <= n:
+        parts.append(A._print(f"/sc rcon.print(storage._snap:sub({i},{i + 2999}))").rstrip("\r\n"))
+        i += 3000
+    A._print("/sc storage._snap=nil")
+    snap = {}
+    for rec in "".join(parts).split(";"):
+        f = rec.split("|")
+        if len(f) == 4:
+            snap[(f[0], int(f[1]), int(f[2]))] = int(f[3])
+    return snap
+
+
+def learn_from_operator_edits(before, after=None):
+    """WHY did the operator change this? (Seth, 2026-08-30). Diff the base across his session,
+    hand the change summary to the local 35B, and store its inferred INTENT as durable rules.
+    The operator is the strongest signal available - he only touches what the bot got wrong."""
+    import collections
+    import json as _j
+    if not before:
+        return 0
+    after = after or world_snapshot()
+    removed = collections.Counter(k[0] for k in before if k not in after)
+    added = collections.Counter(k[0] for k in after if k not in before)
+    rotated = collections.Counter(k[0] for k in before if k in after and before[k] != after[k])
+    if not (removed or added or rotated):
+        return 0
+    # a few concrete coordinates make the intent legible to the model
+    ex_rm = [f"{k[0]}@{k[1]},{k[2]}" for k in list(before)[:4000] if k not in after][:12]
+    ex_add = [f"{k[0]}@{k[1]},{k[2]}" for k in list(after)[:4000] if k not in before][:12]
+    summary = {
+        "removed_counts": dict(removed.most_common(10)),
+        "added_counts": dict(added.most_common(10)),
+        "rotated_counts": dict(rotated.most_common(6)),
+        "removed_examples": ex_rm, "added_examples": ex_add,
+    }
+    status.log(f"operator edits: -{sum(removed.values())} +{sum(added.values())} "
+               f"rot{sum(rotated.values())} - asking the architect why")
+    try:
+        import llm
+        out = llm.chat_json(
+            [{"role": "system", "content":
+              "You analyze what an EXPERT Factorio player changed in a base that an autopilot "
+              "built, and infer WHY. The player only touches things the bot got wrong, so each "
+              "change is evidence of a bot mistake. Reply ONLY with a JSON array of at most 3 "
+              'objects: [{"condition":"when the bot is doing X","mistake":"what the bot did '
+              'wrong","rule":"the durable rule the bot must follow instead"}]. Be concrete and '
+              "actionable (name entities/patterns, not vague advice). No prose outside the JSON."},
+             {"role": "user", "content": "Base changes made by the operator this session:\n"
+              + _j.dumps(summary, separators=(",", ":"))}],
+            model=llm.ARCHITECT, max_tokens=700, tag="operator-learn")
+    except Exception as e:
+        status.log(f"learn_from_operator_edits: {e}")
+        return 0
+    rows = out if isinstance(out, list) else ([out] if isinstance(out, dict) else [])
+    import lessons
+    n = 0
+    for r in rows[:3]:
+        if not isinstance(r, dict) or not r.get("rule"):
+            continue
+        lessons.add(condition=r.get("condition", "operator edited the base"),
+                    mistake=r.get("mistake", "?"), rule=r["rule"],
+                    evidence=_j.dumps(summary)[:1500],
+                    tags=("operator", "triage", "architect"),
+                    key="operator:" + str(r.get("condition", ""))[:40])
+        status.log(f"LEARNED from operator: {r['rule'][:160]}")
+        n += 1
+    return n
+
+
 def record_operator_deletions(before):
     """Diff the world against a pre-session snapshot: tiles the operator REMOVED become
     PROTECTED forever (Seth, 2026-08-30: 'the belts I deleted seem to have returned').

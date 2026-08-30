@@ -92,7 +92,7 @@ def test_travel_chunks_split():
     assert "request_to_generate_chunks" in by["travelreq"], "corridor pre-gen missing"
     assert "force_generate_chunk_requests" in by["travelreq"]
     assert "on_script_path_request_finished" in by["travelinit"]
-    assert "on_nth_tick(5" in by["travelinit"]
+    assert "on_nth_tick(2" in by["travelinit"]
     assert "storage.fle " not in "".join(c for _, c in chunks), \
         "functions must live in the `fle` global, never storage"
 

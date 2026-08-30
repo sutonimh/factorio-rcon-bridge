@@ -27,7 +27,7 @@
 -- @chunk core
 fle = fle or {}
 local F = fle
-F.VERSION = 2
+F.VERSION = 3
 -- vendored tables from connect_entities/server.lua
 F.wire_reach = {['small-electric-pole'] = 4, ['medium-electric-pole'] = 9,
                 ['big-electric-pole'] = 30, ['substation'] = 18}

@@ -926,3 +926,18 @@ resurrection of what the operator deletes; THIS is the creation-side fix: lay_be
 returns the tiles it laid, connect_mine_to_array (and the coal lane) register them in
 lanes.json, and teardown_lane(ore, keep=new_tiles) refund-removes the superseded lane in the
 SAME pass. Registry-scoped, so it only ever removes belts the bot itself recorded.
+
+## Learn from the OPERATOR's edits (Seth, 2026-08-30) + container timezone
+
+The operator only touches what the bot got wrong, so his session is the strongest teaching
+signal available. The controller now snapshots every player entity at login; at logoff it
+diffs (removed / added / rotated, with example coordinates) and hands the summary to the
+local 35B: "an expert changed the bot's base - infer WHY", which returns up to 3 durable
+{condition, mistake, rule} lessons stored under operator:* keys and injected into future
+triage/architect prompts. Verified live: a simulated stray-belt deletion produced the rule
+"only place belts that directly connect a producer to a consumer... every segment has a
+valid input and output". Pairs with the protected-tile registry (never rebuild what he
+removed) and the lane supersede teardown (never create the duplicates in the first place).
+CONTAINERS: both factorio-autopilot and factorio-dash must run with `-e TZ=America/Los_Angeles`
+(python:3.12-slim ships zoneinfo, so this is all that's needed) or the log is UTC. Re-apply
+on every `docker run` recreate - and remember the netns rule: `--network container:factorio`.
