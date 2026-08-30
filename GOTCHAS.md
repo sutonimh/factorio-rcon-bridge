@@ -1615,3 +1615,39 @@ lopsided, stop theorising about ratios and go looking for a break in the path.
 **Fault 3 is the one that generalises hardest: fixing a supply does not clear what is already
 stuck in front of it.** The same shape appeared twice today — this, and the bus lanes filling
 solid because there was no consumer. Reroute AND clear; a reroute alone leaves the deadlock.
+
+---
+
+## `plan_route` plans over EMPTY GROUND unless you scan first
+
+`belt_router.plan_route(start, goal)` has `obstacles=None` as its default, and `None` does not
+mean "figure it out" — it means **there are no obstacles**. The router will happily path a belt
+straight through live belts, through buildings, and through the middle of a lab.
+
+It cost a plan today. A route reported as "40 steps, touches zero reservation tiles" turned out
+to run directly through the science module's own loaded output column and through the tiles of
+the lab it was supposed to feed. Nothing was built, but the number was quoted as if it had been
+checked, and it had not been.
+
+The correct call is two steps, the same two the module's own CLI uses:
+
+```python
+obs = belt_router.scan_obstacles(x1, y1, x2, y2)   # reads the live map
+plan = belt_router.plan_route(start, goal, obstacles=obs)
+```
+
+Scan a box comfortably larger than the corridor — the route may bulge well outside the straight
+line between the endpoints. `scan_obstacles` defaults to `ghosts_hard=True`, which is what you
+want: ghosts are reservations and the router must respect them.
+
+Two corollaries:
+
+- **A route with `0 adopted` steps over ground you know is occupied is the tell.** If the plan
+  claims to place fresh belt on tiles that already hold belt, you forgot the scan.
+- **Never start a route on the source belt's own tile.** Starting at the terminus of a
+  north-bound column, the router's cheapest first move is straight back down that column,
+  paving over the belts feeding it. Start one tile to the side.
+
+And check the last step's direction. The router picks `goal_dir` freely, so a trunk can arrive
+pointing into whatever happens to sit past the goal — in this case a dead underground belt that
+would have swallowed every science pack. Pass `goal_dir` explicitly when the terminus matters.
