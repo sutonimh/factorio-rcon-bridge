@@ -212,10 +212,22 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   if (t.dataset.tab==="live") { view.fitted=false; drawMap(); drawDerp(); }
 });
 
+const UI_VERSION = "__UI_VERSION__";
+// A tab left open across a redeploy keeps running the old JS forever: it polls the API but
+// never re-fetches itself. The server stamps the served HTML with its hash; when /api/state
+// reports a different one, this page is stale — reload it. (Seth 2026-08-30)
+function checkUIVersion(ver) {
+  if (!ver || !UI_VERSION || UI_VERSION.startsWith("__") || ver === UI_VERSION) return;
+  const el = document.activeElement;
+  if (el && (el.tagName === "TEXTAREA" || el.tagName === "INPUT") && el.value.trim()) return;  // never eat a half-typed order
+  location.reload();
+}
+
 let logFilter = null, hist = {iron:[], copper:[], red:[], green:[], coal:[], power:[]};
 async function tick() {
   try {
     const s = await (await fetch("/api/state", {cache:"no-store"})).json();
+    checkUIVersion(s.ui_version);
     const st = s.status||{}, m = s.metrics||{}, ph = (s.phase||{}).phase ?? 0;
     const age = st.ts ? Math.floor(Date.now()/1000 - st.ts) : 9e9;
     $("p-heart").className = "dot " + (age<180 ? "ok" : age<900 ? "amber" : "bad");

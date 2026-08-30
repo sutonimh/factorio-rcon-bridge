@@ -12,6 +12,7 @@ Run on charon next to the autopilot (its own container, /app mounted read-only):
       -e FACTORIO_RCON_HOST=<charon-lan-ip> -p 8619:8619 \
       python:3.12-slim python3 -u dashboard.py
 """
+import hashlib
 import json
 import pathlib
 import time
@@ -29,6 +30,27 @@ def _read_json(name, default):
         return json.loads((HERE / name).read_text())
     except (OSError, ValueError):
         return default
+
+
+_ui_ver = {}
+
+
+def _ui_version():
+    """Fingerprint dashboard.html so a tab left open across a redeploy can reload itself.
+
+    Hashed content, not mtime: scp restamps the mtime on every deploy, and a reload that
+    changes nothing on screen is just a flicker.
+    """
+    path = HERE / "dashboard.html"
+    try:
+        st = path.stat()
+        key = (st.st_mtime_ns, st.st_size)
+        if _ui_ver.get("key") != key:
+            _ui_ver["ver"] = hashlib.md5(path.read_bytes()).hexdigest()[:12]
+            _ui_ver["key"] = key
+    except OSError:
+        return ""
+    return _ui_ver["ver"]
 
 
 def _tail(name, n):
@@ -331,6 +353,7 @@ class H(BaseHTTPRequestHandler):
             try:
                 # no-store: a cached page kept serving stale UI after fixes shipped
                 data = (HERE / "dashboard.html").read_bytes()
+                data = data.replace(b"__UI_VERSION__", _ui_version().encode())
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
@@ -343,6 +366,7 @@ class H(BaseHTTPRequestHandler):
         elif self.path == "/api/state":
             rep = _read_json("architect-report.json", {})
             self._send({
+                "ui_version": _ui_version(),
                 "status": _read_json("status.json", {}),
                 "phase": _read_json("phase.json", {}),
                 "lessons": _read_json("lessons.jsonl", None) or [json.loads(x) for x in _tail("lessons.jsonl", 15) if x.strip()],
