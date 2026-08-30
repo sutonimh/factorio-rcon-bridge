@@ -41,24 +41,31 @@ y=22..32  49 wide from x=-14      <- the open band; the array goes here
 y=33..46  24 wide from x=11       <- labs occupy x=0..8, so the bus passes EAST of them
 ```
 
-## 3. The bus
+## 3. The bus — SITED BY `bus_planner`, not by eye
 
-**Four lanes, vertical, running north → south**, because plates are made in the north
-(y = 6 and 15) and consumed by science and the labs in the south (y = 22..44).
+**x = 32..35, running y = 6 -> 44, four lanes, north to south.**
+
+The first version of this section specified x = 14..17 and was wrong: it was chosen by
+eyeballing the widest clear run per row, which cannot see that ground is CLAIMED and cannot
+see whether a source can actually get there. Built, it destroyed 21 ghosts of the reserved
+36-lab array. The site above is what `bus_planner.choose()` returns on the live world, and it
+is reproducible - re-run it and it will say the same thing, with reasons:
 
 ```
-x =        14   15   16   17
-lane     iron iron copper copper
-runs     y = 18  ->  y = 46
+CHOSE Corridor(v pos=32 6..44 lanes=4) score=-144.34
+  feed: iron-plate 7 tiles, copper-plate 24 tiles | nearest sink 26 tiles
+  margin 4.0 lanes | array room 627 tiles | reservation tiles touched: 0
+
+REJECTED Corridor(v pos=14 18..46): crosses 53 RESERVED tiles
+  (a blueprint ghost claims that ground, e.g. (14,30) (14,31) (14,32))
 ```
 
-Chosen at x = 14..17 because that column is clear through the whole corridor including the
-y ≥ 33 band (clear from x = 11), it passes east of the labs without touching them, and it
-leaves x = 19..34 — the widest part of the open band — free for the array.
+It sits east of the lab reservation (measured x = -2..25, y = 30..50), which is the constraint
+that decides this map. Iron is 7 tiles from the head; copper is 24, which is the real cost of
+the choice and is stated rather than hidden - the copper row ends at x = 17 and everything
+nearer the reservation either collides with the standing base or cannot be reached.
 
-Reserve **x = 12..13 and x = 18..19 as empty margin** either side. Taps, undergrounds and
-future lanes go there. A bus with no margin cannot be expanded without moving it, and this
-one has to grow to green circuits and steel later.
+Margin is 4 clear lanes, and there are 627 tiles of adjacent room for the assembler array.
 
 ### Feeding it — plates go to the BUS, not to a chest
 
