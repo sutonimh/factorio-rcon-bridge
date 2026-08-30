@@ -2219,6 +2219,36 @@ def electrify_mines():
             "  else local rb=s.create_entity{name='burner-mining-drill',position=pos,direction=dir,force=f};"
             "    if rb then inv.remove{name='burner-mining-drill',count=1} end end end;"
             "if n>0 then game.print('electrified '..n..' drills') end")
+        # VERIFY (build law #1/#2): an electric drill with no power MINES NOTHING. Patch the
+        # power in; if it still can't be powered, REVERT that drill to burner rather than
+        # leaving a dead machine on the map (this exact miss killed copper supply 2026-08-30).
+        dead = A._print(
+            f"/sc local s=game.surfaces[1]; local o={{}};"
+            f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name='electric-mining-drill'}}) do"
+            "  if d.status==defines.entity_status.no_power then o[#o+1]=math.floor(d.position.x)..','..math.floor(d.position.y) end end;"
+            "rcon.print(table.concat(o,';'))").strip()
+        for tok in [s2 for s2 in dead.split(";") if "," in s2]:
+            dx, dy = map(int, tok.split(","))
+            try:
+                import fle_tools
+                fle_tools.connect((dx - 4, dy), (dx, dy), "pole")
+            except Exception as e:
+                status.log(f"electrify {ore}: pole patch failed at {dx},{dy}: {e}")
+        still = A._print(
+            f"/sc local s=game.surfaces[1]; local n=0;"
+            f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name='electric-mining-drill'}}) do"
+            "  if d.status==defines.entity_status.no_power then n=n+1 end end; rcon.print(n)").strip()
+        if still not in ("0", ""):
+            status.log(f"electrify {ore}: {still} drills STILL unpowered - reverting them to burner")
+            A._print(
+                f"/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory();"
+                f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name='electric-mining-drill'}}) do"
+                "  if d.status==defines.entity_status.no_power then local pos,dir=d.position,d.direction;"
+                "    inv.insert{name='electric-mining-drill',count=1}; d.destroy();"
+                "    if inv.get_item_count('burner-mining-drill')>0 then"
+                "      local b=s.create_entity{name='burner-mining-drill',position=pos,direction=dir,force=f};"
+                "      if b then inv.remove{name='burner-mining-drill',count=1};"
+                "        local c=math.min(5,inv.get_item_count('coal')); if c>0 then b.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end end end")
     return 1
 
 
