@@ -1585,22 +1585,27 @@ def fix_mine_row_flow(ore):
     if not spot:
         return
     rx, ry = int(spot[0]), int(spot[1])
+    bx, by = SMELT_ZONE["iron-ore"]        # the base direction every lane ultimately serves
     A._print(
         f"/sc local s=game.surfaces[1]; local row={{}};"
-        f"for _,b in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='transport-belt'}}) do"
+        # radius 42: the true exit (corner into the lane column) sat OUTSIDE the old radius-26
+        # scan, so the fallback picked the WESTMOST belt and pointed the whole coal row AWAY
+        # from the base - repeatedly, fighting manual fixes (2026-08-30)
+        f"for _,b in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=42,type='transport-belt'}}) do"
         "  row[#row+1]=b end;"
         "if #row<4 then return end;"
-        # find the dominant row Y (most belts share it) - that's the drop row
         "local ycnt={}; for _,b in pairs(row) do local y=math.floor(b.position.y); ycnt[y]=(ycnt[y] or 0)+1 end;"
         "local ry2,best=nil,0; for y,c in pairs(ycnt) do if c>best then best=c; ry2=y end end;"
-        # exit = a row belt whose output is OFF the row (corner into the lane) or, failing that,
-        # the end adjacent to a non-row belt; fall back: the westmost belt
+        # exit = a row belt whose output leaves the row; fallback = the row end NEAREST THE
+        # BASE (never a compass assumption)
         "local exitx=nil;"
         "for _,b in pairs(row) do local y=math.floor(b.position.y);"
         "  if y==ry2 then for _,o in pairs(b.belt_neighbours.outputs) do"
         "    if math.floor(o.position.y)~=ry2 then exitx=math.floor(b.position.x) end end end end;"
-        "if not exitx then local mn=1e9; for _,b in pairs(row) do local y=math.floor(b.position.y);"
-        "  if y==ry2 then local x=math.floor(b.position.x); if x<mn then mn=x end end end; exitx=mn end;"
+        "if not exitx then local mn,mx=1e9,-1e9; for _,b in pairs(row) do local y=math.floor(b.position.y);"
+        "  if y==ry2 then local x=math.floor(b.position.x); if x<mn then mn=x end; if x>mx then mx=x end end end;"
+        f"  local bx={bx};"
+        "  exitx=(math.abs(mn-bx)<=math.abs(mx-bx)) and mn or mx end;"
         "local n=0;"
         "for _,b in pairs(row) do local y=math.floor(b.position.y);"
         "  if y==ry2 then local x=math.floor(b.position.x);"
