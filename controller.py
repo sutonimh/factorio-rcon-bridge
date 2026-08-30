@@ -19,6 +19,7 @@ Every fixer's trigger and outcome is recorded; an issue that keeps recurring wri
 (the automated GOTCHAS) and repeated fixer FAILURE escalates to the local 35B architect.
 """
 import json
+import os
 import threading
 import time
 import traceback
@@ -26,7 +27,9 @@ import traceback
 import autopilot as A
 import bootstrap as B
 import build_gates
+import feed_planner
 import lessons
+import pole_cull
 import status
 
 import pathlib
@@ -446,6 +449,26 @@ def controller_loop(stop_flag):
                 if lap % 10 == 0:
                     B.reap_dead_drills()
                     B.keep_power()
+                if lap % 60 == 11 and not B.operator_present():
+                    # Redundant poles are UPKEEP, not construction, so this runs even in
+                    # builder-safe-mode: it only ever removes what it can prove is spare and
+                    # re-wires what the removal breaks. It lives HERE, in the loop that
+                    # actually runs, because the same capability was written three times
+                    # before (optimize_poles.py, remove_redundant.py, dedupe_poles) and every
+                    # one of them was hung off something nothing calls. The map reached 165
+                    # poles for a base needing ~100, 53 supplying nothing whatsoever.
+                    try:
+                        pole_cull.apply(A, log=status.log)
+                    except Exception as e:
+                        status.log(f"pole cull error: {e}")
+                if (lap % 80 == 23 and not B.operator_present()
+                        and os.environ.get("BUILDER_ENABLED", "0") == "1"):
+                    # Connecting a stranded product to something that eats it IS construction,
+                    # so it obeys the safe-mode flag the operator set.
+                    try:
+                        feed_planner.feed_stalled(A, log=status.log)
+                    except Exception as e:
+                        status.log(f"feed error: {e}")
                 if (lap % 5 == 0 and not _INV["busy"] and not B.operator_present()
                         and time.monotonic() - _INV["t"] > INVARIANT_PERIOD_S):
                     # STRUCTURAL audit, on its own slow clock and its own thread: it is
