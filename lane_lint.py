@@ -441,6 +441,8 @@ def trace(x, y, contents=True, limit=400, pad=3):
                for b in belts if b["u"] not in run_uids]
 
     return {"start": [int(x), int(y)], "tiles": tiles, "lanes": agg, "segments": segs,
+            "contents": bool(contents),   # False = lanes were never read; content rules must
+                                          # stay silent rather than call an unread lane empty
             "upstream": [_term(n) for n in up_ends], "downstream": [_term(n) for n in down_ends],
             "sideloads": sideloads, "feeders": feeders, "tappers": tappers, "orphans": orphans,
             "pullers": [e for e in ins if (e.get("pt") or {}).get("u") is not None],

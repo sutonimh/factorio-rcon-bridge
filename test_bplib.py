@@ -45,12 +45,54 @@ def test_game_version():
 
 def test_verify_2x():
     bplib.verify_2x(bplib.encode(_bp()))
+    # strict mode still refuses pre-2.0
     try:
-        bplib.verify_2x(bplib.encode(_bp(version=V1_1_110)))
+        bplib.verify_2x(bplib.encode(_bp(version=V1_1_110)), migrate=False)
     except ValueError as e:
         assert "not 2.x" in str(e)
     else:
-        raise AssertionError("1.1 blueprint was admitted")
+        raise AssertionError("1.1 blueprint was admitted in strict mode")
+
+
+def test_migrate_pre2_non_rail():
+    """A non-rail 1.1 print is MIGRATED (directions doubled, entities renamed), not refused."""
+    bp = _bp(version=V1_1_110)
+    bp["blueprint"]["entities"] = [
+        {"entity_number": 1, "name": "stack-inserter", "position": {"x": 0.5, "y": 0.5}, "direction": 2},
+        {"entity_number": 2, "name": "transport-belt", "position": {"x": 1.5, "y": 0.5}, "direction": 6},
+    ]
+    d = bplib.verify_2x(bplib.encode(bp))
+    ents = d["blueprint"]["entities"]
+    assert ents[0]["name"] == "bulk-inserter", ents[0]["name"]
+    assert ents[0]["direction"] == 4 and ents[1]["direction"] == 12, ents
+    assert bplib.game_version(d)[0] == 2
+    assert any("doubled" in n for n in d["_migration_notes"]), d["_migration_notes"]
+
+
+def test_migrate_refuses_rails():
+    """Rails genuinely cannot be converted (2.0 rail geometry) - still refused, with why."""
+    bp = _bp(version=V1_1_110)
+    bp["blueprint"]["entities"] = [
+        {"entity_number": 1, "name": "straight-rail", "position": {"x": 0.5, "y": 0.5}}]
+    try:
+        bplib.verify_2x(bplib.encode(bp))
+    except ValueError as e:
+        assert "rail" in str(e).lower(), str(e)
+    else:
+        raise AssertionError("1.1 rail blueprint was admitted")
+
+
+def test_tier_downgrade():
+    bp = _bp()
+    bp["blueprint"]["entities"] = [
+        {"entity_number": 1, "name": "fast-inserter", "position": {"x": 0.5, "y": 0.5}},
+        {"entity_number": 2, "name": "fast-transport-belt", "position": {"x": 1.5, "y": 0.5}},
+        {"entity_number": 3, "name": "lab", "position": {"x": 4.5, "y": 4.5}},
+    ]
+    notes = bplib.tier_downgrade(bp, {"inserter", "transport-belt", "lab"})
+    names = [e["name"] for e in bp["blueprint"]["entities"]]
+    assert names == ["inserter", "transport-belt", "lab"], names
+    assert len(notes) == 2, notes
 
 
 def test_strip_snap():
