@@ -680,7 +680,13 @@ def lay_belt_path(waypoints):
     gaps = A._print(
         "/sc local s=game.surfaces[1]; local f=game.forces.player;"
         "local T={}; for a,b,c in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+),(%d+)') do T[#T+1]={tonumber(a),tonumber(b),tonumber(c)} end;"
-        "local function freebelt(x,y) for _,e in pairs(s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.6,type={'tree','simple-entity','cliff'}}) do if e.destroy then e.destroy() end end; return s.can_place_entity{name='transport-belt',position={x+0.5,y+0.5},force=f} end;"
+        # An EXISTING belt on the tile counts as FREE: we replace it with the correct
+        # direction. can_place_entity alone returns false there, so a stale-direction tile
+        # could never be corrected - every re-lay bridged or gave up around it, which is why
+        # the copper lane never converged for hours (2026-08-30).
+        "local function freebelt(x,y) for _,e in pairs(s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.6,type={'tree','simple-entity','cliff'}}) do if e.destroy then e.destroy() end end;"
+        "  if s.find_entity('transport-belt',{x+0.5,y+0.5}) then return true end;"
+        "  return s.can_place_entity{name='transport-belt',position={x+0.5,y+0.5},force=f} end;"
         "local gaps=0; local i=1;"
         "while i<=#T do local x,y,d=T[i][1],T[i][2],T[i][3];"
         "  if freebelt(x,y) then local old=s.find_entity('transport-belt',{x+0.5,y+0.5}); if old then old.destroy() end; s.create_entity{name='transport-belt',position={x+0.5,y+0.5},direction=d,force=f}; i=i+1;"
