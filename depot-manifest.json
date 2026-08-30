@@ -1,0 +1,32 @@
+{
+ "depot": "central surplus depot for derpface",
+ "tiles": [
+  [
+   2,
+   20
+  ],
+  [
+   3,
+   20
+  ],
+  [
+   4,
+   20
+  ],
+  [
+   2,
+   21
+  ],
+  [
+   3,
+   21
+  ],
+  [
+   4,
+   21
+  ]
+ ],
+ "captured_at": "2026-08-30 06:35:36",
+ "by_chest": {},
+ "totals": {}
+}

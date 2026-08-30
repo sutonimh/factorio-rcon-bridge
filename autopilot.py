@@ -1112,11 +1112,19 @@ def service_components():
 
 
 def manage_inventory():
-    """Keep the player inventory from clogging so queued builds ALWAYS have room
-    (Seth's rule: maintain free space). Offloads excess bulk to chests: firearm-magazine
-    -> ammo buffer, iron-ore/stone -> mine chest, copper/iron plate over 300 -> storage
-    chests in the buffer zone (-22..-12, -38..-28). Keeps all build items + a working
-    material buffer. Runs on the maintain loop."""
+    """SUPERSEDED by bootstrap.ensure_inventory_room - kept only for patrol.maintain().
+
+    This never ran in the live bot and could not have: it is called from `maintain()`, which is
+    called from `patrol.py`, which nothing imports - it died with the maintain loop (GOTCHAS
+    "THE SWEEP"). On 2026-08-30 derpface reached 80/80 stacks with this function in the tree,
+    and a full inventory makes `can_insert` false for every item, so every build failed at
+    placement while the logs read like a gating problem.
+
+    It was also too narrow to have helped: it offloads five hardcoded names (magazines, ore,
+    stone, plates over 600) and none of them were the 1374 belts, 833 gears, 439 inserters and
+    82 wooden chests that actually filled the bag. The replacement keeps a working set and
+    offloads EVERYTHING above it, to fixed central tiles, with a manifest so the material can be
+    taken back out. Call bootstrap.ensure_inventory_room(); do not extend this."""
     lua = (
         "/sc local s=game.surfaces['nauvis']; local p=storage.derpface; local inv=p.get_main_inventory();"
         # only offload when free space is actually low, so we don't strip materials a build needs

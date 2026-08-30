@@ -25,6 +25,7 @@ import traceback
 
 import autopilot as A
 import bootstrap as B
+import build_gates
 import lessons
 import status
 
@@ -166,7 +167,39 @@ def detect(d):
 
 
 # composite fixers (server-side)
+def _backpressured():
+    """True when the smelters are jammed at the OUTPUT, not starved at the input.
+
+    `full_output` means a furnace finished a plate and has nowhere to put it. Every symptom
+    downstream then looks exactly like a broken supply lane - drills blocked, furnaces idle,
+    plate flow at zero - and it is the opposite problem: the lane is doing its job and the
+    DRAIN is missing. Distinguishing them is the whole difference between a useful repair and
+    relaying good belt every twenty seconds."""
+    try:
+        st = build_gates.sense()
+    except Exception:
+        return False
+    jam = 0
+    for name in getattr(build_gates, "FURNACE_NAMES", ()):
+        hist = (st.get("status") or {}).get(name) or {}
+        jam += int(hist.get("full_output", 0))
+    total = sum(int(build_gates._f(st.get("counts", {}), n))
+                for n in getattr(build_gates, "FURNACE_NAMES", ()))
+    return total > 0 and jam >= max(3, int(total * 0.6))
+
+
 def _fix_lanes():
+    # DO NOT REPAIR A LANE THAT IS NOT BROKEN. On 2026-08-30 this ran every 15-20 seconds for
+    # hours because the triage model read "18 furnaces starved, 8 drills blocked" and concluded
+    # "ore lane broken", while all 28 furnaces were actually jammed at full_output with 3200
+    # plates in each terminal chest and nothing consuming them. It rewrote belts the operator
+    # had just fixed, all night. A lane repair cannot clear a back-pressure stall - there is
+    # nothing wrong upstream - so the only honest move is to say so and leave the belts alone.
+    if _backpressured():
+        status.log("fix_lanes WITHHELD - the smelters are jammed at the OUTPUT (full_output), "
+                   "not starved at the input; relaying belt cannot drain a full chest. The base "
+                   "needs a plate CONSUMER, not a lane repair.")
+        return 0
     B.scrub_mixed_ore()
     B.repair_belt_gaps()
     return B.ensure_lanes()
@@ -443,6 +476,17 @@ def controller_loop(stop_flag):
                             if v.get("state") not in ("healthy", None):
                                 status.log(f"triage[{v.get('_source','?')[:9]}]: {v['state']}/{v.get('class')} - {v['reason']}")
                         act = v.get("actuator")
+                        # THE TRUCE COVERS THIS PATH TOO. Classifying is read-only and keeps
+                        # running while he is connected; ACTUATING does not. This was the hole:
+                        # the invariant audit and the LAYOUT_ISSUES heals both check
+                        # operator_present(), and NEITHER of them writes, while the one path that
+                        # does write - an LLM verdict routed straight into an actuator - did not.
+                        # Live 2026-08-30: "operator online - layout heals suspended" at 06:27:59,
+                        # then "triage -> actuator fix_lanes" at 06:28:11 and again at 06:28:38,
+                        # relaying belts under his hands while he was repairing them by hand.
+                        if act and act != "none" and B.operator_present():
+                            status.log("triage: %s WITHHELD - operator online (truce)" % act)
+                            act = None
                         if v.get("state") in ("stall", "anomaly") and act and act != "none":
                             fn = {"keep_power": B.keep_power, "fix_unpowered": B.fix_unpowered,
                                   "ensure_grid_connected": B.ensure_grid_connected,

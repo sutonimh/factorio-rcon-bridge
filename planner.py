@@ -198,9 +198,22 @@ def _run_architect(d, verdict):
 
 # ------------------------------------------------------------------ phase 0
 def _scout_guarded(p):
-    """scout() with the ROADMAP guard: widen + regenerate on missing resources, fail loudly."""
-    B.scout()
-    missing = [k for k in ("iron-ore", "copper-ore", "stone", "coal", "water") if not B.STATE.get(k)]
+    """scout() with the ROADMAP guard: widen + regenerate on missing resources, fail loudly.
+
+    SCOUT ONLY WHAT IS NOT ALREADY KNOWN. `_load` restores every recorded patch from phase.json
+    into B.STATE at startup, and a patch does not move, so re-running the full scan each pass
+    spent a 625-chunk generate and five radius-160 scans to recompute the same coordinates -
+    at the front of every pass, ahead of all the work that actually builds anything.
+    """
+    known = [k for k in B.SCOUT_RESOURCES if B.STATE.get(k)]
+    missing = [k for k in B.SCOUT_RESOURCES if not B.STATE.get(k)]
+    if not missing:
+        status.log("scout: all %d resources already recorded (%s) - nothing to scan"
+                   % (len(known), ", ".join(known)))
+        return
+    A.purpose("phase 0: scouting %s" % ", ".join(missing))
+    B.scout(only=missing)
+    missing = [k for k in B.SCOUT_RESOURCES if not B.STATE.get(k)]
     if missing:
         status.log(f"scout: missing {missing}, widening to radius 320")
         A._print("/sc local s=game.surfaces[1]; for cx=-20,20 do for cy=-20,20 do s.request_to_generate_chunks({x=cx*32,y=cy*32},0) end end; s.force_generate_chunk_requests()")
@@ -607,7 +620,10 @@ def stage_world(p):
     """
     A.purpose("phase 0 bootstrap: world setup + crash-site cleanup")
     B.setup_world()
-    A.purpose("phase 0: scouting the richest ore patches + water")
+    # The purpose line moved INSIDE _scout_guarded: announcing "scouting the richest ore
+    # patches" before checking whether anything needs scouting made the dashboard report the
+    # bot's current action as scouting on every pass of a base that had every patch recorded
+    # months of game-time ago. A status line that is set unconditionally is not status.
     _scout_guarded(p)
     A.purpose("phase 0: first coal so the plant can be hand-seeded")
     B.fuel()
@@ -1491,6 +1507,16 @@ def phase0(p):
     """
     gate_reset()                # every pass gates against a freshly sensed world
     pass_reset()                # ...and counts what this pass actually built and refused
+    # ROOM TO BUILD, BEFORE ANY GATE IS ASKED. A full inventory makes can_insert false for every
+    # item, so the crafter produces nothing and A.place refuses with NO_ITEM - and none of that
+    # is visible from up here: the pass just looks gate-blocked. Cheap and idempotent (a free-
+    # space read, then nothing) so it belongs at the top of the pass rather than behind a
+    # condition someone has to remember to check. See bootstrap.ensure_inventory_room.
+    try:
+        B.ensure_inventory_room()
+    except Exception as e:
+        status.log("depot: offload failed (%s: %s) - continuing; builds may hit NO_ITEM"
+                   % (type(e).__name__, str(e)[:120]))
     for name, fn in PHASE0_STAGES:
         if B.operator_present():
             status.log("operator online mid-pass - stopping phase 0 before stage %s" % name)

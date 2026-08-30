@@ -113,13 +113,32 @@ def setup_world():
     A.clear_spaceship_debris()
 
 
-def scout():
+SCOUT_RESOURCES = ("iron-ore", "copper-ore", "stone", "coal", "water")
+
+
+def scout(only=None):
     """Find the RICHEST tile of each ore + nearest water; cache in STATE. Generates chunks
-    out to 384 tiles first so resources exist to scan."""
-    A.now("Bootstrap: scouting richest deposits + water")
+    out to 384 tiles first so resources exist to scan.
+
+    `only` restricts the scan to the named resources, and it is the normal case: a patch we
+    already recorded does not move. This used to run in full at the top of EVERY planner pass,
+    re-deriving positions that `planner._load` had just restored from phase.json a few lines
+    earlier - a 625-chunk force-generate plus five radius-160 scans, per pass, to arrive at the
+    same four coordinates. It was also the slowest step in the pass, so the dashboard's "current
+    action" was almost always "scouting richest deposits + water" on a base whose whole problem
+    was that it needed to BUILD (Seth, 2026-08-30: "we dont need to scout any deposits right now
+    we have everything we need").
+    """
+    want = tuple(only) if only else SCOUT_RESOURCES
+    if not want:
+        return STATE
+    A.now("Bootstrap: scouting %s" % ", ".join(want))
     A._print("/sc local s=game.surfaces[1]; for cx=-12,12 do for cy=-12,12 do s.request_to_generate_chunks({x=cx*32,y=cy*32},0) end end; s.force_generate_chunk_requests()")
     for ore in ("iron-ore", "copper-ore", "stone", "coal"):
-        STATE[ore] = A.richest_spot(ore, 0, 0, radius=160)
+        if ore in want:
+            STATE[ore] = A.richest_spot(ore, 0, 0, radius=160)
+    if "water" not in want:
+        return STATE
     w = A._print("/sc local s=game.surfaces[1]; local w; for r=20,200,8 do local t=s.find_tiles_filtered{position={0,0},radius=r,name={'water','deepwater'},limit=1}; if #t>0 then w=t[1]; break end end; rcon.print(w and (math.floor(w.position.x)..','..math.floor(w.position.y)) or 'none')").strip()
     STATE["water"] = tuple(map(int, w.split(","))) if "," in w else None
     return STATE
@@ -2663,6 +2682,165 @@ def bootstrap():
     red_science()
     A.now("Bootstrap: power + automation DONE")
     return STATE
+
+
+# --------------------------------------------------------------- THE DEPOT (Seth, 2026-08-30)
+# "anytime derpface inventory is full just build a chest and dump stuff in there, but make sure
+# to keep track of whats in the chest so he can use it later if he needs to. keep these chests
+# in a central location."
+#
+# A FULL INVENTORY IS NOT UNTIDINESS, IT IS A HARD STOP. At 80/80 stacks `can_insert` returns
+# false for every item, so the script-crafter cannot produce anything and `A.place` refuses with
+# NO_ITEM before it touches the world. Nothing above the placement layer can tell that apart from
+# a gating problem: on 2026-08-30 the base sat idle behind "power headroom 1.014 < 1.50" while the
+# real cause was that derpface was carrying 1374 belts, 833 gears and 82 wooden chests and had
+# nowhere to put a boiler. Three rounds of planner fixes could not have produced a build.
+#
+# `autopilot.manage_inventory` was supposed to prevent exactly this and never ran: it lives in
+# `maintain()`, which only `patrol.py` calls, and nothing imports patrol - it died with the
+# maintain loop (GOTCHAS "THE SWEEP"). It also only ever offloaded five hardcoded item names,
+# none of which were the belts and gears that actually filled the bag.
+DEPOT_TILES = [(2, 20), (3, 20), (4, 20), (2, 21), (3, 21), (4, 21)]
+
+# The working set: what a build actually needs in hand. Everything above this goes to the depot.
+# Generous on purpose - the point is free SLOTS, not a minimal loadout, and a build that has to
+# re-craft its own belts has traded one stall for another.
+DEPOT_KEEP = {
+    "assembling-machine-1": 4, "inserter": 40, "fast-inserter": 20, "transport-belt": 200,
+    "underground-belt": 8, "splitter": 4, "small-electric-pole": 40, "medium-electric-pole": 10,
+    "iron-plate": 300, "copper-plate": 150, "steel-plate": 50, "iron-gear-wheel": 100,
+    "copper-cable": 100, "electronic-circuit": 100, "coal": 100, "stone": 50,
+    "stone-furnace": 4, "iron-chest": 8, "boiler": 2, "steam-engine": 4, "pipe": 20,
+    "offshore-pump": 1, "lab": 2, "electric-mining-drill": 6, "radar": 1,
+}
+
+DEPOT_MIN_FREE = 8        # below this many free stacks, offload; a build needs room to craft into
+
+
+def _depot_manifest_path():
+    import pathlib as _pl
+    return _pl.Path(__file__).resolve().parent / "depot-manifest.json"
+
+
+def depot_manifest(write=True):
+    """Read what the depot actually holds and (by default) persist it.
+
+    The manifest is the "so he can use it later" half of the rule: a blind dump loses track of
+    materials the bot then re-crafts from raws. It is written from the WORLD, never from what we
+    think we put there, so an operator taking something out is reflected on the next pass."""
+    spec = ";".join("%d,%d" % (x, y) for x, y in DEPOT_TILES)
+    rows = A._print(
+        "/sc local s=game.surfaces[1] local o={} "
+        "for a,b in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+)') do "
+        "  local e=s.find_entities_filtered{position={tonumber(a)+0.5,tonumber(b)+0.5},"
+        "radius=0.4,type='container'}[1] "
+        "  if e then for _,it in pairs(e.get_inventory(defines.inventory.chest).get_contents()) "
+        "    do o[#o+1]=a..','..b..'|'..it.name..'|'..it.count end end end "
+        "rcon.print(table.concat(o,';'))").strip()
+    by_chest, totals = {}, {}
+    for rec in [r for r in rows.split(";") if r and "|" in r]:
+        pos, name, cnt = rec.split("|")
+        by_chest.setdefault(pos, {})[name] = int(cnt)
+        totals[name] = totals.get(name, 0) + int(cnt)
+    out = {"depot": "central surplus depot for derpface",
+           "tiles": [list(t) for t in DEPOT_TILES],
+           "captured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+           "by_chest": by_chest, "totals": totals}
+    if write:
+        import json as _json
+        _depot_manifest_path().write_text(_json.dumps(out, indent=1))
+    return out
+
+
+def ensure_inventory_room(min_free=DEPOT_MIN_FREE, keep=None, force=False):
+    """Offload surplus to the central depot so there is always room to craft and place.
+
+    Idempotent and cheap: returns immediately when there are already `min_free` free stacks, so
+    it is safe to call at the top of every planner pass. Chests are placed only as needed, from
+    derpface's own stock, on the fixed central tiles - a scattered chest is one nobody finds
+    again, which is why the tiles are constant rather than "wherever he happens to stand".
+
+    NO `--` COMMENTS IN THE LUA BELOW: `/sc` is sent as one line, so a Lua comment swallows the
+    rest of the command and the whole thing silently does nothing. That cost a debugging cycle.
+    """
+    keep = dict(DEPOT_KEEP if keep is None else keep)
+    free = A._print("/sc rcon.print(storage.derpface.get_main_inventory().count_empty_stacks())").strip()
+    try:
+        free_n = int(free)
+    except ValueError:
+        status.log("depot: could not read inventory free space (%r) - not offloading blind" % free[:80])
+        return None
+    if free_n >= int(min_free) and not force:
+        return None
+
+    keepspec = ";".join("%s=%d" % (k, v) for k, v in keep.items())
+    place = ";".join("%d,%d" % (x, y) for x, y in DEPOT_TILES)
+    out = A._print(
+        "/sc local s=game.surfaces[1] local f=game.forces.player "
+        "local d=storage.derpface local inv=d.get_main_inventory() "
+        "local keep={} "
+        "for pair in ([==[" + keepspec + "]==]):gmatch('([^;]+)') do "
+        "  local n,c=pair:match('([^=]+)=(%d+)') if n then keep[n]=tonumber(c) end end "
+        "local chests={} "
+        "for a,b in ([==[" + place + "]==]):gmatch('(-?%d+),(-?%d+)') do "
+        "  local x,y=tonumber(a),tonumber(b) "
+        "  local e=s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.4,type='container'}[1] "
+        "  if not e and inv.get_item_count('iron-chest')>0 "
+        "     and s.can_place_entity{name='iron-chest',position={x+0.5,y+0.5},force=f} then "
+        "    e=s.create_entity{name='iron-chest',position={x+0.5,y+0.5},force=f} "
+        "    if e then inv.remove{name='iron-chest',count=1} end end "
+        "  if e then chests[#chests+1]=e end end "
+        "if #chests==0 then rcon.print('ERR no depot chest') return end "
+        "local moved={} local left=0 "
+        "for _,it in pairs(inv.get_contents()) do "
+        "  local surplus=it.count-(keep[it.name] or 0) "
+        "  if surplus>0 then local put=0 "
+        "    for _,c in pairs(chests) do if put<surplus then "
+        "      put=put+c.get_inventory(defines.inventory.chest).insert{name=it.name,count=surplus-put} "
+        "    end end "
+        "    if put>0 then inv.remove{name=it.name,count=put} moved[#moved+1]=it.name..'='..put end "
+        "    left=left+(surplus-put) end end "
+        "rcon.print(string.format('%d %d %d %s', #chests, inv.count_empty_stacks(), left, "
+        "  table.concat(moved,' ')))").strip()
+    if out.startswith("ERR"):
+        status.log("depot: %s - inventory stays full, builds will fail with NO_ITEM" % out)
+        return out
+    parts = out.split(" ", 3)
+    now_free = parts[1] if len(parts) > 1 else "?"
+    overflow = parts[2] if len(parts) > 2 else "0"
+    status.log("depot: %s free stacks (was %d)%s -> %s"
+               % (now_free, free_n,
+                  ("; %s items did NOT fit - the depot needs another chest" % overflow)
+                  if overflow not in ("0", "?") else "",
+                  parts[3] if len(parts) > 3 else "nothing to offload"))
+    depot_manifest()
+    return out
+
+
+def depot_take(item, count):
+    """Pull `count` of `item` back out of the depot into derpface's hands. The other half of
+    "so he can use it later": material that went to the depot must be retrievable, or the dump
+    is just a slower way of throwing it away. Returns how many actually moved."""
+    place = ";".join("%d,%d" % (x, y) for x, y in DEPOT_TILES)
+    got = A._print(
+        "/sc local s=game.surfaces[1] local inv=storage.derpface.get_main_inventory() "
+        "local want=" + str(int(count)) + " local got=0 "
+        "for a,b in ([==[" + place + "]==]):gmatch('(-?%d+),(-?%d+)') do "
+        "  local e=s.find_entities_filtered{position={tonumber(a)+0.5,tonumber(b)+0.5},"
+        "radius=0.4,type='container'}[1] "
+        "  if e and got<want then local ci=e.get_inventory(defines.inventory.chest) "
+        "    local have=ci.get_item_count('" + item + "') "
+        "    if have>0 then local n=inv.insert{name='" + item + "',count=math.min(have,want-got)} "
+        "      if n>0 then ci.remove{name='" + item + "',count=n} got=got+n end end end end "
+        "rcon.print(got)").strip()
+    try:
+        n = int(got)
+    except ValueError:
+        n = 0
+    if n:
+        status.log("depot: took %d %s back out" % (n, item))
+        depot_manifest()
+    return n
 
 
 if __name__ == "__main__":
