@@ -21,15 +21,27 @@ admissible-looking placements of things nothing consumed).
     stage            planner module        gate structure     supersedes
     plant            plant_planner         power_capacity     bootstrap.power / power_row
     spine            power_planner         power_grid         bootstrap.power_row
+    relief           (dispatches)          the blocking one   nothing - new (LAW 5)
     mines            mine_planner_v2       mine_outpost       bootstrap.build_mine_outpost
     array grid       power_planner         power_grid         build_smelter_array's pole rows
     ore/coal lanes   supply_planner        ore_lane           bootstrap.connect_mine_to_array
                                                               + bootstrap.coal_to_boiler
+    plant expand     plant_planner.scale   power_capacity     nothing - new
     electrify        mine_planner_v2       mine_outpost       bootstrap.electrify_mines
 
 The superseded bootstrap functions are LEFT IN PLACE and simply not called from here: they
 are still reachable from operator2's command catalog and the controller's own heals, and
 deleting them is a separate change.
+
+THE STAGE ORDER IS THE DEPENDENCY GRAPH (2026-08-30). Gates that were each individually
+correct produced a DEADLOCK on the operator's base - the plant refused for want of coal, the
+coal stage sitting downstream of the plant and never reached, science refused for want of
+power, power refused for want of coal. Three things fix it and all three are here:
+PHASE0_STAGES puts every no-power build ahead of every power-gated one and the coal lane
+ahead of plant expansion; STAGE_SPEC turns "only meaningful after X" into a precondition that
+is SKIPPED WITH A REASON instead of a silent return; and a pass that verifies nothing while
+refusing something logs one DEADLOCK line naming the binding constraint and the relief build,
+which stage_relief then attempts (build_gates LAW 5 / next_relief).
 
 Phase state persists to phase.json (runtime file, gitignored) so a container restart resumes;
 `builds` maps a stage key -> the buildplan id it produced, which is how a stage knows it is
@@ -248,9 +260,16 @@ def plant_columns_needed(st):
     This is the arithmetic the operator did by hand: he ADDED a second boiler column BEFORE
     electrifying 16 drills, because without it headroom would have gone 3.6/2.246 -> 0.80 and
     the whole base would have browned out.
+
+    IT MUST SOLVE THE SAME INEQUALITY AS build_gates._pr_headroom_after, or the stage asks for
+    a column count its own gate can never approve. It did not: this treated PROJECTED_LOAD_KW
+    as the TOTAL load and ignored everything already standing, so on the operator's
+    hand-optimized base (3.55 MW of load already drawing) it asked for 1 column while the gate
+    wanted 4 and refused every one of them. On a fresh map the two agree - current load is
+    zero - which is exactly why it survived until a base existed to break it.
     """
     have = build_gates.capacity_mw(st)
-    need = (PROJECTED_LOAD_KW / 1000.0) * build_gates.POWER_HEADROOM_MIN
+    need = build_gates.load_mw(st, PROJECTED_LOAD_KW) * build_gates.POWER_HEADROOM_MIN
     return max(0, int(math.ceil((need - have) / build_gates.BOILER_MW)))
 
 
@@ -278,13 +297,31 @@ def gate_reset():
     _GATE["st"], _GATE["t"] = None, 0.0
 
 
-def gate(structure, n=1, params=None, state=None):
-    """ADMISSION CONTROL in front of every build (build_gates, LAWS 1-4). True = proceed.
+# ------------------------------------------------------------------ pass bookkeeping
+# What THIS build pass actually did. A builder that verifies nothing and refuses something is
+# not idle, it is DEADLOCKED, and the only way to tell the two apart is to count both.
+_PASS = {"built": 0, "blocked": [], "relief_done": False}
+
+
+def pass_reset():
+    _PASS["built"], _PASS["blocked"], _PASS["relief_done"] = 0, [], False
+
+
+def gate(structure, n=1, params=None, state=None, relieves=None):
+    """ADMISSION CONTROL in front of every build (build_gates, LAWS 1-5). True = proceed.
 
     A refusal is the NORMAL outcome early in a base and is never raised: raising would
     abandon the rest of the pass, and the stages behind this one that ARE allowed would never
     run. A gate that cannot EVALUATE - the census read failed, the structure is unknown, the
     recipe is unknown - REFUSES. It never falls back to allow.
+
+    `relieves` names the constraint(s) this build INCREASES (LAW 5). It is how a relief build
+    gets through the check that is only failing because the relief has not been built yet -
+    and it is logged as `gate RELIEF:`, never as a plain ALLOW, because an exemption that
+    reads like an ordinary pass is an exemption nobody can audit.
+
+    Every refusal is recorded for the pass, so the deadlock detector can name the binding
+    constraint from what the builder actually tried rather than from a speculative x1 of each.
     """
     try:
         st = gate_state() if state is None else state
@@ -293,12 +330,23 @@ def gate(structure, n=1, params=None, state=None):
                    "world must never allow)" % (structure, n, e))
         return False
     try:
-        ok, why = build_gates.gate(structure, n, st, params)
+        ok, why, rep = build_gates.gate_report(structure, n, st, params, relieves)
     except Exception as e:
         status.log("gate %s x%d: %s: %s - REFUSED" % (structure, n, type(e).__name__, e))
         return False
-    status.log(("gate ALLOW: " if ok else "gate BLOCK: ") + why[:240])
-    return ok
+    if not ok:
+        _PASS["blocked"].append({"structure": structure, "n": n,
+                                 "params": dict(params or {}),
+                                 "blocking": list(rep.get("blocking") or []), "why": why})
+        status.log("gate BLOCK: " + why[:240])
+        return False
+    key = build_gates.relief_key_of(rep)
+    if key:
+        status.log("gate RELIEF: allowing %s x%d because it increases %s - %s"
+                   % (structure, n, key, why[:200]))
+    else:
+        status.log("gate ALLOW: " + why[:240])
+    return True
 
 
 def gate_bootstrap(structure, n, exempt_while, why, params=None):
@@ -329,6 +377,7 @@ def verified(rec, what):
     st = (rec or {}).get("status")
     v = (rec or {}).get("verify") or {}
     if st == "verified":
+        _PASS["built"] += 1          # the ONE place a build counts as progress this pass
         status.log("%s: VERIFIED - %s"
                    % (what, str((v.get("check") or {}).get("detail", ""))[:180]))
         return True
@@ -368,6 +417,183 @@ def mark_build(p, key, rec):
 
 def _pt(v, default=None):
     return (int(v[0]), int(v[1])) if v else default
+
+
+# ------------------------------------------------------------------ adopt what is LIVE
+def _census_poles(st):
+    return int(sum(build_gates._f(st.get("counts", {}), n)
+                   for n in build_gates.POLE_NAMES))
+
+
+def _live_poles(area):
+    """Pole TILES inside an inclusive tile bbox. READ ONLY; [] on any failure."""
+    try:
+        out = (A._print(
+            "/sc local t={} for _,e in pairs(game.surfaces[1].find_entities_filtered"
+            "{area={{%d,%d},{%d,%d}},name={'small-electric-pole','medium-electric-pole',"
+            "'big-electric-pole','substation'}}) do t[#t+1]=math.floor(e.position.x)..','"
+            "..math.floor(e.position.y) end rcon.print(table.concat(t,';'))"
+            % (int(area[0]), int(area[1]), int(area[2]), int(area[3]))) or "").strip()
+    except Exception as e:
+        status.log("live pole read failed (%s) - treating as none" % e)
+        return []
+    poles = []
+    for tok in out.split(";"):
+        bits = tok.split(",")
+        if len(bits) == 2:
+            try:
+                poles.append([int(bits[0]), int(bits[1])])
+            except ValueError:
+                pass
+    return poles
+
+
+def _live_pump():
+    """The offshore pump's tile. READ ONLY; None on any failure.
+
+    It is the ONE measurement plant_planner needs to reconstruct a standing plant, because
+    `anchor_from_pump` is defined off it - and defined off THIS plant: its docstring records
+    "pump (-32,51) -> anchor (-35,45)", which is the operator's own shore.
+    """
+    try:
+        out = (A._print(
+            "/sc local p=game.surfaces[1].find_entities_filtered{name='offshore-pump'}[1] "
+            "rcon.print(p and (math.floor(p.position.x)..','..math.floor(p.position.y)) "
+            "or '')") or "").strip()
+    except Exception as e:
+        status.log("live pump read failed (%s) - nothing to adopt" % e)
+        return None
+    bits = out.split(",")
+    if len(bits) != 2:
+        return None
+    try:
+        return (int(bits[0]), int(bits[1]))
+    except ValueError:
+        return None
+
+
+def _plant_standing(plan):
+    """Is every entity of `plan` ACTUALLY IN THE GROUND? (found, missing) - a READ.
+
+    This is the adoption test, and it is deliberately narrower than plant_planner.verify():
+    verify() also fails a plant that is merely dry or cold or has no coal on its belt, and
+    the live plant fails exactly those (pump water 99/100, "coal dead-end") - which is the
+    condition we are adopting it in order to FIX. Identity is `read_state` finding the
+    entity; a missing one reports -2 (plant_planner.verify_lua).
+    """
+    state = plant_planner.read_state(plan)                       # READ ONLY
+    missing = [k for k in plant_planner._check_spec(plan)
+               if (state.get(k) is None or state[k][0] == -2)]
+    return (not missing), missing
+
+
+def adopt_plant(p, st):
+    """The STANDING plant, RECONSTRUCTED from the world when phase.json has no record.
+
+    phase.json is bookkeeping, not evidence. On the operator's hand-optimized base the plant
+    physically exists (2 boilers, 4 engines, 3.60 MW, one energized network) and `p["plant"]`
+    was empty because HE built it. Adopting only its POLES was not enough, and the half-fix
+    was its own dead end: `stage_plant` saw capacity and deferred to `stage_plant_expand`,
+    which needs a buildplan record; `stage_coal_lane` needs `coal_intake`, which only a plan
+    names. So on the base this was written for, boiler columns 2..N AND the coal lane were
+    both unreachable forever - the gate said ALLOW and nothing could build. What the plant
+    stage needs adopted is the PLAN, not the poles.
+
+    Reconstruction is exact and self-checking: plant_planner's geometry is defined off this
+    very shore, and `_plant_standing` reads the world back before a single field is recorded.
+    A wrong anchor lists its MISSING entities and adopts NOTHING - and `scale()` refuses a
+    second time later, because it re-plans and raises if any existing entity would move.
+    """
+    rec = p.get("plant") or {}
+    if rec.get("anchor") and rec.get("coal_intake"):
+        return rec
+    if (build_gates.capacity_mw(st) <= 0 or _census_poles(st) <= 0
+            or int(build_gates._f(st, "networks")) != 1):
+        return {}
+    counts = st.get("counts") or {}
+    n_columns = min(int(build_gates._f(counts, "boiler")),
+                    int(build_gates._f(counts, "steam-engine"))
+                    // plant_planner.ENGINES_PER_BOILER)
+    if n_columns < 1:
+        return {}
+    pump = _live_pump()
+    if pump is None:
+        return {}
+    try:
+        plan = plant_planner.plan_plant(n_columns * plant_planner.ENGINES_PER_BOILER,
+                                        water_hint=pump)
+        standing, missing = _plant_standing(plan)
+    except Exception as e:
+        status.log("plant: cannot reconstruct the standing plant from pump %s (%s: %s) - "
+                   "refusing to adopt a plant it cannot see" % (pump, type(e).__name__,
+                                                                str(e)[:140]))
+        return {}
+    if not standing:
+        status.log("plant: a %d-column plant reconstructed from pump %s is NOT in the ground "
+                   "(%d entities missing, e.g. %s) - this plant is not on plant_planner's "
+                   "lattice and cannot be extended by scale(); leaving it alone"
+                   % (n_columns, tuple(pump), len(missing),
+                      ", ".join("%s@%.1f,%.1f" % m for m in missing[:3])))
+        return {}
+    intake = plant_planner.coal_intake(plan)
+    out = {"anchor": list(plan["anchor"]), "bbox": list(plan["bbox"]),
+           "n_columns": plan["n_columns"], "power_MW": plan["power_MW"],
+           "pump": [int(pump[0]), int(pump[1])],
+           "coal_intake": [int(intake["tile"][0]), int(intake["tile"][1])],
+           "poles": [[x, y] for (_n, x, y) in plant_planner.plan_poles(plan)],
+           "adopted": True}
+    status.log("plant: ADOPTED the standing %d-column plant (%.1f MW) - pump %s -> anchor "
+               "%s, coal intake %s. phase.json had no record; the world did, and every "
+               "entity of the reconstruction was read back before this was written."
+               % (plan["n_columns"], plan["power_MW"], tuple(pump),
+                  tuple(plan["anchor"]), tuple(out["coal_intake"])))
+    p["plant"] = out
+    save(p)
+    return out
+
+
+def plant_existing(p, st):
+    """The plant plan `scale()` must extend: the buildplan record when THIS planner built it,
+    else the reconstruction of the standing one. None when there is nothing to extend."""
+    pid = (p.get("builds") or {}).get("plant")
+    if pid:
+        return plant_planner.from_record(buildplan.load(pid))
+    rec = adopt_plant(p, st)
+    if not rec.get("pump"):
+        return None
+    return plant_planner.plan_plant(int(rec["n_columns"]) * plant_planner.ENGINES_PER_BOILER,
+                                    water_hint=tuple(rec["pump"]))
+
+
+def plant_poles(p, st):
+    """The plant's poles - from phase.json when THIS planner built it, else FROM THE WORLD.
+
+    MEASURED, NOT REMEMBERED, is the same rule that makes a functional check beat
+    create_entity's return value. The plan's OWN poles are used where the plant could be
+    adopted; the wide pole sweep below is the fallback for a plant that stands but is not on
+    plant_planner's lattice, and it is deliberately last - it returns every pole for 40 tiles
+    around the shore, which is most of a built base, not a plant.
+    """
+    poles = (p.get("plant") or {}).get("poles") or []
+    if poles:
+        return [list(t) for t in poles]
+    water = B.STATE.get("water")
+    if (build_gates.capacity_mw(st) <= 0 or _census_poles(st) <= 0
+            or int(build_gates._f(st, "networks")) != 1 or not water):
+        return []
+    adopted = adopt_plant(p, st)
+    if adopted.get("poles"):
+        return [list(t) for t in adopted["poles"]]
+    wx, wy = int(water[0]), int(water[1])
+    found = _live_poles((wx - 40, wy - 40, wx + 40, wy + 40))
+    if not found:
+        return []
+    status.log("plant: adopting %d live pole(s) near the standing plant at (%d,%d) - "
+               "phase.json had no plant record, the world did" % (len(found), wx, wy))
+    p.setdefault("plant", {})["poles"] = found
+    p["plant"]["adopted"] = True
+    save(p)
+    return found
 
 
 # ------------------------------------------------------------------ phase 0 stages
@@ -430,6 +656,13 @@ def stage_plant(p):
     if not gate("power_capacity", cols, params={"projected_load_kw": PROJECTED_LOAD_KW},
                 state=st):
         return
+    if build_gates.capacity_mw(st) > 0:
+        # THE FIRST COLUMN IS UNCONDITIONAL; EVERY LATER ONE BURNS 27 MORE COAL/MIN. A plant
+        # already stands, so this is an EXPANSION, and an expansion belongs behind the coal
+        # lane that pays for it - which is where stage_plant_expand sits in the stage order.
+        status.log("plant: %d more column(s) wanted, but a plant already stands - expansion "
+                   "runs after the coal lane (stage_plant_expand)" % cols)
+        return
     A.purpose("phase 0: steam plant at the lake (%d column(s), planned whole)" % cols)
     wx, wy = int(water[0]), int(water[1])
     terrain = plant_planner.scan_shore(wx, wy, radius=30)            # READ ONLY
@@ -453,6 +686,69 @@ def stage_plant(p):
     save(p)
 
 
+def stage_plant_expand(p):
+    """Boiler columns 2..N - AFTER the coal that will feed them.
+
+    The split from stage_plant is the whole point: the first column is unconditional (nothing
+    precedes power), every later one commits another BOILER_COAL_PER_MIN to the fire, and
+    `power_capacity`'s own `coal_at_boiler` check says so. Running expansion ahead of the coal
+    lane is what produced the live deadlock - the plant refused for want of coal, the coal
+    stage sitting downstream of the plant and never reached.
+
+    EXTENSION, NEVER A REBUILD: plant_planner.scale() refuses outright if the new layout would
+    move a single existing entity, and buildplan probes the world first so only the delta is
+    placed.
+
+    The plant it extends may be one THIS planner never built. Requiring a buildplan record
+    made every column after the first unreachable on the operator's own base - see
+    adopt_plant(), which reconstructs the standing plant and reads every entity back before
+    handing it here.
+    """
+    try:
+        st = gate_state()
+    except Exception as e:
+        status.log("stage_plant_expand: census failed (%s)" % e)
+        return
+    more = plant_columns_needed(st)
+    if more <= 0:
+        return
+    if not gate("power_capacity", more, params={"projected_load_kw": PROJECTED_LOAD_KW},
+                state=st):
+        return
+    try:
+        existing = plant_existing(p, st)
+    except Exception as e:
+        status.log("plant expand: cannot reconstruct the standing plant (%s: %s) - "
+                   "refusing to re-plan a plant blind" % (type(e).__name__, str(e)[:160]))
+        return
+    if existing is None:
+        status.log("plant expand: no plant to extend - neither a buildplan record nor a "
+                   "standing plant this planner can reconstruct")
+        return
+    A.purpose("phase 0: +%d boiler column(s), now that coal leads them" % more)
+    try:
+        out = plant_planner.scale(existing, more * plant_planner.ENGINES_PER_BOILER)
+    except plant_planner.PlantError as e:
+        status.log("plant expand: %s" % str(e)[:220])
+        return
+    for w in out.get("warnings", ()):
+        status.log("plant expand: " + str(w)[:200])
+    rec = plant_planner.build(out["plan"])
+    if not verified(rec, "plant expansion (+%d column(s))" % out["added_columns"]):
+        return
+    mark_build(p, "plant", rec)
+    plan = out["plan"]
+    intake = plan["intake"]
+    p["plant"] = {
+        "anchor": list(plan["anchor"]), "bbox": list(plan["bbox"]),
+        "n_columns": plan["n_columns"], "power_MW": plan["power_MW"],
+        "coal_intake": [int(intake["tile"][0]), int(intake["tile"][1])],
+        "poles": [[x, y] for (_n, x, y) in plant_planner.plan_poles(plan)],
+        "pump": [int(plan["pump"][0]), int(plan["pump"][1])],   # keeps it reconstructable
+    }
+    save(p)
+
+
 def _spine_anchor(p, end):
     """The plant pole the base spine hangs off: whichever of the plant's own poles is nearest
     the spine's far end.
@@ -462,6 +758,12 @@ def _spine_anchor(p, end):
     trunk short in every orientation and never leaves it doubling back through the plant.
     """
     poles = (p.get("plant") or {}).get("poles") or []
+    if not poles:
+        try:
+            poles = plant_poles(p, gate_state())      # adopt the STANDING plant, if any
+        except Exception as e:
+            status.log("spine: could not look for a live plant pole (%s)" % str(e)[:120])
+            poles = []
     if not poles:
         return None
     return min((tuple(t) for t in poles),
@@ -568,9 +870,12 @@ def stage_mines(p):
     the plan ends at the lane's downstream tile and stage_ore_lanes routes onward from it with
     belt_router's obstacle-aware A*.
 
-    The gate is `mine_outpost` for BOTH drill tiers. For a burner outpost that is
-    conservative - it charges the electric drill's 90 kW against a drill that draws none - and
-    conservative is the only safe direction for an admission gate to be wrong in.
+    The gate is `mine_outpost` for BOTH drill tiers, and the TIER IS PASSED. It used to be
+    withheld, on the reasoning that charging a burner the electric drill's 90 kW is
+    conservative and conservative is the safe direction for an admission gate to be wrong in.
+    That reasoning is what LAW 5 overturns: a burner outpost is one of the no-power builds
+    this stage order puts FIRST precisely because it draws nothing, and refusing it for want
+    of headroom it does not consume is not caution, it is the deadlock.
     """
     spine = p.get("spine") or {}
     anchor = _pt((spine.get("poles") or [None])[-1]) if spine.get("poles") else None
@@ -587,7 +892,12 @@ def stage_mines(p):
             status.log("mine %s: no base spine to join - an electric drill on an islanded "
                        "grid mines nothing (net 405). Spine first." % ore)
             continue
-        if not gate("mine_outpost", n, params={"drills": n}):
+        # THE TIER AND THE ORE GO TO THE GATE. Without `drill` the gate charges the electric
+        # drill's 90 kW against a BURNER, which draws none - the exact miscount that helped
+        # close the live deadlock, and adds_kw_for() only fixes it for a caller that says
+        # which drill it means. Without `ore` the relief keys degrade to the
+        # `overbuild_within_budget:*` wildcard instead of naming the ore they raise.
+        if not gate("mine_outpost", n, params={"drills": n, "ore": ore, "drill": drill}):
             continue
         A.purpose("phase 0: %s outpost (%d %s)" % (ore, n, drill))
         try:
@@ -720,7 +1030,7 @@ def stage_array_grid(p):
         mark_build(p, "array_grid", rec)
 
 
-def _supply(p, key, item, from_xy, to_xy, what, drills=1):
+def _supply(p, key, item, from_xy, to_xy, what, drills=1, relieves=None):
     """gate -> plan_supply -> build, for ONE lane. Shared by the ore and coal stages.
 
     plan_supply refuses a SECOND lane into the same destination and hands back the one that
@@ -728,9 +1038,10 @@ def _supply(p, key, item, from_xy, to_xy, what, drills=1):
     72.4%% of everything the operator deleted. That refusal is SUCCESS here, not a failure.
     """
     if build_done(p, key):
-        return
-    if not gate("ore_lane", 1, params={"producer": "mining-drill", "drills": drills}):
-        return
+        return True
+    if not gate("ore_lane", 1, relieves=relieves,
+                params={"producer": "mining-drill", "drills": drills, "item": item}):
+        return False
     A.purpose("phase 0: %s" % what)
     res = supply_planner.plan_supply(item, from_xy, to_xy)
     if not res.get("ok"):
@@ -746,20 +1057,23 @@ def _supply(p, key, item, from_xy, to_xy, what, drills=1):
                 status.log("%s: already served by lane %s" % (what, lane["id"]))
                 p.setdefault("builds", {})[key] = lane["plan_id"]
                 save(p)
-                return
+                return True
             status.log("%s: owned by lane %s (%s) - finishing THAT lane"
                        % (what, lane["id"], lane.get("status")))
             rec = supply_planner.build(lane["plan_id"])
             if verified(rec, what):
                 mark_build(p, key, rec)
-            return
+                return True
+            return False
         status.log("%s: not planned [%s] - %s"
                    % (what, res.get("code"), str(res.get("reason"))[:220]))
-        return
+        return False
     status.log("%s: %s" % (what, res.get("reason")))
     rec = supply_planner.build(res)
     if verified(rec, what):
         mark_build(p, key, rec)
+        return True
+    return False
 
 
 def stage_ore_lanes(p):
@@ -837,7 +1151,10 @@ def stage_electrify(p):
         mine = (p.get("mines") or {}).get(ore)
         if not mine or mine.get("drill") == ELECTRIC_DRILL:
             continue
-        if not gate("mine_outpost", n, params={"drills": n}):
+        # ELECTRIC by definition here - this stage exists to convert - so the gate is charged
+        # the full 90 kW per drill, which is the whole point of the check it has to pass.
+        if not gate("mine_outpost", n,
+                    params={"drills": n, "ore": ore, "drill": ELECTRIC_DRILL}):
             continue
         A.purpose("phase 0: re-planning the %s outpost as all-electric" % ore)
         # NB: no pole= here. upgrade_to_electric passes OPERATOR_MINE_SPEC["pole"] itself and
@@ -868,20 +1185,296 @@ def stage_oil(p):
     scout_oil(p)
 
 
+# ------------------------------------------------------------------ relief (LAW 5)
+def _relief_mine(p, ore, n, drill, relieves):
+    """Expand a mine by `n` drills at the tier that is LEGAL NOW.
+
+    The structural gap this fills: MINE_DRILLS is a one-shot target and stage_mines
+    short-circuits on build_done, so the dependency graph contained the edge "power_capacity
+    requires coal" and NO edge that raised coal in response. A gate that says "mine more coal
+    first" to a builder with no way to mine more coal is a dead end with good manners.
+
+    The plan is for the TOTAL (existing + n) drills: buildplan probes the world first, finds
+    what already stands and places only the delta - the same mechanism plant_planner.scale
+    relies on - so this EXTENDS the outpost instead of laying a second one beside it.
+    """
+    spot = B.STATE.get(ore)
+    if not spot:
+        status.log("relief mine %s: patch not scouted - nothing to expand" % ore)
+        return False
+    drill = drill or _drill_for(ore)
+    if drill is None:
+        status.log("relief mine %s: electric is the standard on this base and the grid cannot "
+                   "carry another drill - the relief is POWER, not a burner outpost" % ore)
+        return False
+    anchor = _pt(((p.get("spine") or {}).get("poles") or [None])[-1])
+    if drill == ELECTRIC_DRILL and anchor is None:
+        status.log("relief mine %s: an electric drill needs a grid to join (net 405) and no "
+                   "spine is recorded" % ore)
+        return False
+    # COUNT WHAT ACTUALLY STANDS, not what phase.json remembers. The operator rebuilt these
+    # outposts by hand - 4 electric coal drills stand on the coal patch while phase.json still
+    # says n=0 - so sizing `total` from the ledger plans a SECOND outpost on top of a working
+    # one. buildplan only places the delta, and the delta is only right if `have` is real.
+    rx, ry = int(spot[0]), int(spot[1])
+    try:
+        have = int(A._print(
+            "/sc rcon.print(#game.surfaces[1].find_entities_filtered{type='mining-drill',"
+            "position={%d,%d},radius=30})" % (rx, ry)).strip())
+    except ValueError:
+        have = int(((p.get("mines") or {}).get(ore) or {}).get("n") or 0)
+    total = have + int(n)
+    if not gate("mine_outpost", int(n), relieves=relieves,
+                params={"drills": total, "ore": ore, "drill": drill}):
+        return False
+    A.purpose("phase 0 relief: %s mine -> %d %s" % (ore, total, drill))
+    try:
+        plan = mine_planner_v2.plan_outpost(
+            ore, total, center=_pt(spot), drill=drill, pole=POLE,
+            trunk=None, power_trunk_x=(SPINE_X if anchor else None), grid_anchor=anchor)
+    except mine_planner_v2.LayoutError as e:
+        status.log("relief mine %s: plan refused - %s" % (ore, str(e)[:220]))
+        return False
+    for w in plan.get("warnings", ()):
+        status.log("relief mine %s plan: %s" % (ore, str(w)[:200]))
+    rec = mine_planner_v2.build(plan)
+    if not verified(rec, "%s mine relief (+%d %s)" % (ore, n, drill)):
+        return False
+    mark_build(p, _mine_key(ore), rec)
+    p.setdefault("mines", {})[ore] = {
+        "drill": drill, "n": total, "lane_y": plan["lane_y"],
+        "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"]),
+    }
+    save(p)
+    return True
+
+
+def _relief_lane(p, item, relieves):
+    """Lay the lane that delivers `item` - the cheapest relief there is: belts only, 0 kW, no
+    new machine, and plan_supply refuses a duplicate outright."""
+    mine = (p.get("mines") or {}).get(item)
+    if not mine:
+        status.log("relief lane %s: no %s mine recorded - the mine is the relief here, not "
+                   "the lane" % (item, item))
+        return False
+    if item == "coal":
+        intake = (p.get("plant") or {}).get("coal_intake")
+        if not intake:
+            status.log("relief lane coal: the standing plant has no recorded coal intake - "
+                       "plant_planner.coal_intake() names the one tile an external spur may "
+                       "hand off at, and only a plant planned through it has one")
+            return False
+        return bool(_supply(p, "lane:coal", "coal", _pt(mine["to_xy"]), _pt(intake),
+                            "coal lane: mine -> boiler intake (RELIEF)",
+                            drills=dict(MINE_DRILLS).get("coal", 1), relieves=relieves))
+    if item not in B.SMELT_ZONE:
+        status.log("relief lane %s: no destination array for it" % item)
+        return False
+    return bool(_supply(p, "lane:" + item, item, _pt(mine["to_xy"]), _array_ore_belt(item),
+                        "%s lane: mine -> smelter array (RELIEF)" % item,
+                        drills=dict(MINE_DRILLS).get(item, 1), relieves=relieves))
+
+
+def _relief_plant(p, r, rel):
+    stage_plant(p)
+    stage_plant_expand(p)
+    return build_done(p, "plant")
+
+
+def _relief_spine(p, r, rel):
+    stage_spine(p)
+    return build_done(p, "spine")
+
+
+RELIEF_EXECUTORS = {
+    "mine_outpost": lambda p, r, rel: _relief_mine(p, (r.get("params") or {}).get("ore"),
+                                                   r.get("n", 1),
+                                                   (r.get("params") or {}).get("drill"), rel),
+    "ore_lane": lambda p, r, rel: _relief_lane(p, (r.get("params") or {}).get("item"), rel),
+    "plate_lane": lambda p, r, rel: _relief_lane(p, (r.get("params") or {}).get("item"), rel),
+    "power_capacity": _relief_plant,
+    "power_grid": _relief_spine,
+}
+
+
+def stage_relief(p):
+    """THE LEGAL MOVE A STUCK BASE STILL HAS.
+
+    The previous pass ended with ZERO verified builds and at least one refusal, named the
+    binding constraint and recorded the build that increases it (see _detect_deadlock). This
+    stage executes exactly that build - gated, planned and VERIFIED like every other, with
+    `relieves=` set so the check that is failing only FOR WANT OF THIS BUILD does not refuse
+    it (LAW 5). Every other refusal still stands, and a build that fails verification still
+    leaves nothing behind.
+
+    It runs EARLY, ahead of the stages it exists to unblock, and it is a no-op on a healthy
+    base: nothing is ever recorded unless a whole pass produced nothing at all.
+    """
+    r = p.get("relief")
+    if not r:
+        return
+    p.pop("relief", None)                    # one attempt per record: never a retry loop
+    _PASS["relief_done"] = True
+    structure, key = r.get("structure"), r.get("key")
+    status.log("relief: attempting %s x%s [%s] - it increases %s, which is blocking %s"
+               % (structure, r.get("n"), key, r.get("constraint"),
+                  ", ".join(r.get("unblocks") or []) or "the pass"))
+    fn = RELIEF_EXECUTORS.get(structure)
+    if fn is None:
+        status.log("relief: no executor for %s - that constraint needs a stage, not a "
+                   "one-off build" % structure)
+        ok = False
+    else:
+        try:
+            ok = bool(fn(p, r, (r.get("constraint"),)))
+        except Exception as e:
+            # A relief that RAISES is a relief that did not execute, and it must land in the
+            # ledger like any other failure or the detector re-proposes it every 90 s forever.
+            # `relief_tried` is cleared the moment any pass verifies a build, so a transient
+            # failure retires a rung for exactly as long as the world stays stuck.
+            status.log("relief %s: %s: %s" % (key, type(e).__name__, str(e)[:180]))
+            ok = False
+    # Recorded either way. `relief_tried` is what makes the ladder ESCALATE: next_relief skips
+    # a rung already handed out, so "lay the coal lane" that cannot be executed becomes "mine
+    # more coal" on the next pass instead of the same impossible move forever.
+    ledger = "relief_done" if ok else "relief_tried"
+    if key and key not in p.setdefault(ledger, []):
+        p[ledger].append(key)
+    status.log("relief: %s %s" % (key, "BUILT" if ok else "not executable - escalating"))
+    save(p)
+
+
 PHASE0_STAGES = (
     ("world", stage_world),                # setup / scout / hand-fed spawn furnaces
-    ("plant", stage_plant),                # plant_planner   | power_capacity
+    ("plant", stage_plant),                # plant_planner   | power_capacity (FIRST column)
     ("spine", stage_spine),                # power_planner   | power_grid
-    ("red_science", stage_red_science),    # the one hand-fed lab
+    ("relief", stage_relief),              # LAW 5: the move a deadlocked pass named
     ("mines", stage_mines),                # mine_planner_v2 | mine_outpost
     ("arrays", stage_arrays),              # (no planner yet) | smelter_array
     ("array_grid", stage_array_grid),      # power_planner   | power_grid
     ("ore_lanes", stage_ore_lanes),        # supply_planner  | ore_lane
     ("coal_lane", stage_coal_lane),        # supply_planner  | ore_lane
-    ("science", stage_science),            # (no planner yet) | science_assembler
+    ("plant_expand", stage_plant_expand),  # plant_planner   | power_capacity (columns 2..N)
     ("electrify", stage_electrify),        # mine_planner_v2 | mine_outpost
+    ("red_science", stage_red_science),    # the one hand-fed lab
+    ("science", stage_science),            # (no planner yet) | science_assembler
     ("oil", stage_oil),                    # scout only
 )
+# THE ORDER IS THE DEPENDENCY GRAPH, NOT A HABIT (2026-08-30). Two inversions produced the
+# live deadlock and both are corrected above:
+#   1. EVERY BUILD THAT NEEDS NO POWER IS ATTEMPTED FIRST. Boilers, engines, the offshore
+#      pump, poles, burner drills, stone furnaces, belts, undergrounds and splitters are all
+#      in build_gates.NON_ELECTRIC - they draw nothing, so no headroom can gate them. They
+#      hold stages 1-10; the three stages that genuinely need power headroom (electrify,
+#      red_science, science) come last, where a refusal costs the rest of the pass nothing.
+#   2. THE COAL LANE PRECEDES PLANT EXPANSION. A boiler column burns 27 coal/min and
+#      power_capacity's own gate refuses one with no coal behind it, so the fuel has to arrive
+#      first. `plant` (the unconditional first column) stays at the front; `plant_expand` -
+#      every column after it - now sits behind `coal_lane`, where it belongs.
+# Ordering alone is not a dependency, so a stage only meaningful after another says so in
+# STAGE_SPEC and is SKIPPED WITH A REASON instead of returning silently: nine stages used to
+# die without a log line, so the operator saw four blocked gates and no hint that five more
+# stages had never run at all.
+
+
+def _pre_power(p, st):
+    if build_gates.capacity_mw(st) > 0:
+        return True, ""
+    return False, "no generation installed - the plant stage runs first"
+
+
+def _pre_plant_poles(p, st):
+    if plant_poles(p, st):
+        return True, ""
+    return False, ("no plant poles recorded and none standing near the shore - the plant "
+                   "stage runs first")
+
+
+def _pre_spine(p, st):
+    if (p.get("spine") or {}).get("poles"):
+        return True, ""
+    return False, "no power spine recorded - the spine stage runs first"
+
+
+def _pre_plant_record(p, st):
+    """A plant to extend: a buildplan record, or a STANDING plant that can be reconstructed
+    and read back. Requiring the record alone made columns 2..N unreachable on the operator's
+    own base - the plant was there, the gate said ALLOW, and nothing could build."""
+    if (p.get("builds") or {}).get("plant"):
+        return True, ""
+    if adopt_plant(p, st).get("pump"):
+        return True, ""
+    return False, ("no plant record to extend and no standing plant this planner can "
+                   "reconstruct - the first column is stage_plant's, and an expansion is "
+                   "never a blind re-plan")
+
+
+def _pre_coal_lane(p, st):
+    if not (p.get("mines") or {}).get("coal"):
+        return False, "no coal mine recorded - the mines stage runs first"
+    if not (p.get("plant") or {}).get("coal_intake"):
+        adopt_plant(p, st)          # a plant HE built still names an intake once reconstructed
+    if not (p.get("plant") or {}).get("coal_intake"):
+        return False, ("the standing plant has no recorded coal intake tile - only a plant "
+                       "planned through plant_planner.coal_intake() names one")
+    return True, ""
+
+
+STAGE_SPEC = {
+    "spine":        {"pre": _pre_plant_poles, "power": False},
+    "array_grid":   {"pre": _pre_spine, "power": False},
+    "coal_lane":    {"pre": _pre_coal_lane, "power": False},
+    "plant_expand": {"pre": _pre_plant_record, "power": False},
+    "electrify":    {"pre": _pre_spine, "power": True},
+    "red_science":  {"pre": _pre_power, "power": True},
+    "science":      {"pre": _pre_power, "power": True},
+    "oil":          {"power": False, "builds": False},   # scouts; places nothing
+}
+# The no-power BUILDS, in order. `oil` is excluded because it constructs nothing at all: it
+# neither needs power nor competes for the front of the pass.
+NO_POWER_STAGES = tuple(n for n, _fn in PHASE0_STAGES
+                        if (STAGE_SPEC.get(n) or {}).get("builds", True)
+                        and not (STAGE_SPEC.get(n) or {}).get("power"))
+
+
+def _detect_deadlock(p):
+    """ZERO verified builds AND at least one refusal = DEADLOCKED, not idle.
+
+    One line, once per stuck pass, naming the constraint that is actually binding and the
+    build that increases it - and that build is RECORDED, so stage_relief attempts it on the
+    next pass. The alternative is what ran live: 90 s of "phase 0 gate not met" forever, with
+    four true statements about why nothing may be built and no statement at all about what may.
+    """
+    if _PASS["built"] or not _PASS["blocked"]:
+        p.pop("relief", None)                 # progress: no stale relief left to chase
+        if _PASS["built"]:
+            # ...and the LADDER RESETS. The ledgers record judgements about a world that just
+            # changed ("the coal lane could not be laid", "that rung is already built"), and a
+            # verified build is exactly the event that can make them wrong.
+            for k in ("relief_tried", "relief_done"):
+                if p.pop(k, None) is not None:
+                    save(p)
+        return None
+    try:
+        st = gate_state()
+        d = build_gates.deadlock(st, blocked=_PASS["blocked"],
+                                 done=(set(p.get("relief_done") or ())
+                                       | set(p.get("relief_tried") or ())))
+    except Exception as e:
+        status.log("DEADLOCK: %d gate(s) blocked, 0 builds verified, and the relief search "
+                   "itself failed (%s) - this needs a human"
+                   % (len(_PASS["blocked"]), str(e)[:160]))
+        return None
+    if d is None:
+        return None
+    status.log(d["line"][:400])
+    if d.get("relief"):
+        p["relief"] = d["relief"]
+        save(p)
+    elif _PASS["relief_done"]:
+        status.log("DEADLOCK: the relief attempted this pass did not clear it and no further "
+                   "relief is legal - escalating to the operator")
+    return d
 
 
 def phase0(p):
@@ -891,12 +1484,26 @@ def phase0(p):
     because a gate refusal upstream is the normal state of a young base and the stages behind
     it may well be allowed. The error is logged and codified as a lesson, exactly as play()
     would have done, and the next stage runs.
+
+    A stage whose PRECONDITION is unmet is skipped WITH A REASON. "Only meaningful after X" is
+    a dependency, and a dependency that shows up as nothing in the log is indistinguishable
+    from a stage that ran and found nothing to do.
     """
     gate_reset()                # every pass gates against a freshly sensed world
+    pass_reset()                # ...and counts what this pass actually built and refused
     for name, fn in PHASE0_STAGES:
         if B.operator_present():
             status.log("operator online mid-pass - stopping phase 0 before stage %s" % name)
             return
+        pre = (STAGE_SPEC.get(name) or {}).get("pre")
+        if pre is not None:
+            try:
+                ok, why = pre(p, gate_state())
+            except Exception as e:
+                ok, why = False, "precondition could not be evaluated (%s)" % str(e)[:120]
+            if not ok:
+                status.log("stage %s: SKIPPED - %s" % (name, why))
+                continue
         try:
             fn(p)
         except Exception as e:
@@ -905,6 +1512,7 @@ def phase0(p):
                         rule="see traceback in autopilot.log",
                         evidence=traceback.format_exc()[-1200:],
                         phase=0, tags=("phase-program", name))
+    _detect_deadlock(p)
 
 
 def gate0():

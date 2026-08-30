@@ -33,6 +33,15 @@ The four laws those deletions encode (see the four LAW_* constants below):
          only property that separates the two sets: a burner draws 0 kW and locks 0 items.
          The way to pre-build an active consumer is GHOSTS -> `reserve()`.
   LAW 4  A CHEST IS LEGITIMATE ONLY AS A LANE TERMINUS. One per lane, nothing downstream.
+  LAW 5  A GATE THAT BLOCKS X BECAUSE CONSTRAINT C IS UNSATISFIED MUST NOT ALSO BLOCK THE
+         BUILD THAT INCREASES C. Added 2026-08-30 after these gates DEADLOCKED a live base:
+         `power_capacity` refused on `coal_at_boiler` (coal 120/min < 178/min) while
+         `mine_outpost` — the only build that raises coal/min — was refused on
+         `power_headroom`, which only `power_capacity` can raise. Four gates, zero legal
+         moves, 90 s of idling, forever. Each law was individually right and the base still
+         starved: refusing every relief build is how a safe gate becomes a stuck one.
+         `gate(..., relieves=("coal_at_boiler",))` is the exemption, and it is NARROW — see
+         RELIEF below, where all three conditions must hold before a single check is waived.
 
 READ-ONLY. `sense()` issues find_entities_filtered + property reads and one `storage._gates`
 scratch string it clears afterwards (the bottleneck.py / principles.py / dashboard.py pattern,
@@ -327,12 +336,39 @@ def flow(st, item):
     return _f(st.get("flows", {}), item)
 
 
-def coal_demand_per_min(st, extra_boilers=0):
-    """Coal the base is committed to burning: boilers at full tilt plus every burner furnace
-    that is actually FED. Reproduces the measured 2*27 + 17*1.35 = 77/min against 120 mined
-    (ratio 1.56) — the 11 furnaces at `no_ingredients` burn nothing, which is the same
-    property that makes them safe to pre-build (LAW 3)."""
-    boilers = _f(st.get("counts", {}), "boiler") + extra_boilers
+def coal_demand_per_min(st, extra_boilers=0, projected_kw=0.0):
+    """Coal the base actually burns: LOAD-driven, not boiler-count-driven, plus fed furnaces.
+
+    MEASURED on the live map 2026-08-29 — 2 boilers, 4 engines, 405.2 kW generated, and the
+    game's own consumption statistic reading 6.0 coal/min. `boilers * BOILER_COAL_PER_MIN`
+    predicted 54. A boiler is not a fire that burns whether you use it or not: it converts
+    fuel in proportion to the steam its engines are asked for, so 405.2 kW * 60 s / 4 MJ =
+    6.08 coal/min, which is the 6.0 the game reports.
+
+    Modelling idle capacity as full-tilt burn is what produced the coal deadlock: the gate
+    demanded 178 coal/min against 120 supplied and refused every plant expansion, while the
+    plant it was protecting sat at 11% load. Worse, it made capacity SELF-BLOCKING - each
+    boiler column raised the demand it had to satisfy, so the base could never grow.
+
+    Two different questions, so two different treatments:
+
+      EXISTING plant burns what it is actually asked for - the load, capped by what the
+      engines can convert, because you cannot burn coal you have no engines to turn into work.
+
+      Plant being ADDED is charged at full tilt. You do not build a boiler column to leave it
+      idle, so the honest planning question is "if this new capacity were used, could the mine
+      feed it?" That keeps the protection the old model got right - four columns behind one
+      drill is still refused - without the self-blocking the old model got wrong."""
+    cap_mw = capacity_mw(st)
+    load = load_mw(st, projected_kw)
+    burn_mw = min(load, cap_mw) if cap_mw > 0 else load
+    burn_mw += max(0, int(extra_boilers)) * BOILER_MW
+    return burn_mw * 60.0 / COAL_FUEL_MJ + furnace_coal_per_min(st)
+
+
+def furnace_coal_per_min(st):
+    """Coal the burner furnaces burn. Only the FED ones: a furnace at `no_ingredients` burns
+    nothing, which is the same property that makes an array safe to pre-build (LAW 3)."""
     fed = 0.0
     for name in FURNACE_NAMES:
         hist = (st.get("status") or {}).get(name) or {}
@@ -340,7 +376,7 @@ def coal_demand_per_min(st, extra_boilers=0):
             fed += sum(v for k, v in hist.items() if k != "no_ingredients")
         else:
             fed += _f(st.get("counts", {}), name)      # no status info: assume all are fed
-    return boilers * BOILER_COAL_PER_MIN + fed * FURNACE_COAL_PER_MIN
+    return fed * FURNACE_COAL_PER_MIN
 
 
 def drill_capacity_per_min(st, ore=None):
@@ -361,6 +397,28 @@ def drill_capacity_per_min(st, ore=None):
 
 def containers(st):
     return int(sum(_f(st.get("counts", {}), n) for n in CONTAINER_NAMES))
+
+
+def adds_kw_for(structure, params=None):
+    """kW ONE unit of `structure` adds to the grid, with the caller's TIER honoured.
+
+    GATES[..]["adds_kw"] is a default the table has to pick without knowing which prototype
+    the caller intends, and it picks the expensive one. `mine_outpost` is the case that
+    deadlocked the live base: its table entry charges the electric drill's 90 kW against a
+    BURNER drill, which is in NON_ELECTRIC and draws exactly nothing. Pass
+    params={'drill': 'burner-mining-drill'} and the gate charges 0 — which is the difference
+    between "mine more coal first" being an instruction and being a dead end.
+    """
+    g = GATES.get(structure) or {}
+    base = float(g.get("adds_kw", 0.0) or 0.0)
+    p = params or {}
+    name = p.get("entity") or p.get("drill") or p.get("machine")
+    if not name:
+        return base
+    if name in NON_ELECTRIC:
+        return 0.0
+    rate = CONSUMER_KW.get(name, CONSUMER_KW_INFERRED.get(name))
+    return float(rate) if rate is not None else base
 
 
 # =========================================================================== flow table
@@ -428,21 +486,34 @@ def _recipe_of(p):
 
 def _pr_flows(st, n, g, p):
     need = required_flows(p.get("structure"), n, _recipe_of(p))
-    short = []
+    short, keys = [], []
     for item, req in sorted(need.items()):
         have = flow(st, item)
         if have < req:
             short.append("%s %.1f/min < %.1f/min needed" % (item, have, req))
-    if short:
-        return False, "; ".join(short) + (" (n=%d)" % n)
+            keys.append("flows:" + item)          # the CONSTRAINT, per item: a relief build
+    if short:                                     # relieves `flows:coal`, never "flows"
+        return False, "; ".join(short) + (" (n=%d)" % n), keys
     return True, "flows ok: " + ", ".join("%s %.1f/min>=%.1f" % (i, flow(st, i), r)
                                           for i, r in sorted(need.items()))
 
 
 def _pr_power_headroom(st, n, g, p):
-    add = g["adds_kw"] * n
+    add = adds_kw_for(p.get("structure"), p) * n
     h = headroom(st, add)
     cap, load = capacity_mw(st), load_mw(st, add)
+    if add <= 0:
+        # MARGINAL, not absolute. This check exists to stop a build from EATING the headroom
+        # its own load needs; a build that adds 0 kW cannot lower a ratio it does not appear
+        # in. Testing it absolutely is what refused every zero-cost relief build — a burner
+        # coal outpost, a belt lane, a pole trunk — on a base whose headroom only a boiler
+        # column could fix, and only more coal could pay for.
+        if h < POWER_HEADROOM_MIN:
+            return True, ("headroom %.3f is ALREADY below %.2f (%.2f MW / %.2f MW) — this "
+                          "build adds 0 kW and cannot make it worse; the relief is a boiler "
+                          "column, not a refusal"
+                          % (h, POWER_HEADROOM_MIN, cap, load))
+        return True, "power headroom %.3f (%.2f MW / %.2f MW), 0 kW added" % (h, cap, load)
     if h < POWER_HEADROOM_MIN:
         return False, ("power headroom %.3f < %.2f (%.2f MW installed / %.2f MW load incl. "
                        "%.0f kW new) — %s" % (h, POWER_HEADROOM_MIN, cap, load, add,
@@ -477,6 +548,12 @@ def _pr_grid_energized(st, n, g, p):
     ok, msg = _pr_grid_single(st, n, g, p)
     if not ok:
         return ok, msg
+    # A build with no electric consumer in it has nothing to energize. The SPLIT check above
+    # still binds (P2 is about not making a second network, which a pole row can do), but
+    # demanding generation before a burner outpost or a belt lane is the same false negative
+    # as testing headroom absolutely.
+    if adds_kw_for(p.get("structure"), p) * n <= 0:
+        return True, msg + "; this build has no electric consumer to energize"
     if capacity_mw(st) <= 0:
         return False, "no generation installed — an electric consumer would be born unpowered"
     if int(_f(st, "networks")) < 1:
@@ -574,6 +651,13 @@ def _pr_upstream_not_backed_up(st, n, g, p):
     return True, "upstream clear (%.0f%% furnaces full, %.0f%% drills blocked)" % (100 * ff, 100 * dw)
 
 
+# Ghost machines that count as a RESERVED sink for a non-pack product: the ones a recipe
+# consuming that product can actually be set on. Deliberately excludes `lab` (packs only,
+# handled by the pack branch) and every passive container (LAW 4: a chest is a buffer).
+RESERVABLE_SINKS = ("assembling-machine-1", "assembling-machine-2", "assembling-machine-3",
+                    "electric-furnace")
+
+
 def _pr_sink_exists(st, n, g, p):
     """LAW 1's sink half. `product` names what this stage will emit; something built must
     consume it and not already be choked."""
@@ -612,6 +696,21 @@ def _pr_sink_exists(st, n, g, p):
         live = sum(v for k, v in hist.items() if k != "full_output")
         if live > 0:
             return True, "%d machine(s) on %s consume %s" % (live, r, product)
+    # The SAME rule the pack branch above already applies: a GHOST is a committed sink. It
+    # costs nothing, draws nothing and holds the ground, so a lane laid toward a reserved
+    # converter block is a lane with a destination — which is the whole difference between
+    # the plate belt he kept and the 33-tile conveyor-to-a-chest he deleted.
+    #
+    # A GHOST IS A SINK ONLY FOR WHAT THAT MACHINE COULD CONSUME. `lab` belongs to the pack
+    # branch above and NOWHERE ELSE: a lab takes science packs and nothing else. Counting
+    # ghost labs here made the live base's 25 reserved labs a "sink" for IRON-PLATE and
+    # ALLOWED `plate_lane` with nothing at the far end — the 33-tile conveyor-to-a-chest
+    # wearing LAW 3's clothes (measured 2026-08-30: ghosts {lab: 25}, 0 assemblers). Only a
+    # machine one of `consumers` could actually be set to craft counts.
+    gh = int(sum(_f(st.get("ghosts", {}), m) for m in RESERVABLE_SINKS))
+    if gh > 0:
+        return True, ("%d ghost crafting machine(s) reserve the sink for %s — revive them as "
+                      "flow arrives (reserve(), LAW 3)" % (gh, product))
     return False, ("nothing built consumes %s and is not already full_output — he deleted an "
                    "iron-gear-wheel assembler for exactly this" % product)
 
@@ -644,25 +743,50 @@ def _pr_coal_at_boiler(st, n, g, p):
         return False, ("no coal in a boiler — belt coal to the plant BEFORE adding a column "
                        "(a chest buffer is forbidden: he replaced it with a belt + "
                        "burner-inserter)")
-    need = coal_demand_per_min(st, n)
+    # THE BOUND IS FUELABILITY, NOT A MULTIPLIER. The question a coal gate exists to answer is
+    # "can the mine actually run the plant I am about to have?" — so price the whole plant
+    # AFTER the build at full tilt (every boiler burning flat out, forever) plus the fed
+    # furnaces, and require the mine to cover it.
+    #
+    # This is strictly conservative: real burn tracks load, and the live plant runs at 11% of
+    # it. But it is conservative in the direction that is physically meaningful, and it needs
+    # no safety factor on top — which matters, because COAL_HEADROOM_MIN was calibrated
+    # against the old full-tilt demand model (120 supplied / 77 "demanded" = 1.56x) and so was
+    # a margin derived from the very error it was multiplying. Applying it here refused a
+    # column on a base with a 1.32x coal surplus whose power was saturated at 98% load, which
+    # is the opposite of what a player does at that moment.
+    cap_after_mw = capacity_mw(st) + max(0, int(n)) * BOILER_MW
+    need = cap_after_mw * 60.0 / COAL_FUEL_MJ + furnace_coal_per_min(st)
     have = flow(st, "coal")
+    # SUPPLY IS WHAT THE MINE CAN DELIVER, NOT WHAT IT DID LAST MINUTE. `flows['coal']` is a
+    # one-minute production average, and on a BACK-PRESSURED base production equals
+    # consumption, not capacity: measured live 2026-08-30 at 2 coal/min off four drills whose
+    # belts were 100% full and whose boilers were refusing coal. Reading a full pipe as an
+    # empty one is how this gate demanded "mine more coal" from a mine that was already
+    # standing idle. `_pr_overbuild_within_budget` states the same rule for furnaces in so
+    # many words ("the denominator is DRILL CAPACITY, not measured plate flow"); this is that
+    # rule applied to the one place it was missing.
+    cap_mined = drill_capacity_per_min(st, "coal")
+    supply = have if cap_mined is None else max(have, cap_mined)
+    src = "mined" if cap_mined is None or have >= cap_mined else "the coal drills can deliver"
     # A ZERO reading is the worst reading, not a missing one. Treating `have == 0` as "no data"
     # let this gate ALLOW a boiler column on before.json — a base mining 0 coal/min — while its
     # own approval line printed "0/min mined vs 54/min demand". Absence of the key is the only
     # thing that counts as unknown; sense() and state_from_snapshot both always set it.
-    known = "coal" in (st.get("flows") or {})
-    if known and have < need * COAL_HEADROOM_MIN:
-        return False, ("coal %.0f/min < %.0f/min (%.0f/min demand at %.1fx) for %d boilers + "
-                       "fed furnaces — mine more coal first; a 50/50 splitter tap can only "
-                       "deliver half the mine"
-                       % (have, need * COAL_HEADROOM_MIN, need, COAL_HEADROOM_MIN,
-                          int(_f(st.get("counts", {}), "boiler")) + n))
+    known = "coal" in (st.get("flows") or {}) or cap_mined is not None
+    if known and supply < need:
+        return False, ("coal %.0f/min < %.0f/min — a %.1f MW plant (%d column(s) added) burns "
+                       "%.0f/min at full tilt plus %.0f/min in fed furnaces, and the mine "
+                       "cannot fuel that; mine more coal first (a 50/50 splitter tap can only "
+                       "deliver half the mine)"
+                       % (supply, need, cap_after_mw, max(0, int(n)),
+                          cap_after_mw * 60.0 / COAL_FUEL_MJ, furnace_coal_per_min(st)))
     if not known:
         return True, ("coal at the boiler (%s in inventory); coal/min NOT MEASURED in this "
                       "state — the %.0f/min demand for %d boilers is UNCHECKED"
                       % (int(c), need, int(_f(st.get("counts", {}), "boiler")) + n))
-    return True, ("coal at the boiler (%s in inventory, %.0f/min mined vs %.0f/min demand)"
-                  % (int(c), have, need))
+    return True, ("coal at the boiler (%s in inventory, %.0f/min %s vs %.0f/min demand)"
+                  % (int(c), supply, src, need))
 
 
 def _pr_chest_is_terminus(st, n, g, p):
@@ -679,6 +803,199 @@ def _pr_chest_is_terminus(st, n, g, p):
         return False, "this lane already has %d chest(s); the budget is 1" % int(lane_chests)
     return True, ("lane terminus, 0 existing chests on the lane (%d container(s) on the whole "
                   "map; his finished base had exactly 2, both terminal)" % containers(st))
+
+
+# =========================================================================== RELIEF (LAW 5)
+# A CONSTRAINT KEY is finer than a predicate name, and it has to be: `flows` is one predicate
+# covering twelve items, and "this build relieves flows" would have let a science assembler
+# through with no plates because it makes packs. The key carries the item — `flows:coal`,
+# `overbuild_within_budget:iron-ore`, `sink_exists:iron-plate` — so a relief can only ever
+# cover the exact quantity it raises.
+KEYED_BY_ORE = ("overbuild_within_budget",)
+KEYED_BY_PRODUCT = ("sink_exists",)
+DEFAULT_PRODUCT = {"science_assembler": "automation-science-pack", "plate_lane": "iron-plate"}
+
+
+def constraint_key(check, params=None):
+    """The default constraint key for a failing check. `_pr_flows` overrides this with one key
+    per short item; everything else is keyed by the parameter that scopes it."""
+    p = params or {}
+    if check in KEYED_BY_ORE:
+        return "%s:%s" % (check, p.get("ore") or "*")
+    if check in KEYED_BY_PRODUCT:
+        prod = p.get("product") or DEFAULT_PRODUCT.get(p.get("structure")) or "*"
+        return "%s:%s" % (check, prod)
+    return check
+
+
+def constraint_check(key):
+    """The predicate a constraint key belongs to ('flows:coal' -> 'flows')."""
+    return key.split(":", 1)[0]
+
+
+def constraint_item(key):
+    """The item/ore a constraint key is scoped to, or None."""
+    return key.split(":", 1)[1] if ":" in key else None
+
+
+def _covers(relieves, key):
+    """Does a declared relief set cover this constraint key? EXACT keys, plus the explicit
+    '<check>:*' wildcard. A bare check name never covers a keyed constraint — that looseness
+    is precisely what would turn the exemption into a bypass."""
+    if not relieves:
+        return None
+    for r in relieves:
+        if r == key:
+            return r
+        if r.endswith(":*") and constraint_check(r) == constraint_check(key):
+            return r
+    return None
+
+
+def relieves_for(structure, params=None):
+    """{constraint key -> why} — the constraints a completed `structure` MEASURABLY increases.
+
+    This is the honest half of LAW 5, and it is short on purpose. A build appears here only
+    where the quantity it raises is the quantity the key names; "it helps eventually" is not
+    a relief. Note what is ABSENT: `headroom_after` (power_capacity's own sufficiency test on
+    the very column being asked for — waiving it would authorise unlimited columns),
+    `water_source`, `research_queued`, `lane_capacity`, `chest_is_terminus`. Nothing this
+    module can build raises those, so nothing may claim to.
+    """
+    p = dict(params or {})
+    out = {}
+    if structure in ("power_capacity", "power_column"):
+        out["power_headroom"] = "a boiler column adds %.1f MW of installed capacity" % BOILER_MW
+        out["grid_energized"] = "a boiler column IS generation where there was none"
+    elif structure == "power_grid":
+        out["grid_single"] = "the trunk wires the islands into one network (net 405)"
+        out["grid_energized"] = "the trunk is how generation reaches the consumers"
+    elif structure in ("mine_outpost", "electric_mining_drill"):
+        ore = p.get("ore")
+        out[constraint_key("overbuild_within_budget", p)] = (
+            "more drills raise the supply the furnace row is measured against")
+        out["producer_live"] = "a new outpost is a live producer for the lane behind it"
+        if ore:
+            out["flows:" + ore] = "more %s drills raise %s/min at the source" % (ore, ore)
+            if ore == "coal":
+                out["coal_at_boiler"] = "coal drills are the only thing that raises coal/min"
+    elif structure in ("ore_lane", "plate_lane"):
+        item = p.get("item") or p.get("product")
+        if item:
+            out["flows:" + item] = "a lane is how %s reaches the machine that consumes it" % item
+            if item == "coal":
+                out["coal_at_boiler"] = "the coal lane is how mined coal reaches the boiler"
+        out["upstream_not_backed_up"] = ("a lane DRAINS the buffer the array is choked on — "
+                                         "back-pressure is a missing lane, not a full mine")
+        # A drill with nowhere to drop reads waiting_for_space_in_destination, NOT working —
+        # so `producer_live` refuses the very lane that would make the drill work. Measured
+        # live 2026-08-30: 15 of 16 drills waiting_for_space, one lane short.
+        out["producer_live"] = "the lane is what gives a jammed producer somewhere to drop"
+    elif structure == "science_assembler":
+        recipe = _recipe_of(p) or "automation-science-pack"
+        out["flows:" + recipe] = "the converter is the only thing that makes %s" % recipe
+        out["pack_producer_live"] = "this IS the pack producer"
+        out["upstream_not_backed_up"] = ("a converter consumes the plates the furnaces are "
+                                         "full_output on")
+        for item in ("iron-plate", "copper-plate"):
+            out.setdefault("sink_exists:" + item, "a converter cell consumes %s" % item)
+    elif structure == "smelter_array":
+        ore = p.get("ore") or ""
+        plate = ORE_PLATE.get(ore)
+        if plate:
+            out["flows:" + plate] = "furnaces are what turn %s into %s" % (ore, plate)
+            out["sink_exists:" + ore] = "a furnace row consumes the %s" % ore
+    elif structure in ("lab", "lab_array"):
+        out["sink_exists:automation-science-pack"] = "a lab is the pack sink"
+        out["labs_satisfied"] = "the mall waits on labs actually working"
+    return out
+
+
+# A relief may waive a check only if proceeding CANNOT make that check worse. This is the
+# condition that keeps LAW 5 an exemption rather than a bypass: it is measured per predicate
+# against the same census, never asserted by the caller. A predicate with no entry here is
+# NEVER waivable — `sink_exists`, `grid_single`, `producer_live`, `research_queued`,
+# `water_source`, `lane_capacity`, `chest_is_terminus`, `labs_satisfied`, `headroom_after`,
+# `pack_producer_live`. Those are facts about the world, not budgets a build can be neutral
+# toward.
+CONSUMES_BACKLOG = ("science_assembler", "mall_assembler", "plate_lane", "ore_lane",
+                    "smelter_array", "lab")
+
+
+def _inert_power(st, structure, n, p):
+    kw = adds_kw_for(structure, p) * n
+    if kw > 0:
+        return False, "this build would add %.0f kW of load" % kw
+    return True, "this build draws 0 kW, so it cannot lower headroom"
+
+
+def _inert_coal(st, structure, n, p):
+    if structure in ("power_capacity", "power_column"):
+        return False, "a boiler column BURNS %.0f coal/min per boiler" % BOILER_COAL_PER_MIN
+    if structure == "smelter_array":
+        return False, "a fed furnace burns %.2f coal/min" % FURNACE_COAL_PER_MIN
+    return True, "this build burns no coal"
+
+
+def _inert_overbuild(st, structure, n, p):
+    if structure == "smelter_array":
+        return False, "this build IS more furnaces — it raises the ratio it would waive"
+    return True, "this build adds no furnaces"
+
+
+def _inert_backup(st, structure, n, p):
+    if structure in CONSUMES_BACKLOG:
+        return True, "this build CONSUMES the backed-up product — it is the drain, not a sink"
+    return False, "this build does not consume what upstream is choked on"
+
+
+def _inert_flows(st, structure, n, p, item):
+    try:
+        need = required_flows(structure, n, _recipe_of(p))
+    except KeyError:
+        need = {}
+    if item in need:
+        return False, "this build itself consumes %.1f %s/min" % (need[item], item)
+    return True, "this build consumes no %s" % item
+
+
+def _inert_producer(st, structure, n, p):
+    """`producer_live` may be waived for a LANE, and only when the producer exists and is
+    JAMMED ON ITS OUTPUT. That is the exact discriminator between the two cases the gate
+    cannot otherwise tell apart: a drill reading waiting_for_space_in_destination is not
+    working BECAUSE this lane is missing, whereas no drill at all means the lane would be
+    the duplicate-lane-ahead-of-its-producer that was 72.4% of the 127 belts he deleted."""
+    if structure not in ("ore_lane", "plate_lane"):
+        return False, "only a lane can make a jammed producer live again"
+    cls = (p or {}).get("producer", "mining-drill")
+    jammed = status_count(st, cls, "waiting_for_space_in_destination")
+    if jammed <= 0:
+        return False, ("no %s is waiting_for_space_in_destination — with no producer behind "
+                       "it this is a duplicate lane, not a relief" % cls)
+    return True, ("%d %s read waiting_for_space_in_destination: they are idle BECAUSE this "
+                  "lane is missing" % (jammed, cls))
+
+
+RELIEF_INERT = {
+    "power_headroom": _inert_power,
+    "coal_at_boiler": _inert_coal,
+    "overbuild_within_budget": _inert_overbuild,
+    "upstream_not_backed_up": _inert_backup,
+    "producer_live": _inert_producer,
+    "flows": None,          # keyed: handled by _inert_flows(item)
+}
+
+
+def relief_inert(key, st, structure, n, params):
+    """(inert, why) — can this build possibly make `key` WORSE? Condition 3 of LAW 5."""
+    check = constraint_check(key)
+    if check == "flows":
+        return _inert_flows(st, structure, n, params or {}, constraint_item(key) or "?")
+    fn = RELIEF_INERT.get(check)
+    if fn is None:
+        return False, ("%s is a fact about the world, not a budget — no build is neutral "
+                       "toward it, so it is never waivable" % check)
+    return fn(st, structure, n, params or {})
 
 
 PREDICATES = {
@@ -702,50 +1019,167 @@ PREDICATES = {
 
 
 # =========================================================================== the gate
-def explain(structure, n=1, state=None, params=None):
-    """Full per-predicate verdict. `gate()` is the one-line form of this."""
+RELIEF_SEARCH_DEPTH = 4       # constraint -> relief -> its blocks -> ... ; a cycle is short
+
+
+def _waive(row, st, structure, n, p, declared):
+    """LAW 5, all three conditions, or no waiver.
+
+    1. THIS BUILD RAISES IT.  The failing constraint key is covered by `declared`, which is
+       `relieves_for()` unless the caller narrowed it. Keys carry their item, so relieving
+       `flows:coal` never touches `flows:iron-plate`.
+    2. THE CONSTRAINT IS DEADLOCKED.  Every build that would raise the FAILING check is
+       itself blocked, directly or transitively, by the constraint this build relieves. No
+       cycle, no waiver: if there is a legal move that fixes the check properly, take that
+       move instead. This is the condition that keeps a relief from being a general excuse.
+    3. THIS BUILD CANNOT MAKE IT WORSE.  `relief_inert`, measured against the same census.
+       A predicate with no inertness rule is never waivable at all.
+    """
+    for key in row["keys"]:
+        for rel, why in sorted(declared.items()):
+            if _covers((rel,), key) is None:
+                continue
+            inert, iwhy = relief_inert(key, st, structure, n, p)
+            if not inert:
+                continue
+            cyc = deadlock_cycle(key, rel, st, structure)
+            if cyc is None:
+                continue
+            return {"key": rel,
+                    "msg": ("RELIEF: [%s] is waived — this build increases %s (%s), %s, and "
+                            "%s. Blocked reason was: %s"
+                            % (row["check"], rel, why, iwhy, cyc, row["msg"]))}
+    return None
+
+
+def deadlock_cycle(key, relieved, st, structure=None, depth=RELIEF_SEARCH_DEPTH):
+    """Condition 2 of LAW 5: is `key` unfixable except through `relieved`?
+
+    Walks the relief graph forward from `key` — every OTHER build that raises `key`, gated
+    with no relief of its own, and every constraint those builds are in turn blocked on — and
+    reports the path when `relieved` is reached. A string (the path, for the log) or None.
+
+    THE FIRST LEGAL MOVE ENDS THE SEARCH WITH None. If something can fix `key` properly right
+    now, that is the build to make, and no waiver is granted — including in the trivial
+    `relieved == key` case, where the question is exactly "is there another way to make this
+    true". That is what keeps the exemption from becoming a general excuse.
+    """
+    seen, frontier = {key}, [(key, [key])]
+    for level in range(max(1, int(depth))):
+        nxt, tried = [], []
+        for cur, trail in frontier:
+            for cand in relief_candidates(cur, st):
+                if cand["structure"] == structure:
+                    continue                       # a build cannot justify itself
+                tried.append(cand["structure"])
+                rep = explain(cand["structure"], cand.get("n", 1), st,
+                              cand.get("params"), relieves=())     # NO relief inside the search
+                if rep["allowed"]:
+                    return None                    # a legal move exists: make THAT move
+                for k in rep["blocking"]:
+                    if k == relieved and relieved != key:
+                        return ("%s -> %s -> %s, which only this build raises"
+                                % (" -> ".join(trail), cand["structure"], relieved))
+                    if k not in seen:
+                        seen.add(k)
+                        nxt.append((k, trail + [cand["structure"], k]))
+        if relieved == key and level == 0:
+            return ("no other build can raise %s right now (tried: %s) — this build is the "
+                    "only move left" % (key, ", ".join(sorted(set(tried))) or "none exists"))
+        frontier = nxt
+        if not frontier:
+            break
+    return None
+
+
+def explain(structure, n=1, state=None, params=None, relieves=None):
+    """Full per-predicate verdict. `gate()` is the one-line form of this.
+
+    `relieves` is the caller's declaration of what this build INCREASES (LAW 5). Pass None to
+    have it derived from `relieves_for(structure, params)`, an explicit tuple to narrow it,
+    or `()` to switch relief off entirely (which is what the cycle search does, so a waiver
+    can never justify itself).
+    """
     g = GATES.get(structure)
     if g is None:
         raise KeyError("unknown structure %r (known: %s)" % (structure, ", ".join(sorted(GATES))))
     st = sense() if state is None else state
     p = dict(params or {})
     p.setdefault("structure", structure)
+    declared = relieves_for(structure, p) if relieves is None else {r: "declared by the caller"
+                                                                   for r in relieves}
     checks = []
     for name in g["requires"]:
         fn = PREDICATES[name]
+        keys = None
         try:
-            ok, msg = fn(st, n, g, p)
+            res = fn(st, n, g, p)
+            ok, msg = res[0], res[1]
+            keys = list(res[2]) if len(res) > 2 else None
         except KeyError as e:                       # a missing recipe/flow entry is a BLOCK,
             ok, msg = False, "cannot evaluate %s: %s" % (name, e)   # never a silent pass
-        checks.append({"check": name, "ok": bool(ok), "msg": msg})
+        if not keys:
+            keys = [constraint_key(name, p)]
+        row = {"check": name, "ok": bool(ok), "msg": msg, "keys": keys}
+        if not ok and declared:
+            w = _waive(row, st, structure, n, p, declared)
+            if w is not None:
+                row.update(ok=True, waived=True, relief=w["key"], msg=w["msg"])
+        checks.append(row)
     failed = [c for c in checks if not c["ok"]]
     try:                                            # the same KeyError the predicates treat as
         rf = required_flows(structure, n, _recipe_of(p)) if g["per_unit_flows"] else {}
     except KeyError:                                # a BLOCK must not become a CRASH here: an
         rf = {}                                     # unknown recipe made gate() raise instead
+    waived = [c for c in checks if c.get("waived")]
     return {"structure": structure, "n": n, "law": g["law"], "allowed": not failed,   # of refuse
             "checks": checks, "failed": [c["check"] for c in failed],
-            "required_flows": rf,
+            "blocking": [k for c in failed for k in c["keys"]],
+            "waived": [c["check"] for c in waived],
+            "relieves": sorted(declared), "required_flows": rf,
             "note": g["note"], "tick": st.get("tick")}
 
 
-def gate(structure, n=1, state=None, params=None):
+def gate(structure, n=1, state=None, params=None, relieves=None):
     """(allowed, reason) for building n of `structure` RIGHT NOW.
 
     Refusing is the normal outcome early in a base and is not an error: the caller logs the
     reason and moves to a stage that IS allowed. `reason` names the first failing check in
-    full, because the first failure is the one to go fix."""
-    rep = explain(structure, n, state, params)
+    full, because the first failure is the one to go fix.
+
+    When a check is WAIVED under LAW 5 the verdict reads `RELIEF ALLOWED`, never a plain
+    `ALLOWED`: a relief build is a deliberate, logged exception and it must never be
+    indistinguishable in the log from a build that simply passed.
+    """
+    return gate_report(structure, n, state, params, relieves)[:2]
+
+
+def gate_report(structure, n=1, state=None, params=None, relieves=None):
+    """(allowed, reason, report) — gate() plus the full explain(), for a caller that needs the
+    blocking constraint KEYS as well as the sentence (the deadlock detector does)."""
+    rep = explain(structure, n, state, params, relieves)
     if rep["allowed"]:
         ok = [c["msg"] for c in rep["checks"]]
+        if rep["waived"]:
+            w = next(c for c in rep["checks"] if c.get("waived"))
+            return True, ("RELIEF ALLOWED %s x%d — it increases %s, which is what [%s] is "
+                          "blocked on: %s"
+                          % (structure, n, w["relief"], w["check"], w["msg"])), rep
         return True, ("ALLOWED %s x%d — %s" % (structure, n, "; ".join(ok)) if ok
                       else "ALLOWED %s x%d — %s (no preconditions: %s)"
-                           % (structure, n, rep["law"], rep["note"].split(".")[0]))
+                           % (structure, n, rep["law"], rep["note"].split(".")[0])), rep
     first = next(c for c in rep["checks"] if not c["ok"])
     extra = len(rep["failed"]) - 1
     return False, ("BLOCKED %s x%d [%s] — %s%s"
                    % (structure, n, first["check"], first["msg"],
-                      ("; +%d more (%s)" % (extra, ", ".join(rep["failed"][1:]))) if extra else ""))
+                      ("; +%d more (%s)" % (extra, ", ".join(rep["failed"][1:]))) if extra
+                      else "")), rep
+
+
+def relief_key_of(rep):
+    """The constraint a report's waiver was granted for, or None."""
+    w = next((c for c in (rep or {}).get("checks", ()) if c.get("waived")), None)
+    return w["relief"] if w else None
 
 
 def why_blocked(state=None, structures=None, plan=None):
@@ -765,6 +1199,311 @@ def why_blocked(state=None, structures=None, plan=None):
         if not ok:
             out.append(why)
     return out
+
+
+# =========================================================================== relief builds
+# The INVERSE of relieves_for(): given a constraint, which build raises it. This is the table
+# that gives a blocked base a legal move — "mine more coal first" stops being an instruction
+# nobody can follow the moment something can name the build that follows it.
+MINE_RESOURCES = ("iron-ore", "copper-ore", "coal", "stone")
+PLATE_ORE = {v: k for k, v in ORE_PLATE.items()}
+
+
+def _cand(structure, params, n, key, why):
+    return {"structure": structure, "params": dict(params), "n": max(1, int(n)),
+            "key": key, "why": why}
+
+
+def relief_drill(st, n=1):
+    """The drill tier a relief mine may actually use RIGHT NOW.
+
+    Electric where the grid can carry it. Where it cannot, the answer is NOT a burner outpost:
+    the operator converted every burner drill on this map to electric and deleted the fuel
+    belts that fed them, so burners are a tier this base has already left behind. Building 12
+    of them to relieve a coal shortage would hand him back the exact infrastructure he removed,
+    and we would have to tear it out again to get where he already is.
+
+    So once a single electric drill stands, a relief that cannot be electric returns None and
+    the caller must escalate to the real constraint — more POWER — instead of a worse mine.
+    Burner remains legal only on a base that has never had an electric drill (a fresh start),
+    where it genuinely is the only tier available."""
+    add = CONSUMER_KW["electric-mining-drill"] * max(1, int(n))
+    if (capacity_mw(st) > 0 and int(_f(st, "networks")) == 1
+            and headroom(st, add) >= POWER_HEADROOM_MIN):
+        return "electric-mining-drill"
+    if int(_f(st.get("counts", {}), "electric-mining-drill")) > 0:
+        return None
+    return "burner-mining-drill"
+
+
+def drills_needed(st, ore, deficit_per_min, drill=None):
+    """How many drills close a per-minute deficit, at the tier that is legal now."""
+    drill = drill or relief_drill(st) or "electric-mining-drill"
+    rate = DRILL_ORE_PER_MIN.get(drill, ELECTRIC_DRILL_ORE_PER_MIN)
+    return max(1, int(math.ceil(max(0.0, float(deficit_per_min)) / rate)))
+
+
+def coal_deficit(st, extra_boilers=0):
+    """coal/min still missing to clear the gate. Supply is what the drills CAN deliver (see
+    _pr_coal_at_boiler); 0 when there is no gap. The threshold is computed the SAME way the
+    gate computes it — the plant after the build, at full tilt, plus fed furnaces — so a
+    relief sized from this deficit is one the gate will actually pass."""
+    cap_after = capacity_mw(st) + max(0, int(extra_boilers)) * BOILER_MW
+    need = cap_after * 60.0 / COAL_FUEL_MJ + furnace_coal_per_min(st)
+    cap = drill_capacity_per_min(st, "coal")
+    have = flow(st, "coal") if cap is None else max(flow(st, "coal"), cap)
+    return max(0.0, need - have)
+
+
+def columns_for_headroom(st, projected_kw=0.0):
+    """Boiler columns needed for capacity to lead the load by POWER_HEADROOM_MIN. The same
+    inequality _pr_headroom_after solves, so a relief column count is one the gate can pass."""
+    load = load_mw(st, projected_kw)
+    if load <= 0:
+        return 1
+    return max(1, int(math.ceil((POWER_HEADROOM_MIN * load - capacity_mw(st)) / BOILER_MW)))
+
+
+def _asked_for(requests, structures):
+    """The largest n any BLOCKED request wanted of these structures, so a quantity-shaped
+    relief is sized to the build it has to unblock rather than to a placeholder. Sizing the
+    coal relief for "one more boiler" while the plant stage is asking for four is how a relief
+    gets planned, built, VERIFIED - and still leaves the gate refusing."""
+    best = 0
+    for s, n in (requests or ()):
+        if s in structures:
+            best = max(best, int(n or 0))
+    return best
+
+
+def relief_candidates(key, st=None, requests=None):
+    """Builds that raise the constraint `key`, cheapest-and-most-legal first.
+
+    ORDER MATTERS AND IS DELIBERATE: delivery before production. A belt lane costs 0 kW, 0
+    ore and no new machines, and `supply_planner.plan_supply` refuses a duplicate outright
+    (handing back the lane that already serves the pair), so proposing a lane that already
+    exists is free and self-correcting. Only when the lane is done — the caller passes its
+    key in `done` — does the ladder escalate to the expensive fix, more drills.
+
+    `requests` is [(structure, n)] of what is actually BLOCKED, so the relief can be sized to
+    close the real gap.
+    """
+    st = st or {}
+    check, item = constraint_check(key), constraint_item(key)
+    out = []
+
+    def mine(ore, n, why):
+        """A mine-outpost candidate, or the POWER candidate when no legal drill tier exists.
+
+        relief_drill returns None on a base that already runs electric drills but cannot
+        currently carry another one. That is not "no relief available" — it is the relief
+        being one step further up the chain: the mine is waiting on capacity, so propose the
+        boiler column instead of silently dropping the candidate (which would re-create the
+        dead end this whole ladder exists to remove)."""
+        drill = relief_drill(st, n)
+        if drill is None:
+            return [_cand("power_capacity", {"projected_load_kw":
+                                             CONSUMER_KW["electric-mining-drill"] * n},
+                          columns_for_headroom(
+                              st, CONSUMER_KW["electric-mining-drill"] * n), "plant",
+                          "%s needs more drills, and this base mines with ELECTRIC drills — "
+                          "so the binding constraint is generation, not the mine" % ore)]
+        return [_cand("mine_outpost", {"ore": ore, "drill": drill}, n, "mine:" + ore, why)]
+
+    if check == "coal_at_boiler":
+        out.append(_cand("ore_lane", {"item": "coal", "producer": "mining-drill", "drills": 1},
+                         1, "lane:coal",
+                         "the coal lane is how mined coal reaches the boiler — belts only, "
+                         "0 kW, no new machine"))
+        cols = max(1, _asked_for(requests, ("power_capacity", "power_column")))
+        out += mine("coal", drills_needed(st, "coal", coal_deficit(st, cols)),
+                    "coal drills are the only thing that raises coal/min at the source")
+    elif check in ("power_headroom", "grid_energized"):
+        out.append(_cand("power_capacity", {"projected_load_kw": 0.0},
+                         columns_for_headroom(st), "plant",
+                         "a boiler column is the only build that raises installed capacity"))
+        if check == "grid_energized":
+            out.append(_cand("power_grid", {}, 1, "spine",
+                             "the trunk carries that generation to the consumers"))
+    elif check == "grid_single":
+        out.append(_cand("power_grid", {}, 1, "spine",
+                         "one wired trunk is what collapses the islands into one network"))
+    elif check == "overbuild_within_budget":
+        ore = item if item in MINE_RESOURCES else "iron-ore"
+        out += mine(ore, 1, "the overbuild ratio's denominator is DRILL CAPACITY — raise it")
+    elif check == "producer_live":
+        # WHICH build fixes "no drill is working" depends on WHY none is. A drill jammed at
+        # waiting_for_space_in_destination is idle for want of the lane; no drill at all is a
+        # different problem with a different build, and conflating the two is how a lane gets
+        # laid ahead of its producer.
+        if status_count(st, "mining-drill", "waiting_for_space_in_destination") > 0:
+            out.append(_cand("ore_lane", {"producer": "mining-drill", "drills": 1}, 1, "lane:*",
+                             "a jammed producer needs somewhere to drop, which is the lane"))
+        else:
+            out += mine("iron-ore", 1, "a lane needs a live producer behind it")
+    elif check == "pack_producer_live":
+        out.append(_cand("science_assembler", {"recipe": "automation-science-pack"}, 1,
+                         "science", "the converter IS the pack producer"))
+    elif check == "upstream_not_backed_up":
+        out.append(_cand("science_assembler", {"recipe": "automation-science-pack"}, 1,
+                         "science", "a converter drains the plates the furnaces choke on"))
+        out.append(_cand("plate_lane", {"item": "iron-plate", "product": "iron-plate"}, 1,
+                         "lane:iron-plate", "a plate lane drains the array into its consumer"))
+    elif check == "sink_exists":
+        if item in SCIENCE_PACKS:
+            out.append(_cand("lab", {}, 1, "labs", "a lab is the pack sink"))
+        else:
+            out.append(_cand("science_assembler", {"recipe": "automation-science-pack"}, 1,
+                             "science", "a converter cell is what consumes plates"))
+    elif check == "flows":
+        if item in MINE_RESOURCES:
+            out.append(_cand("ore_lane", {"item": item, "producer": "mining-drill", "drills": 1},
+                             1, "lane:" + item, "a lane delivers %s to its consumer" % item))
+            out += mine(item, 1, "more drills raise %s/min at the source" % item)
+        elif item in PLATE_ORE:
+            ore = PLATE_ORE[item]
+            out.append(_cand("smelter_array", {"ore": ore}, 1, "array:" + ore,
+                             "furnaces are what turn %s into %s" % (ore, item)))
+            out.append(_cand("plate_lane", {"item": item, "product": item}, 1, "lane:" + item,
+                             "a plate lane delivers %s to its consumer" % item))
+        elif item in SCIENCE_PACKS:
+            out.append(_cand("science_assembler", {"recipe": item}, 1, "science",
+                             "the converter is the only thing that makes %s" % item))
+    return out
+
+
+def blocking_constraints(state=None, plan=None, structures=None, blocked=None):
+    """Every constraint currently refusing a build, ranked by how many builds it refuses.
+
+    `blocked` (a list of explain()-shaped dicts, i.e. what a build pass actually tried) is
+    preferred over re-gating BUILD_ORDER, because the pass knows the n and the params it
+    wanted and a speculative x1 of each does not.
+    """
+    agg = {}
+    if blocked:
+        rows = [(b.get("structure"), b.get("n", 1), b.get("blocking") or []) for b in blocked]
+    else:
+        st = sense() if state is None else state
+        rows = []
+        for s in (structures or [s for s, _ in BUILD_ORDER]):
+            if s not in GATES:
+                continue
+            spec = (plan or {}).get(s, 1)
+            n, params = ((spec, None) if isinstance(spec, int)
+                         else (spec.get("n", 1), spec.get("params")))
+            rep = explain(s, n, st, params, relieves=())      # the RAW verdict, no waivers
+            if not rep["allowed"]:
+                rows.append((s, n, rep["blocking"]))
+    for s, n, keys in rows:
+        for k in keys:
+            a = agg.setdefault(k, {"constraint": k, "check": constraint_check(k),
+                                   "blocks": [], "requests": []})
+            if s and s not in a["blocks"]:
+                a["blocks"].append(s)
+            if s:
+                a["requests"].append((s, n))
+    out = list(agg.values())
+    for r in out:
+        r["n_blocks"] = len(r["blocks"])
+    out.sort(key=lambda r: (-r["n_blocks"], r["constraint"]))
+    return out
+
+
+def _attribution_keys(attribution):
+    """bottleneck.top_cause() -> the constraint keys its missing ingredient corresponds to."""
+    miss = (attribution or {}).get("missing")
+    if not miss:
+        return ()
+    keys = ["flows:" + miss]
+    if miss == "coal":
+        keys.append("coal_at_boiler")
+    if miss in ORE_PLATE:
+        keys.append("overbuild_within_budget:" + miss)
+    return tuple(keys)
+
+
+def _live_attribution(window_s=600):
+    """bottleneck.py's ranking, if the ring has anything in it. Imported LAZILY and never
+    allowed to raise: attribution SHARPENS the choice of relief, it does not gate it."""
+    try:
+        import bottleneck
+        return bottleneck.top_cause(window_s)
+    except Exception:
+        return None
+
+
+ATTRIBUTION_WEIGHT = 10.0     # a measured bottleneck outranks any breadth count
+
+
+def next_relief(state=None, plan=None, blocked=None, done=(), attribution=None,
+                structures=None, window_s=600):
+    """THE SINGLE HIGHEST-VALUE RELIEF BUILD — the legal move a stuck base still has.
+
+    Ranking is breadth (how many structures this constraint refuses) plus bottleneck.py's
+    attribution, which is the only input here measured at the machines rather than derived
+    from a census: if the base's starved machines say they are missing coal, the coal
+    constraint outranks a constraint that merely blocks more gate rows.
+
+    `done` carries the relief keys already built (or already proved un-buildable), so the
+    ladder ESCALATES instead of proposing the same lane forever. Returns None when nothing is
+    legal — which is a real answer, and the caller must say so rather than idle silently.
+    """
+    st = sense() if state is None else state
+    rows = blocking_constraints(st, plan=plan, structures=structures, blocked=blocked)
+    if not rows:
+        return None
+    if attribution is None:
+        attribution = _live_attribution(window_s)
+    hot = set(_attribution_keys(attribution))
+    for r in rows:
+        r["score"] = r["n_blocks"] + (ATTRIBUTION_WEIGHT if r["constraint"] in hot else 0.0)
+    rows.sort(key=lambda r: (-r["score"], -r["n_blocks"], r["constraint"]))
+    done = set(done or ())
+    for r in rows:
+        for cand in relief_candidates(r["constraint"], st, r.get("requests")):
+            if cand["key"] in done:
+                continue
+            ok, why = gate(cand["structure"], cand["n"], st, cand["params"],
+                           relieves=(r["constraint"],))
+            if not ok:
+                continue
+            out = dict(cand)
+            out.update(constraint=r["constraint"], unblocks=list(r["blocks"]),
+                       score=r["score"], gate_reason=why,
+                       attributed=r["constraint"] in hot,
+                       reason=("%s x%d increases %s, which is blocking %s"
+                               % (cand["structure"], cand["n"], r["constraint"],
+                                  ", ".join(r["blocks"]) or "the pass")))
+            return out
+    return None
+
+
+def deadlock(state=None, plan=None, blocked=None, done=(), attribution=None, structures=None):
+    """The one line a stuck pass owes the log, plus the relief to attempt next pass.
+
+    A builder that produces nothing and refuses something is not "idle" — it is DEADLOCKED,
+    and the difference is the whole point of this function. Returns None when nothing is
+    blocked (there is no deadlock to report).
+    """
+    st = sense() if state is None else state
+    rows = blocking_constraints(st, plan=plan, structures=structures, blocked=blocked)
+    if not rows:
+        return None
+    relief = next_relief(st, plan=plan, blocked=blocked, done=done, attribution=attribution,
+                         structures=structures)
+    binding = relief["constraint"] if relief else rows[0]["constraint"]
+    row = next((r for r in rows if r["constraint"] == binding), rows[0])
+    if relief:
+        move = ("%s x%d %s — %s" % (relief["structure"], relief["n"],
+                                    json.dumps(relief["params"], sort_keys=True), relief["why"]))
+    else:
+        cands = [c["structure"] for c in relief_candidates(binding, st, row.get("requests"))]
+        move = ("NONE IS LEGAL (candidates: %s) — this needs a human"
+                % (", ".join(cands) if cands else "none known"))
+    return {"constraint": binding, "blocks": row["blocks"], "relief": relief,
+            "candidates": rows[:4],
+            "line": ("DEADLOCK: %s is the binding limit; it blocks %s; relief build = %s"
+                     % (binding, ", ".join(row["blocks"]) or "every gated stage", move))}
 
 
 # =========================================================================== clearance
