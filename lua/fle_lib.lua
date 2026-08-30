@@ -5,6 +5,9 @@
 -- Commit:   f748ec452dfa79f6a57a12ddcff1ff9102cdb11f  (shallow clone, 2026-08-29)
 -- Files:    fle/env/tools/agent/connect_entities/server.lua
 --           fle/env/tools/agent/nearest_buildable/server.lua
+--           fle/env/tools/admin/request_path/server.lua  (travel chunks)
+--           fle/env/tools/admin/get_path/server.lua      (travel_poll)
+--           fle/env/tools/agent/move_to/server.lua       (travel_step walker)
 --           fle/env/mods/utils.lua + fle/env/mods/serialize.lua (direction helpers)
 --
 -- MIT License (c) Jack Hopkins et al. — see the upstream repo's LICENSE.
@@ -24,7 +27,7 @@
 -- @chunk core
 fle = fle or {}
 local F = fle
-F.VERSION = 1
+F.VERSION = 2
 -- vendored tables from connect_entities/server.lua
 F.wire_reach = {['small-electric-pole'] = 4, ['medium-electric-pole'] = 9,
                 ['big-electric-pole'] = 30, ['substation'] = 18}
@@ -91,10 +94,11 @@ end
 -- @chunk path
 local F = fle
 -- Direct L-path candidates (x-first / y-first); pick the one crossing fewer hard
--- tiles. This REPLACES FLE's async surface.request_path + normalise_path pipeline:
--- request_path needs an on_script_path_request_finished handler registered at
--- scenario load time, which a pure /sc model doesn't have — and GOTCHAS explicitly
--- prefers a short direct corridor with underground crossings over pathfinder snakes.
+-- tiles. For BELT/PIPE ROUTING this deliberately replaces FLE's async
+-- surface.request_path pipeline: GOTCHAS explicitly prefers a short direct
+-- corridor with underground crossings over pathfinder snakes. (The pathfinder
+-- itself IS available from /sc — script.on_event registration works in the level
+-- state, verified live on 2.1.17; the CHARACTER-TRAVEL chunks below use it.)
 -- Coordinates are integer TILE coords (top-left corner); centers are +0.5.
 F.lpath = function(ax, ay, bx, by, xfirst)
   local pts = {}
@@ -440,3 +444,173 @@ F.fluid_probe = function(x, y, fluid)
   if not e then return {found = false} end
   return {found = true, name = e.name, count = e.get_fluid_count(fluid)}
 end
+
+-- @chunk travelreq
+local F = fle
+-- Native-pathfinder travel, vendored from FLE request_path/server.lua. Corridor
+-- chunk pre-generation first (the pathfinder cannot traverse ungenerated chunks —
+-- FLE's hard-won fix), then an async surface.request_path with the CHARACTER's own
+-- collision box + mask (2.x layers format, read from the prototype so water/cliff
+-- avoidance comes from the tile side). transport_belt is added to the mask: belts
+-- push the walking character (GOTCHAS), so paths route around them.
+-- Waypoints land in storage.fle_paths[id] via the travelinit handler.
+F.travel_request = function(tx, ty, radius)
+  local p = storage.derpface
+  if not (p and p.valid) then return -1 end
+  local s = p.surface
+  local sx, sy = p.position.x, p.position.y
+  local dx, dy = tx - sx, ty - sy
+  local n = math.max(1, math.ceil(math.sqrt(dx * dx + dy * dy) / 32))
+  for i = 0, n do   -- every 32 tiles along the straight line, radius 2 chunks
+    s.request_to_generate_chunks({x = sx + dx * i / n, y = sy + dy * i / n}, 2)
+  end
+  s.force_generate_chunk_requests()
+  local goal = s.find_non_colliding_position('character', {tx, ty}, 32, 0.5)
+                 or {x = tx, y = ty}
+  local proto = prototypes.entity['character']
+  local L = {transport_belt = true}
+  for k in pairs(proto.collision_mask.layers) do L[k] = true end
+  local id = s.request_path{
+    bounding_box = proto.collision_box,
+    collision_mask = {layers = L},
+    start = p.position, goal = goal, force = p.force,
+    radius = radius or 1, entity_to_ignore = p, can_open_gates = true,
+    pathfind_flags = {cache = false, prefer_straight_paths = true, no_break = true}}
+  storage.fle_paths = storage.fle_paths or {}
+  storage.fle_pathreq = storage.fle_pathreq or {}
+  storage.fle_pathreq[id] = game.tick
+  return id
+end
+
+-- @chunk travelq
+local F = fle
+-- Control surface for the travel stack (FLE get_path/server.lua poll states).
+-- These return SMALL json strings printed directly (no chunked read needed).
+F.dir8 = function(dx, dy)   -- FLE utils get_direction_with_diagonals, 16-dir consts
+  local m = 0.2
+  if math.abs(dx) < m then return dy > 0 and 8 or 0 end
+  if math.abs(dy) < m then return dx > 0 and 4 or 12 end
+  if dx > 0 then return dy > 0 and 6 or 2 end
+  return dy > 0 and 10 or 14
+end
+F.travel_poll = function(id)
+  local r = storage.fle_paths and storage.fle_paths[id]
+  if r == nil then
+    if storage.fle_pathreq and storage.fle_pathreq[id] then return '{"status":"pending"}' end
+    return '{"status":"invalid"}'
+  end
+  if r == 'busy' then return '{"status":"busy"}' end
+  if r == 'not_found' then return '{"status":"not_found"}' end
+  return '{"status":"success","n":' .. #r .. '}'
+end
+F.travel_go = function(id)
+  local wps = storage.fle_paths and storage.fle_paths[id]
+  if type(wps) ~= 'table' or #wps == 0 then return 'no_path' end
+  storage.fle_paths = {[id] = wps}   -- GC dead paths: storage serializes into saves
+  storage.fle_pathreq = {[id] = storage.fle_pathreq and storage.fle_pathreq[id] or game.tick}
+  storage.fle_travel = {id = id, wp = 1, done = false, partial = false, hops = 0}
+  return 'go'
+end
+F.travel_status = function()
+  local T = storage.fle_travel
+  local p = storage.derpface
+  local px = (p and p.valid) and string.format('%.2f', p.position.x) or 'null'
+  local py = (p and p.valid) and string.format('%.2f', p.position.y) or 'null'
+  if not T then
+    return '{"active":false,"done":true,"partial":false,"wp":0,"total":0,"hops":0,"x":' ..
+           px .. ',"y":' .. py .. '}'
+  end
+  local wps = storage.fle_paths and storage.fle_paths[T.id]
+  local total = (type(wps) == 'table') and #wps or 0
+  return string.format(
+    '{"active":%s,"done":%s,"partial":%s,"wp":%d,"total":%d,"hops":%d,"x":%s,"y":%s}',
+    tostring(not T.done), tostring(T.done), tostring(T.partial or false),
+    T.wp or 0, total, T.hops or 0, px, py)
+end
+F.travel_stop = function()
+  storage.fle_travel = nil
+  storage.fle_paths = nil
+  storage.fle_pathreq = nil
+  local p = storage.derpface
+  if p and p.valid then p.walking_state = {walking = false} end
+  return 'stopped'
+end
+
+-- @chunk travelstep
+local F = fle
+-- Waypoint-queue walker, vendored from FLE move_to/server.lua
+-- update_walking_queues; consumed by the on_nth_tick(5) handler (travelinit).
+-- Arrival = 0.35 tiles. STUCK WATCHDOG: >60 ticks without 0.1 tiles of progress
+-- toward the current waypoint -> teleport to the NEXT waypoint (arturh85's small
+-- legal unstick — never travel-by-teleport); stuck on the LAST waypoint -> stop
+-- and mark done+partial. All progress lives in storage.fle_travel.
+F.travel_step = function()
+  local T = storage.fle_travel
+  if not T or T.done then return end
+  local p = storage.derpface
+  if not (p and p.valid) then T.done = true; T.partial = true; return end
+  local wps = storage.fle_paths and storage.fle_paths[T.id]
+  if type(wps) ~= 'table' or #wps == 0 then
+    T.done = true; T.partial = true; p.walking_state = {walking = false}; return
+  end
+  local w = wps[T.wp]
+  if not w then T.done = true; p.walking_state = {walking = false}; return end
+  local px, py = p.position.x, p.position.y
+  local dx, dy = w.x - px, w.y - py
+  if dx * dx + dy * dy <= 0.1225 then          -- within 0.35 tiles: next waypoint
+    T.wp = T.wp + 1
+    T.sx, T.sy, T.stuck = px, py, 0
+    if T.wp > #wps then T.done = true; p.walking_state = {walking = false}; return end
+    w = wps[T.wp]; dx, dy = w.x - px, w.y - py
+  else
+    if not T.sx then T.sx, T.sy, T.stuck = px, py, 0 end
+    local mx, my = px - T.sx, py - T.sy
+    if mx * mx + my * my >= 0.01 then           -- 0.1 tiles moved: watchdog reset
+      T.sx, T.sy, T.stuck = px, py, 0
+    else
+      T.stuck = (T.stuck or 0) + 5              -- this runs every 5 ticks
+      if T.stuck > 60 then
+        if T.wp < #wps then
+          local nw = wps[T.wp + 1]
+          local tp = p.surface.find_non_colliding_position('character', {nw.x, nw.y}, 6, 0.25)
+          p.teleport(tp or {nw.x, nw.y})
+          T.wp = T.wp + 1
+          T.hops = (T.hops or 0) + 1
+          T.sx, T.sy, T.stuck = nil, nil, 0
+          return
+        else
+          T.done = true; T.partial = true
+          p.walking_state = {walking = false}; return
+        end
+      end
+    end
+  end
+  p.walking_state = {walking = true, direction = F.dir8(dx, dy)}
+end
+
+-- @chunk travelinit
+local F = fle
+-- One-time (per Lua state) event registration. VERIFIED LIVE on 2.1.17
+-- (2026-08-29): script.on_event/on_nth_tick registered from /sc DO work — /sc runs
+-- in the level state, and vanilla freeplay registers neither of these two slots.
+-- Handlers die with the Lua state (save reload / restart), exactly like the `fle`
+-- global, so fle_tools' version probe re-push re-registers them transparently.
+-- Registering again just replaces our own previous handler (idempotent).
+script.on_event(defines.events.on_script_path_request_finished, function(ev)
+  if not (storage.fle_pathreq and storage.fle_pathreq[ev.id]) then return end
+  storage.fle_paths = storage.fle_paths or {}
+  if ev.path then
+    local wps = {}
+    for i, w in ipairs(ev.path) do wps[i] = {x = w.position.x, y = w.position.y} end
+    storage.fle_paths[ev.id] = wps
+  elseif ev.try_again_later then
+    storage.fle_paths[ev.id] = 'busy'
+  else
+    storage.fle_paths[ev.id] = 'not_found'
+  end
+end)
+script.on_nth_tick(5, function()
+  storage.fle_travel_tick = (storage.fle_travel_tick or 0) + 1   -- liveness sentinel
+  if fle and fle.travel_step then fle.travel_step() end
+end)
+F.travel_on = true

@@ -179,7 +179,9 @@ def selftest():
     for cname, code in chunks:
         print(f"  {cname:<10} {len(('/sc ' + code).encode()):>5}B")
     assert [c[0] for c in chunks] == ["core", "placeable", "path", "lay",
-                                      "beltcheck", "poles", "nearest", "api"], "chunk order changed"
+                                      "beltcheck", "poles", "nearest", "api",
+                                      "travelreq", "travelq", "travelstep",
+                                      "travelinit"], "chunk order changed"
     assert all("storage.fle " not in code for _, code in chunks), \
         "functions must live in the `fle` global, never storage (saves break)"
     try:
