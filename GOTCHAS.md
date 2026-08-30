@@ -1531,3 +1531,41 @@ The one exception is a deploy, which restarts the container by its nature.
 BACKSTOP, because a hook can only observe what it is running for: `bootstrap.diff_since_baseline()`
 keeps a durable on-disk baseline and `planner.play()` diffs it at STARTUP, so an edit made
 while the bot was down is still caught, attributed to the operator, and his removals protected.
+
+## POWER, LIKE COAL, IS DEMANDED — NOT NAMEPLATED (measured 2026-08-30)
+
+    NOMINAL load (every machine at nameplate): 3.13 MW
+    MEASURED draw (what the grid delivers)   : 0.218 MW      <- 14.4x overstatement
+
+`load_mw` sums what every machine would take if all of them ran flat out in the same instant.
+`power_headroom` then demanded 1.5x of that, so a base drawing 0.22 MW of a 3.6 MW plant was
+told it had no room for anything — and the thing it had no room for was the CONSUMER that was
+the only way to unjam it. Same error as the boiler model, in the other resource.
+
+**THE RULE, identical in both places: existing equipment is charged at what it DRAWS; equipment
+being ADDED is charged at nameplate.** You know the duty cycle of what is running because you
+can measure it; you do not know it for what you are about to build, and building it is a
+commitment. `demand_mw()` implements it, and falls back to nameplate when there is no reading
+(a snapshot, a dead grid) so a missing measurement is never read as "no load".
+
+Self-correcting by construction: as the base unjams, measured draw rises, headroom falls, and a
+boiler column becomes required — by which time the smelters are working and the coal to fuel it
+is flowing again. And under-provisioning in Factorio is a BROWNOUT — everything runs
+proportionally slower — not damage. Over-provisioning here was a total stop.
+
+## AND: ZERO FLOW WITH FULL BUFFERS IS THE OPPOSITE OF SCARCITY
+
+The `flows` gate refuses a consumer with nothing to consume. But 0/min with the producers at
+`full_output` means the material EXISTS and is not moving *because nothing drains it* — so
+refusing the consumer refuses the one build that creates the flow being demanded. Live: iron
+0.0/min, copper 0.0/min, 28 of 28 furnaces jammed, 156 iron and 133 copper plates sitting on
+the bus, and the relief ladder proposing MORE FURNACES.
+
+`_pr_flows` now passes a CONSUMER when `backed_up(st)`. Note what is deliberately not in
+`CONSUMER_STRUCTURES`: `smelter_array`. Adding producers to a base whose producers are jammed
+is exactly the move this guard exists to stop.
+
+**That is the FOURTH place this same misreading lived** — `fix_lanes`, `connect_mine_to_array`,
+`mine_planner_v2.verify_lane`, and now the flows gate. A blocked OUTPUT presents identically to
+a starved INPUT one step downstream, and the two have opposite fixes. When you find one, grep
+for the rest.

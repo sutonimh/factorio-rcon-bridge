@@ -701,7 +701,11 @@ def test_sense_parses_the_chunked_payload():
     assert st["networks"] == 1 and st["ghosts"]["lab"] == 26
     assert round(G.capacity_mw(st), 2) == 3.60
     # 16 drills * 90 + 113 inserters * 13.9 + 9 labs * 60 = 3.55 MW -> headroom 1.014
-    assert round(G.headroom(st), 3) == 1.014
+    # HEADROOM IS NOW MEASURED, NOT NAMEPLATE. This fixture has generated_kw set, so demand is
+    # what the grid actually delivers rather than what 113 idle inserters would take if they
+    # all swung at once. The nominal reading here was 1.014; the same census measured is 11.1.
+    assert round(G.headroom(st), 3) == 11.146
+    assert round(G.capacity_mw(st) / G.load_mw(st), 3) == 1.014, "nameplate ratio, for contrast"
     ok, why = G.gate("lab", 9, st)
     assert ok is False, why
     # the scratch key is cleared, and nothing but reads went out

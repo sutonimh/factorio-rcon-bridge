@@ -147,7 +147,11 @@ def test_the_live_deadlock_was_a_modelling_error_and_the_base_has_a_legal_move()
     ok, why = G.gate("science_assembler", 1, st, {"recipe": "automation-science-pack"})
     assert not ok and "power_headroom" in why and "0.99" in why, why
     ok, why = G.gate("lab", 1, st)
-    assert not ok and "automation-science-pack 0.0/min < 2.0/min" in why, why
+    # Still refused. The REASON moved from the pack flow to pack_producer_live once headroom
+    # became measured rather than nameplate - a lab with no pack assembler anywhere is refused
+    # on the missing CONVERTER, which is the more direct truth about this base.
+    assert not ok and ("pack_producer_live" in why
+                       or "automation-science-pack 0.0/min < 2.0/min" in why), why
     ok, why = G.gate("mine_outpost", 4, st, {"drills": 4, "ore": "coal"})
     assert not ok and "power_headroom" in why, why
     # ...and the cycle is broken because the ONE build that raises headroom is now allowed.
@@ -731,7 +735,10 @@ def test_the_laws_still_refuse_what_the_operator_deleted():
     still refused, on a census where no relief is declared."""
     st = live()
     ok, why = G.gate("lab", 9, st)
-    assert not ok and "automation-science-pack" in why           # the 9 labs he deleted
+    # Still refused - which is the law this test is about. The REASON now leads with
+    # pack_producer_live rather than the pack flow, because with headroom measured the power
+    # clause no longer fires first. The lab array he deleted stays deleted either way.
+    assert not ok and ("automation-science-pack" in why or "pack_producer_live" in why)
     st2 = state(counts={"boiler": 4, "steam-engine": 8, "electric-mining-drill": 6},
                 networks=2)
     ok, why = G.gate("mine_outpost", 6, st2, {"drills": 6})

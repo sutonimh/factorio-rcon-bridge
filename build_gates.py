@@ -304,9 +304,34 @@ def load_mw(st, extra_kw=0.0):
     return kw / 1000.0
 
 
+def demand_mw(st, extra_kw=0.0):
+    """What the grid is actually asked for, plus the nameplate of whatever is being ADDED.
+
+    THE SAME CORRECTION AS THE COAL MODEL, in the other resource. `load_mw` sums every
+    machine's NAMEPLATE draw - what they would take if all of them ran flat out at the same
+    instant. Measured on the live base: nominal 3.13 MW against 0.218 MW actually delivered, a
+    14.4x overstatement, because most machines are idle, starved, or duty-cycling.
+
+    Charging existing equipment at nameplate made `power_headroom` demand 1.5x of a number 14x
+    too big, which refused every consumer this base could build - and the consumer was the only
+    thing that could unjam it. Existing equipment is therefore charged at what it DRAWS;
+    equipment being added is charged at nameplate, because its duty cycle is not yet known and
+    building it is a commitment.
+
+    Self-correcting by construction: as the base unjams, measured draw rises, headroom falls,
+    and a boiler column becomes required - by which time the smelters are working and the coal
+    to fuel it is flowing again. Under-provisioning in Factorio is a brownout (everything runs
+    proportionally slower), not damage; over-provisioning here was a total stop.
+    """
+    measured = _f(st, "generated_kw") / 1000.0
+    if measured <= 0:                       # no reading (a snapshot, a dead grid): be strict
+        return load_mw(st, extra_kw)
+    return measured + max(0.0, float(extra_kw)) / 1000.0
+
+
 def headroom(st, extra_kw=0.0):
-    """capacity / load. inf when nothing draws power yet (an empty grid is not starved)."""
-    cap, load = capacity_mw(st), load_mw(st, extra_kw)
+    """capacity / demand. inf when nothing draws power yet (an empty grid is not starved)."""
+    cap, load = capacity_mw(st), demand_mw(st, extra_kw)
     if load <= 0:
         return float("inf")
     return cap / load
@@ -484,6 +509,37 @@ def _recipe_of(p):
     return prod if prod in CELL_PLATE_COST else None
 
 
+# A build that CONSUMES plates: the thing that turns a backed-up base back into a flowing one.
+# Furnaces are not here on purpose - a smelter array is a producer, and adding producers to a
+# base whose producers are already jammed is the move this whole guard exists to stop.
+CONSUMER_STRUCTURES = ("science_assembler", "lab", "mall_assembler", "assembler_block")
+
+
+def _is_consumer(structure):
+    return structure in CONSUMER_STRUCTURES
+
+
+def backed_up(st, frac=0.5, floor=3):
+    """True when the producers are jammed at their OUTPUT rather than starved at their input.
+
+    `full_output` means a machine finished something and has nowhere to put it. Every symptom
+    downstream then looks like scarcity - zero flow, idle machines, blocked drills - and it is
+    the opposite: the material exists and the DRAIN is missing."""
+    jam = total = 0
+    for name in FURNACE_NAMES:
+        hist = (st.get("status") or {}).get(name) or {}
+        jam += int(hist.get("full_output", 0))
+        total += int(_f(st.get("counts", {}), name))
+    return total > 0 and jam >= max(int(floor), int(total * frac))
+
+
+def backed_up_detail(st):
+    jam = sum(int(((st.get("status") or {}).get(n) or {}).get("full_output", 0))
+              for n in FURNACE_NAMES)
+    total = int(sum(_f(st.get("counts", {}), n) for n in FURNACE_NAMES))
+    return "%d of %d furnaces at full_output" % (jam, total)
+
+
 def _pr_flows(st, n, g, p):
     need = required_flows(p.get("structure"), n, _recipe_of(p))
     short, keys = [], []
@@ -493,6 +549,21 @@ def _pr_flows(st, n, g, p):
             short.append("%s %.1f/min < %.1f/min needed" % (item, have, req))
             keys.append("flows:" + item)          # the CONSTRAINT, per item: a relief build
     if short:                                     # relieves `flows:coal`, never "flows"
+        # ZERO FLOW WITH FULL BUFFERS IS THE OPPOSITE OF SCARCITY. This gate exists to stop a
+        # consumer being built with nothing to consume. But when the producers are jammed at
+        # `full_output`, the material plainly EXISTS - furnaces holding finished plates, more
+        # standing on the bus - and it is not moving precisely BECAUSE nothing drains it.
+        # Refusing the consumer then refuses the one build that creates the flow being demanded,
+        # and the base sits at 0/min forever with its buffers full.
+        #
+        # Live 2026-08-30: iron 0.0/min, copper 0.0/min, 16+12 furnaces at full_output, 156 iron
+        # and 133 copper plates standing on the bus - and the relief ladder proposed MORE
+        # FURNACES. Same misreading as fix_lanes and verify_lane (a blocked OUTPUT read as a
+        # starved INPUT), in a fourth place.
+        if _is_consumer(p.get("structure")) and backed_up(st):
+            return True, ("flow is 0/min but upstream is BACKED UP (%s): the material exists "
+                          "and is not moving because nothing drains it, and a CONSUMER is what "
+                          "creates the flow this gate asks for" % backed_up_detail(st))
         return False, "; ".join(short) + (" (n=%d)" % n), keys
     return True, "flows ok: " + ", ".join("%s %.1f/min>=%.1f" % (i, flow(st, i), r)
                                           for i, r in sorted(need.items()))
