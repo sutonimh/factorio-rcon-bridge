@@ -69,6 +69,34 @@ def coverage(poles, consumers):
     return out
 
 
+def components(poles, keep):
+    """How many separate networks the kept poles could form, given wire reach."""
+    keep = sorted(keep)
+    if not keep:
+        return 0
+    idx = {k: i for i, k in enumerate(keep)}
+    adj = {i: [] for i in range(len(keep))}
+    for i, a in enumerate(keep):
+        for b in keep[i + 1:]:
+            if _wires(poles[a], poles[b]):
+                adj[i].append(idx[b])
+                adj[idx[b]].append(i)
+    seen, n = set(), 0
+    for s in range(len(keep)):
+        if s in seen:
+            continue
+        n += 1
+        stack = [s]
+        seen.add(s)
+        while stack:
+            q = stack.pop()
+            for m in adj[q]:
+                if m not in seen:
+                    seen.add(m)
+                    stack.append(m)
+    return n
+
+
 def connected(poles, keep):
     """Could the kept poles form one network, given wire reach?
 
@@ -102,7 +130,7 @@ def connected(poles, keep):
     return len(seen) == len(keep)
 
 
-def cull(poles, consumers, protect=()):
+def cull(poles, consumers, protect=(), dark=()):
     """Indices of poles that can be removed without unpowering anything or splitting the grid.
 
     Greedy to a fixpoint, taking the LEAST useful pole first (fewest consumers supplied) and
@@ -119,10 +147,23 @@ def cull(poles, consumers, protect=()):
     # A consumer no pole supplies is already unpowered; culling cannot make it worse, and
     # holding the whole pass hostage to it would mean one dark machine freezes cleanup
     # forever. Ignore it here - fix_unpowered() is what answers for those.
-    live = {ci: pis for ci, pis in cov.items() if pis}
+    dark = set(tuple(d) for d in dark)
+    live = {ci: pis for ci, pis in cov.items()
+            if pis and tuple(consumers[ci]) not in dark}
 
     keep = set(range(len(poles)))
     removed = []
+    # MUST NOT MAKE CONNECTIVITY WORSE - which is not the same as "must end up whole".
+    # Requiring a single network meant the culler refused to remove ANYTHING whenever the grid
+    # was already split, i.e. exactly when cleanup matters most. On 2026-08-30 three stray
+    # poles out at x=-40 formed two tiny islands far beyond wire reach; that tripped the
+    # `grid_energized` gate, which blocks science_assembler, lab and mine_outpost, and the
+    # planner declared a deadlock with "relief build = NONE IS LEGAL" - while the culler stood
+    # by unable to delete the three useless poles causing it.
+    # Counting components instead lets an isolated island be removed (components go DOWN) and
+    # still forbids breaking the main grid (components go UP). It also matches apply()'s live
+    # guard, which compares network counts rather than demanding exactly one.
+    base_components = components(poles, keep)
 
     def useful(pi):
         return sum(1 for pis in live.values() if pi in pis)
@@ -140,20 +181,22 @@ def cull(poles, consumers, protect=()):
             # rule 1: nothing this pole supplies goes dark
             if any(not (pis & trial) for pis in live.values() if pi in pis):
                 continue
-            # rules 2+3: what is left is still one network (generators are in `consumers`,
-            # so rule 1 already kept them supplied)
-            if not connected(poles, trial):
+            # rules 2+3: connectivity is no worse than we found it (generators are in
+            # `consumers`, so rule 1 already kept them supplied)
+            after = components(poles, trial)
+            if after > base_components:
                 continue
             keep = trial
+            base_components = after
             removed.append(pi)
             progress = True
     return sorted(removed)
 
 
-def explain(poles, consumers, protect=()):
+def explain(poles, consumers, protect=(), dark=()):
     """Human-readable summary of what a cull would do and why - for the status log, so the
     loop says what it changed instead of silently deleting the operator's poles."""
-    gone = cull(poles, consumers, protect)
+    gone = cull(poles, consumers, protect, dark)
     if not gone:
         return "poles: %d, none redundant" % len(poles)
     orphans = sum(1 for pi in gone
@@ -178,7 +221,8 @@ _READ = (
     "for _,e in pairs(s.find_entities_filtered{type=T}) do"
     "  if e.prototype.electric_energy_source_prototype then local b=e.bounding_box;"
     "    o[#o+1]='C|'..math.floor(b.left_top.x)..'|'..math.floor(b.left_top.y)..'|'"
-    "      ..(math.ceil(b.right_bottom.x)-1)..'|'..(math.ceil(b.right_bottom.y)-1) end end;"
+    "      ..(math.ceil(b.right_bottom.x)-1)..'|'..(math.ceil(b.right_bottom.y)-1)"
+    "      ..'|'..((e.status==defines.entity_status.no_power) and 1 or 0) end end;"
     "for _,e in pairs(s.find_entities_filtered{name='steam-engine'}) do local b=e.bounding_box;"
     "  o[#o+1]='G|'..math.floor(b.left_top.x)..'|'..math.floor(b.left_top.y)..'|'"
     "    ..(math.ceil(b.right_bottom.x)-1)..'|'..(math.ceil(b.right_bottom.y)-1) end;"
@@ -187,18 +231,25 @@ _READ = (
 
 
 def read_world(A):
-    """(poles, consumers) off the live map. Generators are appended to `consumers` because
+    """(poles, consumers, dark) off the live map. `dark` are the consumers the game already
+    reports as no_power. Generators are appended to `consumers` because
     they must stay supplied too - a pole layout that powers every machine but strands the
     steam engine is not a saving."""
-    poles, consumers = [], []
+    poles, consumers, dark = [], [], []
     for tok in (A._print(_READ).strip() or "").split(";"):
         f = tok.split("|")
         if f[0] == "P" and len(f) == 6:
             poles.append({"name": f[1], "x": int(f[2]), "y": int(f[3]),
                           "px": float(f[4]), "py": float(f[5])})
-        elif f[0] in ("C", "G") and len(f) == 5:
-            consumers.append(tuple(int(v) for v in f[1:5]))
-    return poles, consumers
+        elif f[0] in ("C", "G") and len(f) >= 5:
+            box = tuple(int(v) for v in f[1:5])
+            # A consumer the GAME reports as no_power is already dark. Its poles cover it on
+            # paper but supply it with nothing - an island with no generator covers plenty and
+            # powers none of it - so those poles must not be treated as load-bearing.
+            if len(f) >= 6 and f[5] == "1":
+                dark.append(box)
+            consumers.append(box)
+    return poles, consumers, dark
 
 
 def _pos(p):
@@ -253,13 +304,13 @@ def apply(A, protect=(), dry_run=False, log=None):
                 return 0
         except Exception:
             pass                                 # no truce available -> proceed
-    poles, consumers = read_world(A)
+    poles, consumers, dark = read_world(A)
     if len(poles) < MIN_POLES_TO_BOTHER:
         return 0
-    gone = cull(poles, consumers, protect)
+    gone = cull(poles, consumers, protect, dark)
     if not gone:
         return 0
-    say(explain(poles, consumers, protect))
+    say(explain(poles, consumers, protect, dark))
     if dry_run:
         return len(gone)
 
@@ -316,7 +367,7 @@ if __name__ == "__main__":
     import sys
     import autopilot as A
     dry = "--apply" not in sys.argv
-    poles, consumers = read_world(A)
-    print(explain(poles, consumers))
+    poles, consumers, dark = read_world(A)
+    print(explain(poles, consumers, dark=dark))
     n = apply(A, dry_run=dry, log=print)
     print(("would remove %d (pass --apply to do it)" if dry else "removed %d") % n)

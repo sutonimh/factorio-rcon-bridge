@@ -1800,3 +1800,37 @@ one up and it destroyed the two assemblers it was walking over to reach.
 **Clear footprints, never areas.** `A.place` already refuses ground it cannot legally build
 on, so the loop should walk forward looking for a free slot rather than making room by force.
 An occupied tile is information, not an obstacle to be removed.
+
+---
+
+## Coverage is not power, and "must end up whole" is not "must not get worse"
+
+Two bugs in the culler, both found by the same incident, both worth keeping.
+
+Three stray poles out at x=-40 formed two islands far beyond wire reach. That tripped
+`grid_energized`, which blocks `science_assembler`, `lab` and `mine_outpost`, and the planner
+duly reported:
+
+```
+DEADLOCK: grid_energized is the binding limit; it blocks mine_outpost, lab,
+science_assembler; relief build = NONE IS LEGAL
+```
+
+The culler stood by unable to delete the three useless poles causing it, for two reasons:
+
+1. **It required the survivors to form ONE network.** While the grid was already split that is
+   false for every candidate, so it removed nothing — in exactly the situation where cleanup
+   was the fix. The right test is that connectivity must not get WORSE: count components and
+   refuse an increase. Removing an isolated island makes the count go *down*.
+
+2. **It treated coverage as power.** The island poles "supplied" machines out there, so rule 1
+   read them as load-bearing. But an island with no generator covers plenty and powers none of
+   it — those machines were sitting at `no_power` the whole time. Modelling energisation is
+   possible; reading the game's own `no_power` flag is better, and `read_world` now returns it.
+
+Result: 101 → 99 poles, and `networks` back to 1.
+
+**The general shape: an invariant stated as an absolute ("must be whole", "must be covered")
+tends to forbid the repair as firmly as the damage.** State it as a comparison against the
+state you found instead, and the cleanup can run on a base that is already broken — which is
+the only base that needs it.

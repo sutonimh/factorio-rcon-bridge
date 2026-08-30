@@ -158,3 +158,67 @@ def test_chunks_cover_everything_exactly_once():
     out = [x for c in PC._chunks(seq, 25) for x in c]
     assert out == seq
     assert all(len(c) <= 25 for c in PC._chunks(seq, 25))
+
+
+# --------------------------------------------------------------------------- split grids
+def test_components_counts_islands():
+    poles = [P(0, 0), P(6, 0), P(40, 0), P(46, 0)]
+    assert PC.components(poles, {0, 1, 2, 3}) == 2
+    assert PC.components(poles, {0, 1}) == 1
+    assert PC.components(poles, set()) == 0
+
+
+def test_cull_can_clean_up_a_grid_that_is_already_split():
+    """Requiring a single network meant refusing to remove anything whenever the grid was
+    already split - exactly when cleanup matters most. Three stray poles at x=-40 formed two
+    islands, which tripped the grid_energized gate (blocking science_assembler, lab and
+    mine_outpost) and the planner declared a deadlock, while the culler stood by unable to
+    delete the three useless poles causing it."""
+    main = [P(x, 0) for x in range(0, 13, 2)]          # one connected run
+    strays = [P(60, 0), P(80, 0)]                      # two useless islands, powering nothing
+    poles = main + strays
+    consumers = [box(x, 0) for x in range(0, 13, 4)]
+    gone = set(PC.cull(poles, consumers))
+    assert len(main) in gone and len(main) + 1 in gone, "the isolated strays survived"
+    keep = set(range(len(poles))) - gone
+    assert PC.components(poles, keep) <= PC.components(poles, set(range(len(poles))))
+
+
+def test_cull_still_refuses_to_split_a_whole_grid():
+    poles = [P(0, 0), P(1, 0), P(7, 0), P(14, 0), P(15, 0)]
+    consumers = [box(0, 0), box(15, 0)]
+    assert 2 not in set(PC.cull(poles, consumers)), "removed the bridge and split the network"
+
+
+def test_cull_never_increases_component_count():
+    poles = [P(x, y) for x in range(0, 17, 2) for y in (0, 4)] + [P(70, 70), P(90, 90)]
+    consumers = [box(x, y) for x in range(0, 17, 4) for y in (0, 4)]
+    before = PC.components(poles, set(range(len(poles))))
+    keep = set(range(len(poles))) - set(PC.cull(poles, consumers))
+    assert PC.components(poles, keep) <= before
+
+
+def test_a_dark_consumer_does_not_protect_its_island_poles():
+    """Coverage is not power. An island with no generator covers plenty and supplies none of
+    it, so its poles read as load-bearing and the culler refused to remove them - the exact
+    poles tripping grid_energized and deadlocking the planner. The game's own no_power flag
+    settles it."""
+    main = [P(x, 0) for x in range(0, 13, 2)]
+    island = [P(60, 0), P(62, 0)]
+    poles = main + island
+    stranded = box(61, 0)
+    consumers = [box(x, 0) for x in range(0, 13, 4)] + [stranded]
+    # without the hint, the island looks load-bearing and survives
+    assert not (set(PC.cull(poles, consumers)) >= {len(main), len(main) + 1})
+    # told the consumer is already dark, the island is provably waste
+    gone = set(PC.cull(poles, consumers, dark=[stranded]))
+    assert {len(main), len(main) + 1} <= gone, "the dead island survived"
+
+
+def test_dark_hint_never_sacrifices_a_powered_consumer():
+    poles = [P(0, 0), P(4, 0), P(8, 0), P(12, 0)]
+    consumers = [box(0, 0), box(12, 0)]
+    gone = set(PC.cull(poles, consumers, dark=[box(0, 0)]))
+    keep = set(range(len(poles))) - gone
+    cov = PC.coverage(poles, consumers)
+    assert cov[1] & keep, "the still-powered consumer lost its last pole"
