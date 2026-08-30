@@ -274,8 +274,10 @@ async function tick() {
               : l.includes("triage[") ? "triage" : l.includes("trigger tech") ? "trig" : "";
     let lines = lg.lines||[];
     if (logFilter) lines = lines.filter(l => cls(l)===logFilter);
-    $("log").innerHTML = lines.map(l=>`<span class="logline ${cls(l)}">${l.replace(/</g,"&lt;")}</span>`).join("");
-    $("log").scrollTop = $("log").scrollHeight;
+    // newest first (Seth 2026-08-30): no scrolling to find what just happened
+    $("log").innerHTML = lines.slice().reverse().map(
+      l=>`<span class="logline ${cls(l)}">${l.replace(/</g,"&lt;")}</span>`).join("");
+    $("log").scrollTop = 0;
   } catch(e) {}
 }
 function kvSet(id, obj) { $(id).innerHTML = Object.entries(obj).map(([k,v])=>`<b>${k}</b><span>${v}</span>`).join(""); }
