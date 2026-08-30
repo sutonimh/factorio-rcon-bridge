@@ -37,6 +37,8 @@ class FakeWorld(FakeRcon):
         m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             return self.payload[int(m.group(1)) - 1:int(m.group(2))] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         assert self.queue, "unexpected RCON call (payloads exhausted): %s" % cmd[:120]
         self.payload = self.queue.pop(0)
         return str(len(self.payload))

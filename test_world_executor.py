@@ -38,10 +38,13 @@ class FakeRcon:
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\._world:sub\((\d+),(\d+)\)", cmd)
+        # the buffer key is minted per read (rcon.read_chunked), so match ANY scratch
+        m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:160])
         sub, resp = self.script.pop(0)
@@ -139,14 +142,14 @@ def test_reconcile_marks_missing_then_recovers(ctx):
                            {"name": "steam-engine", "tile_pos": (10, -6)}],
                           "power", 0, "o1")
     # live scan sees only the boiler -> engine flagged missing (never deleted)
-    ctx.fake.script = [("storage._world", lambda cmd: ctx.fake.payload_len(
+    ctx.fake.script = [("rcon.print(#storage.", lambda cmd: ctx.fake.payload_len(
         [{"n": "boiler", "x": 10, "y": -2, "d": 0}]))]
     res = world.reconcile()
     assert res["checked"] == 2 and res["missing"] == [uids[1]] and res["recovered"] == []
     assert len(world.query()) == 2                       # flagged, not deleted
     assert not world.query(include_missing=False)[0].get("missing")
     # next scan sees both -> engine recovered
-    ctx.fake.script = [("storage._world", lambda cmd: ctx.fake.payload_len(
+    ctx.fake.script = [("rcon.print(#storage.", lambda cmd: ctx.fake.payload_len(
         [{"n": "boiler", "x": 10, "y": -2, "d": 0},
          {"n": "steam-engine", "x": 10, "y": -6, "d": 0}]))]
     res = world.reconcile()
@@ -245,7 +248,7 @@ def test_belt_path_order(ctx):
         ])
     ctx.fake.script = [
         ("gmatch", "0"),                                 # lay_belt_path: 0 unbridged gaps
-        ("storage._world", serve_belts),                 # scan_tiles verify+collect
+        ("rcon.print(#storage.", serve_belts),                 # scan_tiles verify+collect
     ]
     oid = executor.submit({"kind": "belt_path", "role": "bus",
                            "args": {"waypoints": [[0, 0], [2, 0]]}})

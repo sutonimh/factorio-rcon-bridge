@@ -6,7 +6,7 @@ Run with either:
     python3 test_bottleneck.py
 
 Every test repoints bottleneck.HIST_PATH at its own tmp dir and installs a scripted fake
-rcon.run that speaks the storage._bn chunked-read protocol (length, then :sub slices), so the
+rcon.run that speaks the chunked storage.<key> protocol (length, then :sub slices), so the
 real sample() path — command build, chunking, rejoin, attribution — is exercised end to end
 without touching the live game.
 
@@ -30,12 +30,13 @@ class FakeRcon:
     """Scripted rcon.run: (substring, response) steps consumed in order, plus native handling of
     the chunked storage.<key> reads. A response may be a callable(cmd) -> str; return
     payload_len(obj) from one to serve a chunked scan."""
-    def __init__(self, script=(), key="_bn"):
+    def __init__(self, script=(), key=r"_\w+"):
         self.script = list(script)
         self.calls = []
         self.payload = None
         self.slices = 0
-        self._re = re.compile(r"storage\.%s:sub\((\d+),(\d+)\)" % re.escape(key))
+        # the buffer key is minted per read (rcon.read_chunked): match any scratch
+        self._re = re.compile(r"storage\.%s:sub\((\d+),(\d+)\)" % key)
 
     def payload_len(self, obj):
         self.payload = json.dumps(obj, separators=(",", ":"))
@@ -48,6 +49,8 @@ class FakeRcon:
             self.slices += 1
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"      # rcon.print appends a newline per response
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:160])
         sub, resp = self.script.pop(0)
@@ -69,7 +72,7 @@ class Ctx:
             1 for r in rows if r.get("s") in bottleneck.STARVED)
         payload = {"t": tick, "tot": tot if tot is not None else len(rows),
                    "stv": starved, "rows": rows}
-        self.fake.script = [("storage._bn", lambda cmd: self.fake.payload_len(payload))]
+        self.fake.script = [("=helpers.table_to_json", lambda cmd: self.fake.payload_len(payload))]
 
     def close(self):
         bottleneck.HIST_PATH, bottleneck.MAX_SAMPLES, rcon.run = self._orig
@@ -192,7 +195,7 @@ def test_scan_lua_is_read_only():
         assert "assembling_machine_input" not in lua
         assert "previous_recipe" in lua
         assert "ing.type=='fluid'" in lua            # never prototypes.item[<fluid>].type
-        assert "storage._bn" in lua                  # our own key: never races _arch / _world
+        assert "storage._bn" in lua                  # the default store name
     assert "area={{-100,-100},{100,100}}" in bottleneck.scan_lua((-100, -100, 100, 100))
 
 
@@ -291,7 +294,8 @@ def test_failed_scan_raises_never_records_a_healthy_lap(ctx):
     """An RCON blip or Lua error must NOT degrade into a 0-starved sample: record() would
     persist it as a healthy lap and every such lap dilutes starved_pct in report()."""
     for bad in ("", "   ", "Error: something died in the /sc", "0"):
-        ctx.fake.script = [("storage._bn", bad)]
+        # twice: read_chunked retries a failed read once before giving up (tries=2)
+        ctx.fake.script = [("=helpers.table_to_json", bad)] * 2
         try:
             bottleneck.sample()
         except RuntimeError:

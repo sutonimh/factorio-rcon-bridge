@@ -228,6 +228,67 @@ def test_anchor_is_reached_by_a_straight_trunk_never_a_chain():
     assert len(bridge) <= 2, "join with 1-2 poles, not a chain: %s" % (bridge,)
 
 
+def test_an_ORPHAN_standing_pole_does_not_veto_every_lattice():
+    """REGRESSION 2026-08-30. The SPLIT check asked `connected(tiles + existing + anchor)` -
+    "are the plan AND every pole standing in this area one network?" - which is not a question
+    the plan controls. One pole someone left further than the wire reach from everything else
+    makes the answer no for EVERY pitch and EVERY phase, so plan_grid raised on all of them,
+    and stage_array_grid absorbs a GridError as "retrying next pass": a permanent, silent
+    stall over a pole the lattice was never going to touch.
+
+    What LAW 3 actually requires is here: the plan is one network, and it reaches its anchor.
+    The orphan is REPORTED, not raised on.
+    """
+    cons, obs, area = smelter()
+    # room to the south for a pole nothing can reach: the lattice rows are chosen from the
+    # CONSUMER band (rows 4 and 7), so an empty y=35 is 28 tiles from the nearest pole
+    area = (area[0] - 12, area[1], area[2], area[3] + 24)
+    anchor = (-15, 5)
+    orphan = (area[2] - 1, area[3])            # SE corner, far past the 7.5 wire reach
+    plan = P.plan_grid(area, cons, obstacles=obs, anchor=anchor, existing=[orphan])
+    tiles = P.plan_tiles(plan)
+    assert tiles, "an unreachable standing pole vetoed the whole lattice"
+    assert P.connected(tiles + [anchor]), "the plan itself must still be ONE network"
+    assert any("ALREADY islanded" in w for w in P.LAST_WARNINGS), P.LAST_WARNINGS
+    # ...and validate() must agree, or apply() refuses for the reason plan_grid stopped raising
+    bad = [f for f in P.validate(plan, consumers=cons, obstacles=obs, anchor=anchor,
+                                 existing=[orphan]) if f["severity"] == "error"]
+    assert not bad, bad
+    orph = [f for f in P.validate(plan, consumers=cons, obstacles=obs, anchor=anchor,
+                                  existing=[orphan]) if f["check"] == "orphan_pole"]
+    assert len(orph) == 1 and orph[0]["severity"] == "warn", orph
+    # a PLANNED pole off the network is still an ERROR - that is the split this module prevents
+    split = P.validate(list(plan) + [{"x": 60, "y": 60, "entity": POLE}],
+                       consumers=cons, obstacles=obs, anchor=anchor, existing=[orphan])
+    assert any(f["check"] == "grid_split" and f["severity"] == "error" for f in split), split
+
+
+def test_a_trunk_endpoint_this_run_would_NEWLY_place_is_legality_checked():
+    """REGRESSION 2026-08-30. `_run`'s endpoint check was reachable only through `hard`, and
+    `hard` was the unconditional {a, b} - so BOTH endpoints were exempt and the loop was dead
+    code. stage_spine's far end (SPINE_X, oy) is a brand-new tile, not a standing pole, and
+    nothing stopped it landing on a belt: the same hole `_corners` was written to close one
+    tile over.
+
+    `existing` names the endpoints that really ARE poles already. Everything else is checked.
+    """
+    a, b = (0, 0), (0, 21)                     # a = a standing pole, b = a fresh tile
+    blocked = {a, b}                           # b is a belt tile; a is the pole's own tile
+    # the historical contract - both endpoints are the caller's own poles - is unchanged
+    tiles = P.plan_tiles(P.plan_trunk(a, b, blocked=blocked, area=(-2, -2, 20, 30)))
+    assert tiles[0] == a and tiles[-1] == b, tiles
+    # naming only the standing one makes the check LIVE: b is on a belt and the run is refused
+    try:
+        P.plan_trunk(a, b, blocked=blocked, area=(-2, -2, 20, 30), existing=[a])
+    except P.GridError as e:
+        assert "anchor" in str(e) or "occupied" in str(e), e
+    else:
+        raise AssertionError("a fresh endpoint on a blocked tile was planned anyway")
+    # and a fresh endpoint on FREE ground is still planned, of course
+    ok = P.plan_tiles(P.plan_trunk(a, b, blocked={a}, area=(-2, -2, 20, 30), existing=[a]))
+    assert ok[0] == a and ok[-1] == b, ok
+
+
 def test_grid_error_when_the_area_cannot_hold_a_lattice():
     cons, obs, area = smelter()
     try:
@@ -236,6 +297,37 @@ def test_grid_error_when_the_area_cannot_hold_a_lattice():
         pass
     else:
         raise AssertionError("a 1-tile area must raise GridError, not return a split plan")
+
+
+def test_poles_already_in_the_ground_push_the_lattice_out_to_MIN_POLE_SEP():
+    """The planner had no notion of standing poles: they landed in `blocked`, so they only
+    EXCLUDED tiles - their coverage was never credited and MIN_POLE_SEP was never measured
+    against them. Live, that made it pick the next free phase and plan a full PARALLEL lattice
+    2.0 tiles from the one already there, covering nothing new."""
+    cons, obs, area = smelter()
+    plan = P.plan_grid(area, cons, obstacles=obs)
+    laid = P.plan_tiles(plan)
+    assert laid, "no baseline plan"
+    again = P.plan_tiles(P.plan_grid(area, cons, obstacles=obs, existing=laid[:1]))
+    for t in again:
+        assert P._dist(POLE, t, laid[0]) >= P.MIN_POLE_SEP - 1e-9, \
+            "planned %s only %.2f from the standing pole %s" % (t, P._dist(POLE, t, laid[0]),
+                                                               laid[0])
+
+
+def test_validate_measures_separation_against_STANDING_poles_too():
+    """A plan whose every pole is 2.0 tiles from one already in the ground reads perfectly
+    clean if you only compare the plan to itself - which is all validate could do."""
+    cons, obs, area = smelter()
+    plan = P.plan_grid(area, cons, obstacles=obs)
+    tiles = P.plan_tiles(plan)
+    interleaved = [(x + 2, y) for x, y in tiles]        # the 2.0-tile parallel lattice
+    blind = [f for f in P.validate(plan, consumers=cons, obstacles=obs)
+             if f["check"] == "poles_too_close"]
+    seeing = [f for f in P.validate(plan, consumers=cons, obstacles=obs, existing=interleaved)
+              if f["check"] == "poles_too_close"]
+    assert not blind, "the plan is internally fine: %s" % blind[:2]
+    assert len(seeing) >= len(tiles), "the interleave must be reported: %d" % len(seeing)
 
 
 # --------------------------------------------------------------------------- plan_trunk
@@ -275,6 +367,55 @@ def test_trunk_refuses_a_spacing_past_the_wire_reach():
         pass
     else:
         raise AssertionError("spacing 9 > small-pole reach 7.5 must raise")
+
+
+# The live geometry, reduced to what actually decided it. `_reach_anchor` planned
+# (-5,4)->(-15,3); (-5,3) is a transport-belt tile on the iron plate row, and the two candidate
+# corners scored a TIE on `_leg_blocked` (6 apiece, measured on the live obstacle set), which
+# the old `<=` handed to the blocked one. Two blocked tiles on the y=4 leg reproduce that tie.
+_TRUNK_A, _TRUNK_B = (-5, 4), (-15, 3)
+_TIE_BLOCKED = {(-5, 3), (-8, 4), (-9, 4)}
+
+
+def test_the_trunk_CORNER_is_legality_checked_like_every_other_tile():
+    """REGRESSION, live 2026-08-29. Every INTERIOR tile of a leg went through `_fits`, but the
+    corner is leg 1's endpoint and leg 2's start, and `_run` anchored its endpoints
+    unconditionally - so the one brand-new pole nobody checked was emitted straight into the
+    plan, and phase 0's array_grid then died on the same GridError every pass forever.
+    `_leg_blocked` only ever COUNTED blocked tiles as a tie-break; it never rejected a corner."""
+    assert (P._leg_blocked(_TRUNK_A, (-5, 3), _TRUNK_B, _TIE_BLOCKED)
+            == P._leg_blocked(_TRUNK_A, (-15, 4), _TRUNK_B, _TIE_BLOCKED)), \
+        "the fixture must reproduce the TIE that handed the route to the blocked corner"
+    tiles = P.plan_tiles(P.plan_trunk(_TRUNK_A, _TRUNK_B, blocked=set(_TIE_BLOCKED),
+                                      area=(-15, 0, 32, 20)))
+    assert (-5, 3) not in tiles, "the corner is a belt tile and was planned anyway: %s" % tiles
+    assert not (set(tiles) & _TIE_BLOCKED), "pole on a blocked tile: %s" % tiles
+    assert tiles[0] == _TRUNK_A and tiles[-1] == _TRUNK_B, tiles    # endpoints stay HARD
+    assert all(a[0] == b[0] or a[1] == b[1] for a, b in zip(tiles, tiles[1:])), tiles
+    assert max(P._dist(POLE, a, b) for a, b in zip(tiles, tiles[1:])) <= 7.5, tiles
+    assert P.connected(tiles)
+
+
+def test_a_trunk_with_both_corners_blocked_is_REFUSED_not_planned_anyway():
+    """The other half of the same rule. `_lay` reads this refusal as 'this pitch/phase cannot
+    reach the grid' and tries the next one, so a cornered candidate becomes a different
+    lattice - which is the only outcome better than a pole on a belt."""
+    blocked = {(0, 10), (10, 0)}          # both (a.x,b.y) and (b.x,a.y)
+    try:
+        P.plan_trunk((0, 0), (10, 10), blocked=blocked, area=(-2, -2, 20, 20))
+    except P.GridError as e:
+        assert "corner" in str(e), e
+    else:
+        raise AssertionError("a route whose every corner is occupied must be refused")
+
+
+def test_a_leg_endpoint_is_checked_unless_it_is_the_callers_own_pole():
+    """from_xy/to_xy are EXISTING poles - they are in `blocked` because a pole occupies its own
+    tile, and they must still be emitted. Anything else a leg anchors on is a tile this run
+    would newly place, so it is checked like an interior one."""
+    a, b = (0, 0), (0, 21)
+    tiles = P.plan_tiles(P.plan_trunk(a, b, blocked={a, b}, area=(-2, -2, 20, 30)))
+    assert tiles[0] == a and tiles[-1] == b, tiles
 
 
 # --------------------------------------------------------------------------- wiring
@@ -470,29 +611,53 @@ def test_audit_separates_the_operator_from_the_bot():
 
 
 # --------------------------------------------------------------------------- apply harness
+_STORE_WRITE = re.compile(r"rcon\.print\(#(storage\.[A-Za-z0-9_]+)\)")
+_STORE_SLICE = re.compile(r"(storage\.[A-Za-z0-9_]+):sub\((\d+),(\d+)\)")
+_STORE_CLEAR = re.compile(r"storage\.[A-Za-z0-9_]+=nil")
+
+
 class FakeRcon:
     """Scripted rcon.run: (substring, response) steps consumed in order, plus native handling
-    of the chunked storage.<key> reads used by world.py (_world) and power_planner (_pgrid)."""
+    of the chunked storage.<key> protocol.
+
+    The buffer key is whatever the BUILD command minted - rcon.read_chunked mints a private one
+    per read - so payloads are filed under the key the command actually used rather than under
+    a hardcoded _world/_pgrid. The logical name passed to json() survives only as a label.
+    """
 
     def __init__(self, script=()):
         self.script = list(script)
         self.calls = []
         self.payload = {}
+        self.clobber = None          # see clobber_after(): the mid-read swap, defect 2
 
     def payload_len(self, key, obj):
         self.payload[key] = json.dumps(obj, separators=(",", ":"))
         return str(len(self.payload[key]))
 
     def json(self, key, obj):
-        return lambda cmd: self.payload_len(key, obj)
+        def build(cmd):
+            m = _STORE_WRITE.search(cmd)
+            return self.payload_len(m.group(1) if m else key, obj)
+        return build
+
+    def clobber_after(self, slices, obj):
+        """Swap the buffer out from under the reader after `slices` slices have been served -
+        exactly what a concurrent power_planner.scan did to the invariant thread's audit."""
+        self.clobber = {"after": int(slices), "obj": obj, "seen": 0}
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\.(_world|_pgrid):sub\((\d+),(\d+)\)", cmd)
+        m = _STORE_SLICE.search(cmd)
         if m:
             key, i, j = m.group(1), int(m.group(2)), int(m.group(3))
+            c = self.clobber
+            if c is not None:
+                c["seen"] += 1
+                if c["seen"] > c["after"]:
+                    self.payload[key] = json.dumps(c["obj"], separators=(",", ":"))
             return self.payload[key][i - 1:j] + "\n"
-        if re.search(r"storage\._pgrid=nil", cmd):
+        if _STORE_CLEAR.search(cmd):
             return ""
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:200])
@@ -773,6 +938,83 @@ def test_cli_trunk_mode_plans_without_writing():
         assert P._main(["power_planner.py"]) == 2
     finally:
         ctx.close()
+
+
+# ------------------------------------------------- the chunked read that spliced two scans
+#
+# 2026-08-29 23:27:07 live: "invariants: power audit failed (Expecting ',' delimiter: line 1
+# column 9003 (char 9002))". Not truncation, not UTF-8, not a trimmed rcon.print - the audit
+# thread was reading storage._pgrid in 3000-char slices while the builder's array_grid scan
+# wrote its own document to that same key. The reassembled string was the first 9000 chars of
+# a 46926-char scan spliced onto the tail of a 32962-char one: two valid documents, meeting at
+# a chunk boundary, and no reader in the repo compared the reassembled length against the
+# length Lua had reported.
+
+
+def _big_scan(n):
+    """A payload comfortably longer than one 3000-char slice."""
+    return {"ents": [{"n": "small-electric-pole", "t": "electric-pole", "x": i, "y": 0,
+                      "bb": [i, 0, i, 0], "s": "working"} for i in range(n)]}
+
+
+@_with_ctx
+def test_a_buffer_clobbered_mid_read_is_caught_not_parsed(ctx):
+    """THE DEFECT. A writer landing between two slice reads is now a named error with the
+    delta in it, instead of a JSONDecodeError at an offset that means nothing."""
+    ctx.fake.script = [("find_entities_filtered", ctx.fake.json("_pgrid", _big_scan(120)))] * 2
+    ctx.fake.clobber_after(1, _big_scan(4))          # a different, shorter document
+    try:
+        P.scan((-5, -5, 5, 5))
+        raise AssertionError("a spliced read must not be parsed as an answer")
+    except rcon.ChunkedReadError as e:
+        assert "reassembled" in str(e) and "Lua reported" in str(e), e
+        assert "delta" in str(e), e
+
+
+@_with_ctx
+def test_every_chunked_read_mints_its_own_buffer_key(ctx):
+    """The primary fix. Two reads can no longer share a buffer, so a concurrent writer cannot
+    cause the mismatch above at all - the length check is only the backstop."""
+    ctx.fake.script = [("find_entities_filtered", ctx.fake.json("_pgrid", _big_scan(40)))] * 2
+    P.scan((-5, -5, 5, 5))
+    P.scan((-5, -5, 5, 5))
+    keys = {m.group(1) for m in (_STORE_WRITE.search(c) for c in ctx.fake.calls) if m}
+    assert len(keys) == 2, "both reads used the same buffer key: %s" % keys
+    assert all(k.startswith("storage._rd") for k in keys), keys
+    for k in keys:
+        assert any("%s=nil" % k in c for c in ctx.fake.calls), "scratch %s never cleared" % k
+
+
+@_with_ctx
+def test_a_lua_error_is_never_read_as_an_empty_area(ctx):
+    """int(prose) swallowed would read as 'nothing is there'. For read_grid - a buildplan
+    verify_fn - that answer would fail the verify and ROLL BACK a lattice that was built
+    correctly, so a failed read must be indistinguishable from no read, never from zero."""
+    ctx.fake.script = [("electric_network_id", "Error: the mod caused a non-recoverable error")] * 2
+    try:
+        P.read_grid((-5, -5, 5, 5))
+        raise AssertionError("a Lua error must not read back as an empty grid")
+    except rcon.ChunkedReadError as e:
+        assert "unreadable" in str(e), e
+
+
+def test_no_module_hand_rolls_a_chunked_read_any_more():
+    """The lesson generalised. lane_lint hit this bug in 2026-08 and fixed it locally with a
+    private key; the fix never left that file, and power_planner was still splicing scans a
+    month later. One reader means the next instance cannot be written by accident.
+
+    storage.fle_out is the one exemption: the key is chosen by the VENDORED lua/fle_lib.lua
+    (fle.out()), not by Python, so it cannot be minted per read from this side.
+    """
+    offenders = []
+    for path in sorted(pathlib.Path(__file__).resolve().parent.glob("*.py")):
+        if path.name.startswith("test_") or path.name == "rcon.py":
+            continue
+        for i, line in enumerate(path.read_text().splitlines(), 1):
+            if re.search(r"\bstorage\.[A-Za-z0-9_]+:sub\(", line) and "fle_out" not in line:
+                offenders.append("%s:%d" % (path.name, i))
+    assert not offenders, ("hand-rolled chunked slice read(s) - use rcon.read_chunked: %s"
+                           % offenders)
 
 
 TESTS = [v for k, v in sorted(globals().items()) if k.startswith("test_")]

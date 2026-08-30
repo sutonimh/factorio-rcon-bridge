@@ -42,7 +42,12 @@ def write_status(build_queue=None):
         "local eng=s.find_entities_filtered{name='steam-engine'}[1]; local b=s.find_entities_filtered{name='boiler'}[1];"
         "local labs=s.find_entities_filtered{name='lab'}; local lr=0; for _,l in pairs(labs) do if l.status==1 then lr=lr+1 end end;"
         "local asm=s.find_entities_filtered{type='assembling-machine'}; local aw=0; for _,a in pairs(asm) do if a.status==1 then aw=aw+1 end end;"
-        "local function mf(name) local m=999; for _,dr in pairs(s.find_entities_filtered{name='burner-mining-drill'}) do local fb=dr.get_fuel_inventory(); local c=fb and fb.get_item_count('coal') or 0; if c<m then m=c end end; return m==999 and -1 or m end;"
+        # FUEL-BURNING drills only, found by TYPE and filtered on actually having a fuel
+        # inventory - an electric drill has none. The old query filtered by the NAME
+        # 'burner-mining-drill', of which this map has had zero since the operator converted
+        # every drill and deleted the fuel belts, so the loop body never ran and the -1
+        # sentinel read as "the query is stale" rather than "not applicable".
+        "local function mbf() local m=999; for _,dr in pairs(s.find_entities_filtered{type='mining-drill'}) do local fb=dr.get_fuel_inventory(); if fb then local c=fb.get_item_count('coal'); if c<m then m=c end end end; return m==999 and -1 or m end;"
         "local parts={};"
         "parts['ticks']=game.tick;"
         "parts['research']=f.current_research and f.current_research.name or 'BLOCKED/none';"
@@ -51,8 +56,11 @@ def write_status(build_queue=None):
         "parts['boiler_fuel']=b and b.get_fuel_inventory().get_item_count('coal') or 0;"
         "parts['labs_running']=lr; parts['labs_total']=#labs;"
         "parts['assemblers_working']=aw; parts['assemblers_total']=#asm;"
-        "parts['drills']=#s.find_entities_filtered{name='burner-mining-drill'};"
-        "parts['min_drill_fuel']=mf();"
+        # BY TYPE, like controller.sense() already does. Counting the literal name
+        # 'burner-mining-drill' reported 0 drills on a map running 16 electric ones, and the
+        # two telemetry paths disagreed for a month without either being wrong-looking.
+        "parts['drills']=#s.find_entities_filtered{type='mining-drill'};"
+        "parts['min_burner_drill_fuel']=mbf();"
         "parts['derp_x']=d and math.floor(d.position.x) or 0; parts['derp_y']=d and math.floor(d.position.y) or 0;"
         "parts['derp_walking']=tostring(d and d.walking_state.walking);"
         "parts['derp_coal']=d and d.get_main_inventory().get_item_count('coal') or 0;"
@@ -79,7 +87,11 @@ def write_status(build_queue=None):
         "labs": f"{st.get('labs_running')}/{st.get('labs_total')}",
         "assemblers": f"{st.get('assemblers_working')}/{st.get('assemblers_total')}",
         "drills": st.get("drills"),
-        "min_drill_fuel": st.get("min_drill_fuel"),
+        # NAMED for what it measures. Every drill on this map is ELECTRIC - the operator
+        # converted them and deleted the fuel belts - so this is -1 and stays -1, meaning "no
+        # fuel-burning drill exists", never "the drills are out of coal". It must never read
+        # as an argument for a burner drill or a fuel belt: that would be a tier regression.
+        "min_burner_drill_fuel": st.get("min_burner_drill_fuel"),
         "derpface": {"pos": [st.get("derp_x"), st.get("derp_y")],
                      "walking": st.get("derp_walking"), "coal": st.get("derp_coal")},
         "build_queue": [getattr(t, "__name__", str(t)) for t in (build_queue or [])],

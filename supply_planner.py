@@ -469,33 +469,21 @@ def _as_plan(plan):
 
 # --------------------------------------------------------------------------- consumers
 def _chunked(build_lua):
-    """One /sc builds the JSON into STORE and prints its length; read it back in slices
-    (GOTCHAS "RCON client protocol": a single response over ~4KB truncates, and rcon.print
-    appends a newline to EACH response so every slice is rstripped).
+    """rcon.read_chunked on a PRIVATE buffer key. `build_lua(store)` returns the /sc.
 
-    RAISES on a read that did not happen. A Lua runtime error comes back as prose, and
-    int(prose) is a ValueError - which, swallowed, would read as "this lane has no consumers"
-    and become a delete order for a working lane. A failed read must be indistinguishable
-    from no read at all, never from an answer.
+    RAISES on a read that did not happen - and read_chunked keeps that contract: a Lua runtime
+    error comes back as prose, and int(prose) swallowed would read as "this lane has no
+    consumers" and become a delete order for a working lane. A failed read must be
+    indistinguishable from no read at all, never from an answer. The reassembled length is
+    checked too, so a short or spliced payload cannot pass as an empty one either.
     """
-    head = (rcon.run(build_lua) or "").strip()
     try:
-        n = int(head or "0")
-    except ValueError:
-        raise RuntimeError("consumer probe FAILED: expected a payload length, the server "
-                           "returned %r - treating this as unreadable, not as zero consumers"
-                           % head[:160])
-    if n == 0:
-        return "{}"
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(%s:sub(%d,%d))" % (STORE, i, i + CHUNK - 1))
-                     .rstrip("\r\n"))
-        i += CHUNK
-    return "".join(parts)
+        return rcon.read_chunked(build_lua, chunk=CHUNK)
+    except rcon.ChunkedReadError as e:
+        raise RuntimeError("consumer probe FAILED: %s" % str(e)[:220])
 
 
-def consumer_lua(x1, y1, x2, y2):
+def consumer_lua(x1, y1, x2, y2, store=STORE):
     """READ-ONLY: every tile in the box from which something DRAWS off a belt.
 
     An inserter's pickup_position is the authority, never its facing - the operator's own
@@ -516,9 +504,9 @@ def consumer_lua(x1, y1, x2, y2):
             "for _,e in pairs(s.find_entities_filtered{area={{%d,%d},{%d,%d}},"
             "type={'loader','loader-1x1'}}) do"
             " o[#o+1]=math.floor(e.position.x)..','..math.floor(e.position.y) end;" % box +
-            "if #o==0 then " + STORE + "='{\"c\":[]}' else "
-            + STORE + "=helpers.table_to_json{c=o} end;"
-            "rcon.print(#" + STORE + ")")
+            "if #o==0 then " + store + "='{\"c\":[]}' else "
+            + store + "=helpers.table_to_json{c=o} end;"
+            "rcon.print(#" + store + ")")
 
 
 def probe_consumers(rec, pad=CONSUMER_PAD):
@@ -540,8 +528,8 @@ def probe_consumers(rec, pad=CONSUMER_PAD):
         return 0
     xs = [t[0] for t in tiles]
     ys = [t[1] for t in tiles]
-    lua = consumer_lua(min(xs) - pad, min(ys) - pad, max(xs) + pad, max(ys) + pad)
-    body = _chunked(lua)
+    body = _chunked(lambda store: consumer_lua(min(xs) - pad, min(ys) - pad,
+                                               max(xs) + pad, max(ys) + pad, store=store))
     try:
         raw = json.loads(body)
     except ValueError:

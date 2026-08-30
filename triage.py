@@ -29,7 +29,14 @@ SYSTEM = (
     "keep_power); power_networks>1 = grid split (power, ensure_grid_connected); "
     "drills_blocked high + furnaces_starved high = broken ore lane (lane, fix_lanes); "
     "free_slots<5 = inventory clog (inventory, trim_inventory); iron_pm falling toward 0 "
-    "with furnaces_starved rising = lane/supply break (lane).\n"
+    "with furnaces_starved rising = lane/supply break (lane); "
+    "furnaces_full_output high + drills_blocked high + iron_pm 0 = DOWNSTREAM BACK-PRESSURE "
+    "(the terminal chest or the consumer is full), class supply, actuator none - fix_lanes "
+    "CANNOT help, the lane is intact and saturated; the relief is a consumer, a build "
+    "decision.\n"
+    "STARVED AND FULL ARE OPPOSITES. furnaces_starved = no input (a supply break); "
+    "furnaces_full_output = no OUTPUT room (a demand problem). Never answer 'lane' when "
+    "furnaces_starved is 0 and furnaces_full_output is high.\n"
     'Reply ONLY JSON: {"state":"healthy|watch|stall|anomaly","class":"power|coal|lane|'
     'supply|inventory|research|science|build|none","actuator":"keep_power|fix_unpowered|'
     'ensure_grid_connected|fix_lanes|fix_science|fix_research|trim_inventory|none",'
@@ -40,7 +47,12 @@ SYSTEM = (
     'boiler dry - power death","wake_architect":false}\n'
     "Example 2 - cur {drills_blocked:8,furnaces_starved:36,iron_pm:0} prev {iron_pm:90} -> "
     '{"state":"stall","class":"lane","actuator":"fix_lanes","reason":"iron flow collapsed '
-    '90->0 with drills blocked: ore lane broken","wake_architect":false}'
+    '90->0 with drills blocked: ore lane broken","wake_architect":false}\n'
+    "Example 3 (the 2026-08-29 misdiagnosis) - cur {drills:16,drills_blocked:12,furnaces:28,"
+    "furnaces_starved:0,furnaces_full_output:28,asm:0,labs_working:0,iron_pm:0} prev "
+    '{iron_pm:0} -> {"state":"stall","class":"supply","actuator":"none","reason":"every '
+    "furnace is full_output and nothing consumes plates (0 assemblers) - the lane is "
+    'saturated, not broken","wake_architect":true}'
 )
 
 

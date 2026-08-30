@@ -80,26 +80,22 @@ end
 local nc=0 for _ in pairs(nets) do nc=nc+1 end g.power_networks=nc
 local eng=0 for _,e in pairs(s.find_entities_filtered{name='steam-engine'}) do eng=eng+e.energy end
 g.engine_energy=math.floor(eng)
-storage._arch=helpers.table_to_json({ents=ents,globals=g})
-rcon.print(tostring(#storage._arch))
+__STORE__=helpers.table_to_json({ents=ents,globals=g})
+rcon.print(tostring(#__STORE__))
 """
 
 
 def snapshot():
-    """Gather the rich live snapshot. Builds it server-side into storage._arch, then reads it
-    back in CHUNK-sized slices (Factorio truncates a single large RCON response, so we paginate)
-    -> parsed dict {ents:[...], globals:{...}}."""
-    n = int((rcon.run("/sc " + SNAPSHOT_LUA).strip() or "0"))
-    if n == 0:
+    """Gather the rich live snapshot -> parsed dict {ents:[...], globals:{...}}.
+
+    Built server-side into a PRIVATE scratch global and read back in slices by
+    rcon.read_chunked, which mints that key per read and checks the reassembled length. The key
+    was the fixed storage._arch; a shared key read over N round-trips is the splice documented
+    in GOTCHAS "RCON client protocol"."""
+    raw = rcon.read_chunked(lambda store: "/sc " + SNAPSHOT_LUA.replace("__STORE__", store),
+                            chunk=CHUNK, empty="")
+    if not raw:
         raise RuntimeError("snapshot build returned 0 length (RCON or Lua error)")
-    parts = []
-    i = 1
-    while i <= n:
-        # rcon.print appends a trailing newline to each response; strip it so the slices
-        # rejoin into exactly the original JSON (compact JSON has no other trailing whitespace).
-        parts.append(rcon.run("/sc rcon.print(storage._arch:sub(%d,%d))" % (i, i + CHUNK - 1)).rstrip("\r\n"))
-        i += CHUNK
-    raw = "".join(parts)
     return json.loads(raw)
 
 

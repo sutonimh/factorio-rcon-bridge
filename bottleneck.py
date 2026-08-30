@@ -62,7 +62,7 @@ STARVED = frozenset({"no_ingredients", "item_ingredient_shortage",
 
 
 # --------------------------------------------------------------------------- the scan
-def scan_lua(bbox=None, types=TYPES):
+def scan_lua(bbox=None, types=TYPES, store="storage._bn"):
     """Build the read-only /sc body. Emits, per machine: name, tile pos, recipe (with the
     previous_recipe fallback), status name, and for a STARVED machine the list of ingredients
     it is short of as {n=<item>, d=<deficit>}. Starved rows are collected first so the MAX_ROWS
@@ -111,31 +111,27 @@ def scan_lua(bbox=None, types=TYPES):
         "    if #hot<MX then hot[#hot+1]=row end"
         "  elseif #cold<MX then cold[#cold+1]=row end end;"
         "for i=1,#cold do if #hot>=MX then break end hot[#hot+1]=cold[i] end;"
-        "storage._bn=helpers.table_to_json({t=game.tick,tot=tot,stv=stv,rows=hot});"
-        "rcon.print(#storage._bn)"
+        + "%s=helpers.table_to_json({t=game.tick,tot=tot,stv=stv,rows=hot});"
+          "rcon.print(#%s)" % (store, store)
     )
 
 
-def _chunked(lua):
-    """Run the /sc that stores JSON in storage._bn + prints its length, then read it back in
-    CHUNK slices. rcon.print appends a newline per response -> rstrip EVERY slice or a control
-    char lands in the JSON at each chunk boundary.
+def _chunked(build_lua):
+    """rcon.read_chunked on a PRIVATE buffer key. `build_lua(store)` returns the Lua body.
 
     A failed scan RAISES (architect.snapshot's precedent) - it must never degrade into an empty
     sample. record() would persist that as a healthy 0-starved lap, and every such lap grows
     report()'s window_samples without growing `present`, silently diluting a real bottleneck
-    below the ranking. A monitor that lies when it breaks is worse than one that stops."""
-    raw = (rcon.run("/sc " + lua) or "").strip()
-    if not raw.lstrip("-").isdigit():
-        raise RuntimeError("bottleneck scan failed (RCON/Lua): %s" % (raw[:200] or "(empty response)"))
-    n = int(raw)
-    if n <= 0:
-        raise RuntimeError("bottleneck scan built a %d-length payload" % n)
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage._bn:sub(%d,%d))" % (i, i + CHUNK - 1)).rstrip("\r\n"))
-        i += CHUNK
-    return "".join(parts)
+    below the ranking. A monitor that lies when it breaks is worse than one that stops - and a
+    monitor that reassembles two different scans into one is worse still, which is why the
+    buffer key is minted per read rather than the fixed storage._bn."""
+    try:
+        raw = rcon.read_chunked(lambda store: "/sc " + build_lua(store), chunk=CHUNK, empty="")
+    except rcon.ChunkedReadError as e:
+        raise RuntimeError("bottleneck scan failed (RCON/Lua): %s" % str(e)[:220])
+    if not raw:
+        raise RuntimeError("bottleneck scan built a 0-length payload")
+    return raw
 
 
 # --------------------------------------------------------------------------- attribution
@@ -181,7 +177,7 @@ def sample(bbox=None, types=TYPES):
     total/starved are exact counts taken server-side over every machine; `machines` is capped at
     MAX_ROWS (starved rows first), and `truncated` says whether the cap bit into the starved set.
     """
-    d = json.loads(_chunked(scan_lua(bbox, types)) or "{}")
+    d = json.loads(_chunked(lambda store: scan_lua(bbox, types, store=store)))
     rows = d.get("rows") or []
     machines = []
     for r in rows:

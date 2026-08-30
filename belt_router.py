@@ -523,21 +523,15 @@ def plan_to_lua(plan, consume=True):
 
 # --------------------------------------------------------------------------- live scan
 def _chunked(build_lua):
-    """One /sc builds the JSON into storage._broute and prints its length; read it back in
-    slices (GOTCHAS "RCON client protocol": single responses >4KB truncate, and rcon.print
-    appends a newline to EACH response so every slice must be rstripped)."""
-    n = int(rcon.run(build_lua).strip() or "0")
-    if n == 0:
-        return "{}"
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage._broute:sub(%d,%d))"
-                              % (i, i + READ_CHUNK - 1)).rstrip("\r\n"))
-        i += READ_CHUNK
-    return "".join(parts)
+    """rcon.read_chunked on a PRIVATE buffer key. `build_lua(store)` returns the /sc.
+
+    The key was the fixed storage._broute; a build plus N slice reads is N+1 round-trips, and a
+    key shared by two concurrent readers splices two documents together (GOTCHAS "RCON client
+    protocol")."""
+    return rcon.read_chunked(build_lua, chunk=READ_CHUNK)
 
 
-def scan_lua(x1, y1, x2, y2, pad=6, res_pad=5, ghosts_hard=True):
+def scan_lua(x1, y1, x2, y2, pad=6, res_pad=5, ghosts_hard=True, store="storage._broute"):
     """Build the READ-ONLY scan command (pure — unit-testable, and reviewable before it runs).
     The rectangle is padded because a building's footprint, and above all an inserter that owns
     a reservation INSIDE the route, usually sits outside it."""
@@ -600,8 +594,8 @@ def scan_lua(x1, y1, x2, y2, pad=6, res_pad=5, ghosts_hard=True):
         "'express-underground-belt','turbo-underground-belt','pipe-to-ground'}) do"
         " local p=prototypes.entity[n];"
         " if p then UG[n]=p.max_underground_distance end end;"
-        "storage._broute=helpers.table_to_json{b={X1,Y1,X2,Y2},h=hl,r=rl,belts=B,ug=UG};"
-        "rcon.print(#storage._broute)")
+        + "%s=helpers.table_to_json{b={X1,Y1,X2,Y2},h=hl,r=rl,belts=B,ug=UG};"
+          "rcon.print(#%s)" % (store, store))
 
 
 def scan_obstacles(x1, y1, x2, y2, pad=6, res_pad=5, ghosts_hard=True):
@@ -611,10 +605,14 @@ def scan_obstacles(x1, y1, x2, y2, pad=6, res_pad=5, ghosts_hard=True):
     there. A deliberate divergence from fle_lib.F.classify (lua/fle_lib.lua:76), which ignores
     them; it is the safer default now that ghosts are how megabase modules get planned.
     """
-    cmd = scan_lua(x1, y1, x2, y2, pad=pad, res_pad=res_pad, ghosts_hard=ghosts_hard)
-    if len(cmd) > CMD_LIMIT:
-        raise ValueError("scan command is %d bytes (>%d)" % (len(cmd), CMD_LIMIT))
-    return Obstacles.from_scan(json.loads(_chunked(cmd)))
+    def build(store):
+        cmd = scan_lua(x1, y1, x2, y2, pad=pad, res_pad=res_pad, ghosts_hard=ghosts_hard,
+                       store=store)
+        if len(cmd) > CMD_LIMIT:
+            raise ValueError("scan command is %d bytes (>%d)" % (len(cmd), CMD_LIMIT))
+        return cmd
+
+    return Obstacles.from_scan(json.loads(_chunked(build)))
 
 
 # --------------------------------------------------------------------------- cli

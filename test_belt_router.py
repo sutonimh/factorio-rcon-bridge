@@ -6,7 +6,7 @@ Run with either:
     python3 -m pytest test_belt_router.py
 
 Every routing test builds a synthetic obstacle grid; only test_scan_parsing touches rcon,
-and it installs a scripted fake that speaks the chunked storage._broute protocol (length,
+and it installs a scripted fake that speaks the chunked storage.<key> protocol (length,
 then :sub slices) so Obstacles.from_scan is exercised for real. Nothing here can reach the
 game: plan_to_lua returns strings, and test_plan_to_lua_is_safe stubs rcon.run to raise so a
 regression that starts EXECUTING commands fails loudly.
@@ -21,7 +21,7 @@ import belt_router as B
 
 # --------------------------------------------------------------------------- harness
 class FakeRcon:
-    """Scripted rcon.run for the chunked storage._broute read: the first call (the scan /sc)
+    """Scripted rcon.run for the chunked read: the first call (the scan /sc)
     returns the payload length, later :sub calls serve slices (with the trailing newline
     rcon.print really appends — the router must rstrip it)."""
     def __init__(self, payload):
@@ -30,10 +30,13 @@ class FakeRcon:
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\._broute:sub\((\d+),(\d+)\)", cmd)
+        # the buffer key is minted per read (rcon.read_chunked), so match ANY scratch
+        m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         return str(len(self.payload))
 
 
@@ -277,7 +280,8 @@ def test_scan_parsing():
         assert obs.bounds == (-6, -6, 16, 16)
         assert obs.under_max["underground-belt"] == 5
         # the live prototype value wins over the module default
-        assert len(rcon.run.calls) >= 2 and "_broute:sub(1," in rcon.run.calls[1]
+        assert len(rcon.run.calls) >= 2 and re.search(r"storage\._\w+:sub\(1,",
+                                                      rcon.run.calls[1])
     finally:
         rcon.run = orig
     cmd = B.scan_lua(0, 0, 10, 10, pad=6, res_pad=5)

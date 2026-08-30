@@ -20,6 +20,7 @@ Usage:  python3 bootstrap.py            # run the whole sequence on the current 
 """
 import time
 import autopilot as A
+import rcon              # read_chunked only; every WRITE still goes out through A._print
 import techdb
 import gamedb
 import status
@@ -2106,23 +2107,20 @@ def belt_tiles_now():
 
 def world_snapshot():
     """Compact snapshot of every player entity (name, tile, direction) for edit diffing."""
-    out = A._print(
-        "/sc local s=game.surfaces[1]; local o={};"
-        "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
-        "  if e.name~='character' and #o<4000 then"
-        "    o[#o+1]=e.name..'|'..math.floor(e.position.x)..'|'..math.floor(e.position.y)..'|'..(e.direction or 0) end end;"
-        "storage._snap=table.concat(o,';'); rcon.print(#storage._snap)").strip()
+    def build(store):
+        return (
+            "/sc local s=game.surfaces[1]; local o={};"
+            "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
+            "  if e.name~='character' and #o<4000 then"
+            "    o[#o+1]=e.name..'|'..math.floor(e.position.x)..'|'..math.floor(e.position.y)..'|'..(e.direction or 0) end end;"
+            "%s=table.concat(o,';'); rcon.print(#%s)" % (store, store))
+
     try:
-        n = int(out)
-    except ValueError:
-        return {}
-    parts, i = [], 1
-    while i <= n:
-        parts.append(A._print(f"/sc rcon.print(storage._snap:sub({i},{i + 2999}))").rstrip("\r\n"))
-        i += 3000
-    A._print("/sc storage._snap=nil")
+        raw = rcon.read_chunked(build, run=A._print, empty="")
+    except rcon.ChunkedReadError:
+        return {}                       # an unreadable snapshot is no snapshot, never an empty one
     snap = {}
-    for rec in "".join(parts).split(";"):
+    for rec in raw.split(";"):
         f = rec.split("|")
         if len(f) == 4:
             snap[(f[0], int(f[1]), int(f[2]))] = int(f[3])

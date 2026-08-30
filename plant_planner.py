@@ -306,8 +306,8 @@ def scan_shore(cx, cy, radius=30):
     Water is detected by name substring (there are many water variants - water,
     deepwater, water-shallow, water-mud...), matching bootstrap's own `iw()` test.
     Cliffs and resources come from find_entities_filtered by TYPE; every other player
-    entity is `blocked`. Emits one compact string through the storage._world chunked
-    read (world._chunked) rather than JSON - a 61x61 water box is thousands of tiles.
+    entity is `blocked`. Emits one compact string through the world._chunked protocol
+    rather than JSON - a 61x61 water box is thousands of tiles.
     """
     x1, y1 = int(cx) - int(radius), int(cy) - int(radius)
     x2, y2 = int(cx) + int(radius), int(cy) + int(radius)
@@ -323,11 +323,11 @@ def scan_shore(cx, cy, radius=30):
         "for _,e in pairs(s.find_entities_filtered{area=A,force='player'}) do"
         "  if e.name~='character' then"
         "    B[#B+1]=math.floor(e.position.x)..','..math.floor(e.position.y) end end;"
-        "storage._world='W:'..table.concat(W,';')..'|C:'..table.concat(C,';')"
-        "..'|R:'..table.concat(R,';')..'|B:'..table.concat(B,';');"
-        "rcon.print(#storage._world)"
     )
-    return parse_shore(world._chunked(lua), (x1, y1, x2, y2))
+    tail = ("%s='W:'..table.concat(W,';')..'|C:'..table.concat(C,';')"
+            "..'|R:'..table.concat(R,';')..'|B:'..table.concat(B,';');rcon.print(#%s)")
+    return parse_shore(world._chunked(lambda store: lua + tail % (store, store)),
+                       (x1, y1, x2, y2))
 
 
 def parse_shore(raw, bbox_):

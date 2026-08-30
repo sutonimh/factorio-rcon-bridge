@@ -42,22 +42,14 @@ for name,t in pairs(game.forces.player.technologies) do
   end
   out.techs[name]=e
 end
-storage._techdump=helpers.table_to_json(out)
-rcon.print(#storage._techdump)
+__STORE__=helpers.table_to_json(out)
+rcon.print(#__STORE__)
 """.replace("\n", " ")
 
 
 def dump():
-    size = int(rcon.run(BUILD).strip())
-    parts, i = [], 1
-    while i <= size:
-        # rcon.print appends a newline per response; strip it or it corrupts the JSON
-        parts.append(
-            rcon.run("/sc rcon.print(storage._techdump:sub(%d,%d))" % (i, i + CHUNK - 1)).rstrip("\r\n")
-        )
-        i += CHUNK
-    rcon.run("/sc storage._techdump=nil")
-    data = json.loads("".join(parts))
+    data = json.loads(rcon.read_chunked(lambda store: BUILD.replace("__STORE__", store),
+                                        chunk=CHUNK))
     # table_to_json turns empty lua tables into []; techdb expects {} for packs
     for t in data["techs"].values():
         if t.get("packs") == []:

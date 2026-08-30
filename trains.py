@@ -169,10 +169,8 @@ def list_trains():
         "  out[#out+1]={id=t.id,group=g,state=SN[t.state] or tostring(t.state),"
         "               station=st,cargo=cargo}"
         " end;"
-        "if #out==0 then storage._world='[]' else storage._world=helpers.table_to_json(out) end;"
-        "rcon.print(#storage._world)"
     )
-    trains = json.loads(world._chunked(lua))
+    trains = json.loads(world._chunked(lambda store: lua + world._store_lua(store)))
     for t in trains:
         if not isinstance(t.get("cargo"), dict):        # empty lua table -> [] in json
             t["cargo"] = {}
@@ -182,26 +180,27 @@ def list_trains():
 def train_status(train_id):
     """One train in detail -> {id, group, state, station, cargo, current, records:[stop
     names], interrupts:[names]}. RCON READ ONLY; chunked."""
-    lua = (
-        "local SN={}; for k,v in pairs(defines.train_state) do SN[v]=k end;"
-        "local t=game.train_manager.get_train_by_id(%d);" % int(train_id) +
-        "if not (t and t.valid) then storage._world=helpers.table_to_json({err='NO_TRAIN'})"
-        " else"
-        "  local sch=t.get_schedule();"
-        "  local recs={};"
-        "  for _,r in pairs(sch.get_records() or {}) do recs[#recs+1]=r.station or 'rail' end;"
-        "  local ints={};"
-        "  for _,i in pairs(sch.get_interrupts() or {}) do ints[#ints+1]=i.name end;"
-        "  local st=''; local oks,stn=pcall(function() return t.station end);"
-        "  if oks and stn and stn.valid then st=stn.backer_name or '' end;"
-        "  local cargo={};"
-        "  for _,c in pairs(t.get_contents()) do cargo[c.name]=(cargo[c.name] or 0)+c.count end;"
-        "  storage._world=helpers.table_to_json({id=t.id,group=sch.group or '',"
-        "    state=SN[t.state] or tostring(t.state),station=st,cargo=cargo,"
-        "    current=sch.current,records=recs,interrupts=ints})"
-        " end;"
-        "rcon.print(#storage._world)"
-    )
+    def lua(store):
+        return (
+            "local SN={}; for k,v in pairs(defines.train_state) do SN[v]=k end;"
+            "local t=game.train_manager.get_train_by_id(%d);" % int(train_id) +
+            "if not (t and t.valid) then %s=helpers.table_to_json({err='NO_TRAIN'})" % store +
+            " else"
+            "  local sch=t.get_schedule();"
+            "  local recs={};"
+            "  for _,r in pairs(sch.get_records() or {}) do recs[#recs+1]=r.station or 'rail' end;"
+            "  local ints={};"
+            "  for _,i in pairs(sch.get_interrupts() or {}) do ints[#ints+1]=i.name end;"
+            "  local st=''; local oks,stn=pcall(function() return t.station end);"
+            "  if oks and stn and stn.valid then st=stn.backer_name or '' end;"
+            "  local cargo={};"
+            "  for _,c in pairs(t.get_contents()) do cargo[c.name]=(cargo[c.name] or 0)+c.count end;"
+            "  %s=helpers.table_to_json({id=t.id,group=sch.group or ''," % store +
+            "    state=SN[t.state] or tostring(t.state),station=st,cargo=cargo,"
+            "    current=sch.current,records=recs,interrupts=ints})"
+            " end;"
+            "rcon.print(#%s)" % store)
+
     st = json.loads(world._chunked(lua))
     if isinstance(st, list):                            # all-empty lua table -> []
         st = {}

@@ -39,6 +39,7 @@ rcon.run = _no_rcon
 import build_gates                                                        # noqa: E402
 import buildplan                                                          # noqa: E402
 import controller                                                         # noqa: E402
+import triage                                                             # noqa: E402
 import planner                                                            # noqa: E402
 import supply_planner                                                     # noqa: E402
 
@@ -200,19 +201,31 @@ def test_builds_v2_no_longer_imported_by_the_planner():
     assert "builds_v2" not in names
 
 
-def test_every_stage_that_places_also_gates():
-    """A stage that reaches a build entry point must reach a gate in the same function."""
-    builds = {"mine_planner_v2.build", "mine_planner_v2.upgrade_to_electric",
-              "plant_planner.build", "power_planner.apply", "supply_planner.build",
-              "B.build_smelter_array", "B.red_science", "B.smelting_base",
-              "B.automate_green_science", "B.setup_science_io", "B.ensure_science_cells"}
-    gates = {"gate", "gate_bootstrap"}
+BUILD_ENTRY_POINTS = {"mine_planner_v2.build", "mine_planner_v2.upgrade_to_electric",
+                      "plant_planner.build", "power_planner.apply", "supply_planner.build",
+                      "B.build_smelter_array", "B.red_science", "B.smelting_base",
+                      "B.automate_green_science", "B.setup_science_io",
+                      "B.ensure_science_cells"}
+# gate_largest IS a gate: one real gate() call per n, and 0 when every one of them refused. A
+# stage may reach a build through it and through nothing else.
+GATE_CALLS = {"gate", "gate_bootstrap", "gate_largest"}
+
+
+def test_every_function_that_places_also_gates():
+    """Any function that reaches a build entry point must reach a gate in the same function.
+
+    EVERY function in planner.py, not only the stages. The moment a stage delegates placement
+    to a helper - stage_plant_expand hands the extension to _plant_add - checking the stages
+    alone would let the gate be dropped inside the helper and still pass.
+    """
     fns = _fn_nodes("planner.py")
-    for name in PHASE_FNS:
-        called = set(_calls(fns[name]))
-        if called & builds:
-            assert called & gates, ("%s places (%s) without calling a gate"
-                                    % (name, sorted(called & builds)))
+    placing = {n: set(_calls(node)) for n, node in fns.items()}
+    placing = {n: c for n, c in placing.items() if c & BUILD_ENTRY_POINTS}
+    assert len(placing) >= 8, \
+        "only %d placing functions found - the build entry point list went stale" % len(placing)
+    for name, called in placing.items():
+        assert called & GATE_CALLS, ("%s places (%s) without calling a gate"
+                                     % (name, sorted(called & BUILD_ENTRY_POINTS)))
 
 
 def _print_lua(path):
@@ -367,7 +380,7 @@ def test_build_done_tracks_the_record_not_a_flag(ctx):
 
 
 # ===================================================== BEHAVIOURAL: stage_plant
-def _fake_plant(ctx, build_result):
+def _fake_plant(ctx, build_result, entities=()):
     calls = {"scan": 0, "plan": 0, "build": 0}
 
     def scan_shore(cx, cy, radius=30):
@@ -378,7 +391,7 @@ def _fake_plant(ctx, build_result):
         calls["plan"] += 1
         return {"anchor": (-32, 46), "bbox": [-38, 36, -26, 54], "n_columns": n_engines // 2,
                 "power_MW": 0.9 * n_engines, "warnings": ["no terrain supplied"],
-                "intake": {"tile": (-34, 48)}, "entities": []}
+                "intake": {"tile": (-34, 48)}, "entities": list(entities)}
 
     def build(plan, **kw):
         calls["build"] += 1
@@ -448,6 +461,97 @@ def test_stage_plant_skips_when_its_record_is_still_verified(ctx):
     ctx.plan_file("plant1", "verified")
     planner.stage_plant({"builds": {"plant": "plant1"}})
     assert calls["plan"] == 0 and calls["build"] == 0
+
+
+def _fake_inventory(ctx, have, craftable=True, order=None):
+    """derpface's main inventory + B.make, recorded. `craftable=False` = the ingredients are
+    not there, which is the live case: 0 boiler, 0 steam-engine, 15 pipe."""
+    inv, made = dict(have), []
+
+    def make(item, n):
+        made.append((item, int(n)))
+        if order is not None:
+            order.append(("make", item, int(n)))
+        if craftable:
+            inv[item] = inv.get(item, 0) + int(n)
+    ctx.patch(planner.B, "_count", lambda item: inv.get(item, 0))
+    ctx.patch(planner.B, "make", make)
+    return made
+
+
+_COLUMN = [{"entity": "boiler", "role": "boiler", "x": 0, "y": 0, "direction": 0},
+           {"entity": "steam-engine", "role": "engine", "x": 2, "y": 0, "direction": 0},
+           {"entity": "steam-engine", "role": "engine", "x": 5, "y": 0, "direction": 0},
+           {"entity": "pipe", "role": "riser", "x": 0, "y": 2, "direction": 0}]
+
+
+@_with_ctx
+def test_stage_plant_CRAFTS_the_parts_before_it_places_anything(ctx):
+    """REGRESSION 2026-08-30 - the column could not be placed at all. autopilot.place refuses
+    with `NO_ITEM <item>` when the item is not in the character's main inventory, and NOTHING
+    on the planner path crafted: bom() and bom_delta were computed and never read. Live
+    inventory that day: 0 boiler, 0 steam-engine, 15 pipe. So the +1 column placed its belts
+    and poles, failed verify on `MISSING: boiler@...`, and buildplan rolled the whole thing
+    back - a full plan/apply/verify/rollback cycle for zero builds, every pass, forever.
+
+    The superseded bootstrap.power() provisioned exactly this way (a craft per part); the
+    rewrite to plant_planner dropped it and nothing replaced it.
+    """
+    order = []
+    ctx.state()
+    calls = _fake_plant(ctx, {"id": "plant1", "status": "verified", "verify": {}},
+                        entities=_COLUMN)
+    faked_build = planner.plant_planner.build
+    ctx.patch(planner.plant_planner, "build",
+              lambda plan, **kw: (order.append("build"), faked_build(plan, **kw))[1])
+    made = _fake_inventory(ctx, {"pipe": 15}, order=order)
+    p = {}
+    planner.stage_plant(p)
+    assert calls["build"] == 1, "the plant was never built"
+    assert made == [("boiler", 1), ("steam-engine", 2)], made
+    assert "pipe" not in [i for i, _n in made], "15 pipe in stock: 1 is already provisioned"
+    assert order[-1] == "build", "items must be crafted BEFORE the first placement: %s" % order
+    assert p["builds"]["plant"] == "plant1"
+
+
+@_with_ctx
+def test_stage_plant_places_NOTHING_when_it_cannot_provision_the_column(ctx):
+    """ALL OR NOTHING, and that is right HERE (unlike the gate, which steps down). A boiler
+    column cannot step down to "the belts but not the boiler": half a column is a structure
+    that does nothing, standing in the way of the one that would. So the shortfall is found
+    BEFORE the first placement and nothing is placed at all."""
+    ctx.state()
+    calls = _fake_plant(ctx, {"id": "plant1", "status": "verified", "verify": {}},
+                        entities=_COLUMN)
+    made = _fake_inventory(ctx, {"pipe": 15}, craftable=False)
+    p = {}
+    planner.stage_plant(p)
+    assert made == [("boiler", 1), ("steam-engine", 2)], "it did not even try to craft"
+    assert calls["build"] == 0, "a column was placed with no boiler to place"
+    assert "builds" not in p and "plant" not in p
+    assert ctx.log.has("NOT PLACED", "boiler 0/1")
+
+
+@_with_ctx
+def test_plant_expansion_provisions_only_the_DELTA(ctx):
+    """scale() keeps every standing entity, so `bom_delta` is exactly what the extension will
+    place. Provisioning the whole plant's bom would craft a second plant's worth of parts."""
+    ctx.state(counts={"boiler": 2, "steam-engine": 4, "offshore-pump": 1},
+              networks=1, boiler_water_min=200, boiler_coal_min=5, flows={"coal": 400.0})
+    ctx.patch(planner, "plant_existing", lambda p, st: {"stub": True})
+    ctx.patch(planner.plant_planner, "scale", lambda existing, engines: {
+        "added_columns": 1, "warnings": (), "bom_delta": {"boiler": 1, "steam-engine": 2},
+        "plan": {"anchor": (0, 0), "bbox": (0, 0, 1, 1), "n_columns": 3, "power_MW": 5.4,
+                 "intake": {"tile": (1, 2)}, "pump": (-32, 51), "entities": _COLUMN * 9}})
+    ctx.patch(planner.plant_planner, "plan_poles", lambda plan: [])
+    built = []
+    ctx.patch(planner.plant_planner, "build",
+              lambda plan, **kw: built.append(plan) or
+              {"id": "bp9", "status": "verified", "verify": {}})
+    made = _fake_inventory(ctx, {})
+    planner.stage_plant_expand({})
+    assert made == [("boiler", 1), ("steam-engine", 2)], made
+    assert len(built) == 1
 
 
 def test_plant_is_sized_to_the_load_it_will_carry():
@@ -600,6 +704,40 @@ def test_stage_mines_gate_block_places_nothing(ctx):
     calls = _fake_mines(ctx, {"id": "m1", "status": "verified", "verify": {}})
     planner.stage_mines({"spine": {"poles": [[-15, 3]]}})
     assert calls["plans"] == [] and calls["builds"] == 0
+
+
+@_with_ctx
+def test_stage_mines_does_NOT_mark_a_PARTIAL_outpost_done(ctx):
+    """REGRESSION 2026-08-30. `gate_largest` may shrink the ask - 2 drills of 6, when that is
+    all the gate allows - and `mark_build` was called unconditionally, so `build_done()`
+    reported the ore FINISHED forever and the MINE_DRILLS target was abandoned at whatever one
+    pass happened to permit. stage_arrays already gets this right ("if after >= n"); this is
+    that convention.
+
+    The mine itself is still recorded - the lanes need from_xy/to_xy and stage_electrify needs
+    a record id to supersede - but the STAGE stays open, so the next pass re-plans for the
+    full target and buildplan places only the missing drills.
+    """
+    ctx.state(counts={"boiler": 3, "steam-engine": 6}, networks=1)
+    _fake_mines(ctx, {"id": "m1", "status": "verified", "verify": {}})
+    real = planner.gate
+    ctx.patch(planner, "gate",
+              lambda s, n=1, **kw: int(n) <= 2 and real(s, n, **kw))   # the gate allows 2
+    p = {"spine": {"poles": [[-15, 3]]}}
+    planner.stage_mines(p)
+    target = dict(planner.MINE_DRILLS)["iron-ore"]
+    assert target > 2, "fixture assumes a target the gate has to shrink"
+    assert p["mines"]["iron-ore"]["n"] == 2, p["mines"]
+    assert p["mines"]["iron-ore"]["plan"] == "m1", "the record must stay findable"
+    assert planner._mine_key("iron-ore") not in (p.get("builds") or {}), \
+        "a 2-of-%d outpost was marked done and the ore is now skipped forever" % target
+    assert not planner.build_done(p, planner._mine_key("iron-ore"))
+    assert ctx.log.has("leaving the stage OPEN")
+    # ...and a FULL outpost still closes the stage, or nothing would ever finish
+    ctx.patch(planner, "gate", real)
+    p2 = {"spine": {"poles": [[-15, 3]]}}
+    planner.stage_mines(p2)
+    assert p2["builds"][planner._mine_key("iron-ore")] == "m1", p2.get("builds")
 
 
 @_with_ctx
@@ -844,6 +982,55 @@ def test_stage_array_grid_covers_the_live_consumers_and_anchors_to_the_spine(ctx
 
 
 @_with_ctx
+def test_stage_array_grid_lays_nothing_where_a_pole_already_stands(ctx):
+    """OPERATOR RULE: never build anything unless it ACTUALLY DOES SOMETHING.
+
+    build_smelter_array had already laid a pitch-4 lattice in the inserter rows, and
+    power_planner could only see those poles as blocked TILES - so the stage planned 32 more
+    on the next free phase, 2.0 tiles away, covering zero new consumers and failing the
+    operator's own 3.0 separation standard 57 times over. The stage now drops consumers that
+    are already powered, and when none are left it lays nothing.
+    """
+    laid = []
+    ctx.patch(planner.power_planner, "scan", lambda area: [
+        {"n": "inserter", "t": "inserter", "x": 0.5, "y": 4.5},
+        {"n": "small-electric-pole", "t": "electric-pole", "x": 0.5, "y": 4.5}])
+    ctx.patch(planner.power_planner, "from_entities", lambda ents: [(0, 4, 0, 4)])
+    ctx.patch(planner.power_planner, "plan_grid", lambda *a, **k: 1 / 0)
+    ctx.patch(planner.power_planner, "apply", lambda *a, **k: laid.append(1))
+    ctx.state(counts={"boiler": 3, "steam-engine": 6}, networks=1)
+    p = {"spine": {"poles": [[-15, 3]]}}
+    planner.stage_array_grid(p)
+    assert laid == [], "a lattice was laid over consumers that are already powered"
+    assert ctx.log.has("already covered", "nothing to lay")
+    assert "array_grid" not in (p.get("builds") or {}), \
+        "the stage must stay re-checkable so it can extend the lattice when the arrays grow"
+
+
+@_with_ctx
+def test_stage_array_grid_passes_the_standing_poles_to_the_planner(ctx):
+    """An UNCOVERED consumer still gets a lattice - and the poles already in the ground go to
+    plan_grid and apply, or the planner re-derives the interleave it just avoided."""
+    seen = {}
+    ctx.patch(planner.power_planner, "scan", lambda area: [
+        {"n": "inserter", "t": "inserter", "x": 20.5, "y": 4.5},
+        {"n": "small-electric-pole", "t": "electric-pole", "x": 0.5, "y": 4.5}])
+    ctx.patch(planner.power_planner, "from_entities", lambda ents: [(20, 4, 20, 4)])
+    ctx.patch(planner.power_planner, "obstacles_for", lambda area, **k: object())
+    ctx.patch(planner.power_planner, "LAST_WARNINGS", [])
+    ctx.patch(planner.power_planner, "plan_grid",
+              lambda area, cons, **kw: seen.update(plan=kw) or
+              [{"x": 20, "y": 5, "entity": "small-electric-pole"}])
+    ctx.patch(planner.power_planner, "apply",
+              lambda plan, **kw: seen.update(apply=kw) or
+              {"id": "G2", "status": "verified", "verify": {}})
+    ctx.state(counts={"boiler": 3, "steam-engine": 6}, networks=1)
+    planner.stage_array_grid({"spine": {"poles": [[-15, 3]]}})
+    assert seen["plan"]["existing"] == [(0, 4)], seen["plan"]
+    assert seen["apply"]["existing"] == [(0, 4)], seen["apply"]
+
+
+@_with_ctx
 def test_stage_array_grid_lays_nothing_before_the_arrays_exist(ctx):
     laid = []
     ctx.patch(planner.power_planner, "scan", lambda area: [])
@@ -853,6 +1040,79 @@ def test_stage_array_grid_lays_nothing_before_the_arrays_exist(ctx):
     planner.stage_array_grid({"spine": {"poles": [[-15, 3]]}})
     assert laid == []
     assert ctx.log.has("no electric consumers")
+
+
+def _grid_spy(ctx, consumers, ents):
+    """stage_array_grid with power_planner stubbed at its planning edge -> what it was told."""
+    seen = {}
+    ctx.patch(planner.power_planner, "scan", lambda area: ents)
+    ctx.patch(planner.power_planner, "from_entities", lambda e: list(consumers))
+    ctx.patch(planner.power_planner, "obstacles_for", lambda area, **k: object())
+    ctx.patch(planner.power_planner, "LAST_WARNINGS", [])
+    ctx.patch(planner.power_planner, "plan_grid",
+              lambda area, cons, **kw: seen.update(plan=dict(kw, consumers=list(cons))) or
+              [{"x": 20, "y": 5, "entity": "small-electric-pole"}])
+    ctx.patch(planner.power_planner, "apply",
+              lambda plan, **kw: seen.update(apply=kw) or
+              {"id": "G9", "status": "verified", "verify": {}})
+    ctx.state(counts={"boiler": 3, "steam-engine": 6}, networks=1)
+    return seen
+
+
+@_with_ctx
+def test_stage_array_grid_floors_pole_tiles_and_never_truncates_them(ctx):
+    """REGRESSION, measured live 2026-08-30. `int(e["x"])` read power_planner.probe_lua's
+    `e.position.x` - the entity CENTRE, a float - and int() truncates TOWARD ZERO, so every
+    NEGATIVE coordinate landed one tile east/north: a 1x1 pole on tile (-15,3) reports
+    (-14.5,3.5) and was read as (-14,3). 15 of the 40 poles in area (-15,0,32,20) came back on
+    the wrong tile, and those tiles feed `_too_near`, plan_grid's connectivity nodes,
+    validate's separation and split checks, and apply's join / tie_in / wire_pairs.
+
+    The repo's two conventions, and both are floors: the probe's own `bb`, or
+    floor(centre - size/2). Lua's math.floor is a true floor, which is why `_live_poles()` -
+    the identical read done in Lua - was never wrong.
+    """
+    ents = [{"n": "inserter", "t": "inserter", "x": 20.5, "y": 4.5},
+            {"n": "small-electric-pole", "t": "electric-pole", "x": -14.5, "y": 3.5},
+            {"n": "small-electric-pole", "t": "electric-pole", "x": -6.5, "y": -0.5},
+            # the bb form the probe actually supplies is preferred when it is there
+            {"n": "small-electric-pole", "t": "electric-pole", "x": -2.5, "y": 3.5,
+             "bb": [-3, 3, -3, 3]},
+            {"n": "small-electric-pole", "t": "electric-pole", "x": 9.5, "y": 4.5}]
+    seen = _grid_spy(ctx, [(20, 4, 20, 4)], ents)
+    planner.stage_array_grid({"spine": {"poles": [[-15, 3]]}})
+    want = [(-15, 3), (-7, -1), (-3, 3), (9, 4)]
+    assert seen["plan"]["existing"] == want, seen["plan"]["existing"]
+    assert seen["apply"]["existing"] == want, seen["apply"]["existing"]
+
+
+@_with_ctx
+def test_stage_array_grid_credits_a_pole_only_its_OWN_tiers_supply_area(ctx):
+    """The coverage test used THIS stage's pole tier for every standing pole, whatever tier it
+    actually was. Per mine_layout.POLES a BIG pole supplies 2.0 and is 2x2, while a small one
+    supplies 2.5 and is 1x1 - so a big pole's supply area is SMALLER, and crediting it the
+    small window marks a consumer beside it as powered when it is not. A consumer marked
+    powered never gets a pole, which is a dark machine dressed up as a finished stage.
+
+    Geometry: big pole on tiles (0,0)-(1,1) supplies x in [-1,2]; a small pole there would
+    supply x in [-2,2]. The inserter at (-2,0) is covered by exactly one of those.
+    """
+    big = {"n": "big-electric-pole", "t": "electric-pole", "x": 1.0, "y": 1.0,
+           "bb": [0, 0, 1, 1]}
+    ins = {"n": "inserter", "t": "inserter", "x": -1.5, "y": 0.5}
+    seen = _grid_spy(ctx, [(-2, 0, -2, 0)], [ins, big])
+    planner.stage_array_grid({"spine": {"poles": [[-15, 3]]}})
+    assert seen.get("plan"), ("the inserter at (-2,0) is OUTSIDE the big pole's 4x4 supply "
+                              "area and was credited as powered: %s" % ctx.log.lines)
+    assert seen["plan"]["consumers"] == [(-2, 0, -2, 0)]
+    assert seen["plan"]["existing"] == [(0, 0)], seen["plan"]["existing"]
+    # ...and a pole that genuinely DOES cover it still stops the stage laying anything
+    seen2 = _grid_spy(ctx, [(-2, 0, -2, 0)],
+                      [ins, {"n": "small-electric-pole", "t": "electric-pole",
+                             "x": 0.5, "y": 0.5}])
+    planner.stage_array_grid({"spine": {"poles": [[-15, 3]]}})
+    assert not seen2.get("plan"), "a covered consumer must not buy a second pole"
+    assert ctx.log.has("already covered", "nothing to lay")
 
 
 @_with_ctx
@@ -1136,6 +1396,95 @@ def test_the_controller_no_longer_rebuilds_the_superseded_coal_spur():
     fn = _fn_nodes("controller.py")["controller_loop"]
     src = ast.get_source_segment((HERE / "controller.py").read_text(), fn)
     assert '"coal_to_boiler"' not in src and "'coal_to_boiler'" not in src
+
+
+# ------------------------------------------- the saturated chain that read as a broken lane
+#
+# Live 2026-08-29. 16 drills, 12 of them waiting_for_space; 28 stone furnaces, ALL of them
+# full_output; both terminal chests at 3200 plates; 0 assembling machines and 9 labs all at
+# missing_science_packs. iron_pm and copper_pm were genuinely 0 - and the chain was SATURATED,
+# not broken. sense() bucketed furnaces only into no_ingredients and working, so the 28
+# full_output were counted in the total and reported nowhere; the triage prompt had no
+# signature for back-pressure; and the 4B answered class=lane / actuator=fix_lanes three times
+# running, which dispatched scrub_mixed_ore + repair_belt_gaps + ensure_lanes every ~20s
+# against a lane that was working perfectly and merely full.
+
+
+def _saturated(**kw):
+    """The live sense() dict, with the bucket the census used to omit."""
+    d = {"engines": 4, "engine_energy": 1, "drills": 16, "drills_blocked": 12,
+         "furnaces": 28, "furnaces_starved": 0, "furnaces_working": 0,
+         "furnaces_full_output": 28, "labs": 9, "labs_working": 0, "asm": 0,
+         "iron_pm": 0, "copper_pm": 0, "science_pm": 0, "free_slots": 40,
+         "boiler_fuel": 5, "power_networks": 1}
+    d.update(kw)
+    return d
+
+
+def test_sense_reports_the_full_output_bucket_at_all():
+    """The bucket that did not exist. Without it the census says 28 furnaces, 0 starved, 0
+    working - a base doing nothing, with no field saying why."""
+    src = (HERE / "controller.py").read_text()
+    assert "defines.entity_status.full_output" in src, \
+        "sense() still buckets furnaces into no_ingredients/working only"
+    assert "furnaces_full_output=fo" in src, "the bucket is counted but never emitted"
+
+
+@_with_ctx
+def test_a_saturated_chain_is_backpressure_and_never_routed_to_fix_lanes(ctx):
+    """The bug, as a rule. fix_lanes cannot clear a lane that is intact and full, so routing
+    this to it is unrequested work that can never succeed - and it ran every ~20s for hours."""
+    ids = {i.id: i for i in controller.detect(_saturated())}
+    assert "backpressure" in ids, sorted(ids)
+    assert "lane_stalled" not in ids and "arrays_starved" not in ids, sorted(ids)
+    assert ids["backpressure"].fixer is controller._report_backpressure
+    assert "full_output" in ids["backpressure"].evidence
+    for issue in ids.values():
+        assert issue.fixer is not controller._fix_lanes, \
+            "%s dispatches lane work at a saturated lane" % issue.id
+
+
+@_with_ctx
+def test_a_genuinely_starved_array_still_reads_as_a_lane_fault(ctx):
+    """The guard must not swallow the real signature it sits in front of. STARVED (no input)
+    and FULL_OUTPUT (no room) are opposite failures and keep opposite actuators."""
+    ids = {i.id: i for i in
+           controller.detect(_saturated(furnaces_starved=20, furnaces_full_output=0))}
+    assert "lane_stalled" in ids, sorted(ids)
+    assert "backpressure" not in ids, sorted(ids)
+    assert ids["lane_stalled"].fixer is controller._fix_lanes
+
+
+@_with_ctx
+def test_the_progress_watchdog_does_not_answer_backpressure_with_lane_work(ctx):
+    """no_progress is severity 0 - it PREEMPTS the builder. Under back-pressure the flow
+    really is flat, but lane work is the one actuator that certainly will not restart it."""
+    ctx.patch(controller, "_HIST", [(0.0, _saturated())])
+    ids = {i.id: i for i in controller.detect(_saturated())}
+    assert "no_progress" in ids, sorted(ids)
+    assert ids["no_progress"].fixer is controller._report_backpressure
+
+
+def test_the_triage_prompt_can_tell_saturated_from_broken():
+    """The LLM had only two mappings for a collapsed plate flow, both 'lane'. Given
+    iron_pm=0 + drills_blocked=12 it had no other bucket to reach for."""
+    s = triage.SYSTEM
+    assert "furnaces_full_output" in s, "the prompt never mentions the new field"
+    assert "BACK-PRESSURE" in s
+    assert "fix_lanes" in s and "CANNOT help" in s
+    assert "STARVED AND FULL ARE OPPOSITES" in s
+
+
+def test_status_counts_drills_by_TYPE_and_never_argues_for_burner_drills():
+    """status.json reported drills:0 on a map running 16 electric ones: it counted the literal
+    name 'burner-mining-drill', of which this map has had none since the operator converted
+    every drill and deleted the fuel belts. The fuel metric is now NAMED for what it measures,
+    so a -1 can never be read as 'the drills are out of coal' - a tier regression argument."""
+    src = (HERE / "status.py").read_text()
+    assert "parts['drills']=#s.find_entities_filtered{type='mining-drill'}" in src
+    assert "name='burner-mining-drill'" not in src, "the stale name filter is still there"
+    assert "min_burner_drill_fuel" in src and '"min_drill_fuel"' not in src, \
+        "the burner-era metric must be named for what it measures"
 
 
 # --------------------------------------------------------------------------- plain runner

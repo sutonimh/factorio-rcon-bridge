@@ -55,21 +55,17 @@ local ps=f.get_item_production_statistics(s)
 local function pm(n) return math.floor(ps.get_flow_count{name=n,category='input',precision_index=defines.flow_precision_index.one_minute}) end
 g.iron_pm=pm('iron-plate') g.copper_pm=pm('copper-plate') g.coal_pm=pm('coal')
 g.red_pm=pm('automation-science-pack') g.green_pm=pm('logistic-science-pack')
-storage._snapmap=helpers.table_to_json({ents=o,globals=g})
-rcon.print(#storage._snapmap)
+__STORE__=helpers.table_to_json({ents=o,globals=g})
+rcon.print(#__STORE__)
 """.replace("\n", " ")
 
 
 def capture():
-    n = int(rcon.run(DUMP_LUA).strip() or "0")
-    if not n:
+    raw = rcon.read_chunked(lambda store: DUMP_LUA.replace("__STORE__", store),
+                            chunk=CHUNK, empty="")
+    if not raw:
         raise RuntimeError("snapshot returned nothing")
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage._snapmap:sub(%d,%d))" % (i, i + CHUNK - 1)).rstrip("\r\n"))
-        i += CHUNK
-    rcon.run("/sc storage._snapmap=nil")
-    data = json.loads("".join(parts))
+    data = json.loads(raw)
     data["captured_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
     return data
 

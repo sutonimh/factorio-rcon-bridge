@@ -349,6 +349,36 @@ def gate(structure, n=1, params=None, state=None, relieves=None):
     return True
 
 
+def gate_largest(structure, target, params=None, state=None, relieves=None, params_for=None):
+    """The LARGEST n in 1..target this gate ACTUALLY allows, or 0. One real gate() call per n.
+
+    A stage that asks for its full computed target and reads a refusal as "build nothing" throws
+    away every smaller build the gate WOULD have approved. That is the all-or-nothing half of the
+    live deadlock: stage_plant_expand asked for 4 columns, was refused on coal, placed nothing -
+    while ONE column was legal and would have taken headroom from 1.01 to 1.52.
+
+    IT WALKS THE RANGE AND NEVER BINARY-SEARCHES. The feasible set is not downward-closed:
+    `headroom_after` is a sufficiency FLOOR (too small is refused) and `coal_at_boiler` a fuel
+    CEILING (too large is refused), so the allowed set can be a band, a single point, or empty.
+    Anything assuming monotonicity steps straight past the only legal n.
+
+    EVERY n IS A GENUINE gate() CALL against the same cached census. No predicate is skipped, no
+    inequality is re-derived here, `relieves` passes through untouched, and every refusal still
+    lands in _PASS["blocked"] for the deadlock detector. Deriving the largest legal n
+    arithmetically instead would silently drop the water_source and grid checks - which have
+    nothing to do with quantity - and that is the one way this could become a bypass.
+
+    `params_for(n)` exists because some params are themselves n-shaped: mine_outpost's
+    lane_capacity gates off params["drills"], so shrinking n while leaving drills at the full
+    target gates a build nobody is going to place.
+    """
+    for n in range(int(target), 0, -1):
+        if gate(structure, n, params=(params_for(n) if params_for else params),
+                state=state, relieves=relieves):
+            return n
+    return 0
+
+
 def gate_bootstrap(structure, n, exempt_while, why, params=None):
     """gate() with a NAMED crash-site exemption that CLOSES on a measured condition.
 
@@ -628,8 +658,85 @@ def stage_world(p):
     B.smelting_base()
 
 
-def stage_plant(p):
+def _provision(need, what):
+    """Put the items a plan needs INTO derpface's main inventory before anything is placed.
+
+    THE COLUMN COULD NOT BE PLACED AT ALL WITHOUT THIS (restored 2026-08-30). autopilot.place
+    refuses with `NO_ITEM <item>` when the item is not in the main inventory, and nothing on
+    the planner path crafted: `bom()` / `bom_delta` were computed and then never read. Live
+    inventory on 2026-08-30 was 0 boiler, 0 steam-engine and 15 pipe, so a +1 column placed
+    its belts and poles, failed verify on `MISSING: boiler@...`, and buildplan rolled the
+    whole thing back - a full plan/apply/verify/rollback cycle for zero builds, every pass.
+    The superseded bootstrap.power() provisioned exactly this way (`_craft_wait` per part);
+    the rewrite to plant_planner dropped it.
+
+    B.make(), not a bare craft: it computes the raw cost, gathers it (buffers first, then
+    furnaces, then mining - automation before hand-work) and only then crafts, which is the
+    operator's "never blind-fire a craft" rule.
+
+    ALL OR NOTHING, and that is right HERE. A gate build may legitimately step down to a
+    smaller n; a boiler column may not step down to "the belts but not the boiler". Half a
+    column is a structure that does nothing, standing in the way of the one that would. So a
+    shortfall returns False BEFORE the first placement and the caller places nothing at all -
+    the items already crafted stay in the inventory and pay for the next pass.
+    """
+    short = {}
+    for item, count in sorted((need or {}).items()):
+        count = int(count)
+        if count <= 0:
+            continue
+        try:
+            have = int(B._count(item))
+            if have < count:
+                status.log("%s: crafting %d %s (have %d)" % (what, count - have, item, have))
+                B.make(item, count - have)
+                have = int(B._count(item))
+        except Exception as e:
+            status.log("%s: cannot provision %s (%s: %s)"
+                       % (what, item, type(e).__name__, str(e)[:120]))
+            short[item] = (None, count)
+            continue
+        if have < count:
+            short[item] = (have, count)
+    if short:
+        status.log("%s: NOT PLACED - the plan needs %s and the ingredients are not there. "
+                   "Placing part of a column leaves a half-built plant standing, so nothing "
+                   "was placed; mine/smelt more and this stage retries next pass"
+                   % (what, ", ".join("%s %s/%d" % (k, "?" if h is None else h, c)
+                                      for k, (h, c) in sorted(short.items()))))
+        return False
+    return True
+
+
+def _plant_params_for(target):
+    """The `power_capacity` params a column count of n must answer, given a target of `target`.
+
+    THE FULL TARGET STILL LEADS THE FUTURE LOAD. Only a PARTIAL column is held to the load
+    standing NOW, and it has to be: the reason it is partial is that `coal_at_boiler` refuses the
+    column count PROJECTED_LOAD_KW demands, so asking a partial column to lead a load the fuel
+    supply cannot yet carry refuses every n and builds nothing. That weaker question is not a new
+    one - it is exactly what columns_for_headroom() and the relief ladder already ask of a relief
+    column (build_gates.relief_candidates, projected_load_kw=0.0).
+
+    Nothing lands unpaid. Each build that makes up PROJECTED_LOAD_KW - the mine drills, the labs,
+    the science assembler - re-charges its own kW against `power_headroom` when it is placed, so
+    the projected load cannot arrive on a grid that was never sized for it; it just arrives one
+    legal column at a time instead of not at all.
+    """
+    return lambda n: {"projected_load_kw": PROJECTED_LOAD_KW if n >= target else 0.0}
+
+
+def stage_plant(p, n=None, params=None, relieves=None):
     """POWER FIRST (LAW 2): the operator's SCALABLE steam plant, through plant_planner.
+
+    `n`/`params`/`relieves` are the RELIEF's question, not the stage's. _relief_plant reaches
+    here on a base with no generation at all (there is nothing to scale, so the first column
+    is a whole plant plan) and it arrives holding a column count and a params dict the
+    deadlock detector already proved legal - `projected_load_kw: 0.0`, capacity leads the load
+    standing NOW. Calling this bare threw all three away and re-derived x4 against
+    PROJECTED_LOAD_KW, which coal refuses, so the relief's own x1 was never attempted and the
+    rung was burned in relief_tried anyway. That is the exact bug the rewrite fixed on the
+    _plant_add branch, left standing on this one.
 
     Supersedes bootstrap.power() / _build_boiler_engine - a single non-scalable column whose
     west-side surface pipe run occupies the two rows the scalable design needs. plant_planner
@@ -648,13 +755,22 @@ def stage_plant(p):
     except Exception as e:
         status.log("stage_plant: census failed (%s)" % e)
         return
-    cols = plant_columns_needed(st)
-    if cols <= 0:
+    target = int(n) if n else plant_columns_needed(st)
+    if target <= 0:
         status.log("plant: %.2f MW installed already leads the %.2f MW projected load"
                    % (build_gates.capacity_mw(st), PROJECTED_LOAD_KW / 1000.0))
         return
-    if not gate("power_capacity", cols, params={"projected_load_kw": PROJECTED_LOAD_KW},
-                state=st):
+    # STEP DOWN RATHER THAN STALL. The target is sized against the FUTURE load; the fuel ceiling
+    # is sized against the coal standing now, and when the two disagree the largest legal column
+    # count is what gets built. Asking only for the target is what placed 0 columns on a base
+    # where 1 was legal.
+    if params is not None:
+        cols = gate_largest("power_capacity", target, state=st, params=params,
+                            relieves=relieves)
+    else:
+        cols = gate_largest("power_capacity", target, state=st, relieves=relieves,
+                            params_for=_plant_params_for(target))
+    if cols <= 0:
         return
     if build_gates.capacity_mw(st) > 0:
         # THE FIRST COLUMN IS UNCONDITIONAL; EVERY LATER ONE BURNS 27 MORE COAL/MIN. A plant
@@ -672,6 +788,8 @@ def stage_plant(p):
         coal_tap=_pt(coal), pole=POLE)
     for w in plan.get("warnings", ()):
         status.log("plant plan: " + str(w)[:200])
+    if not _provision(plant_planner.bom(plan), "power plant"):
+        return
     rec = plant_planner.build(plan)
     if not verified(rec, "power plant"):
         return
@@ -709,33 +827,54 @@ def stage_plant_expand(p):
     except Exception as e:
         status.log("stage_plant_expand: census failed (%s)" % e)
         return
-    more = plant_columns_needed(st)
+    target = plant_columns_needed(st)
+    if target <= 0:
+        return
+    _plant_add(p, st, target, params_for=_plant_params_for(target))
+
+
+def _plant_add(p, st, target, params=None, params_for=None, relieves=None):
+    """Gate for up to `target` more boiler columns, then EXTEND the standing plant by whatever
+    the gate approved. True only when the extension verified.
+
+    Shared by stage_plant_expand and _relief_plant so that the relief builds the column the
+    deadlock detector proved legal - at ITS n and ITS params - instead of calling back into the
+    stage and having it re-derive a different one. That is what the relief did: it requested x1
+    at projected_load_kw=0.0, called stage_plant + stage_plant_expand, which each re-computed
+    x4 against PROJECTED_LOAD_KW and were refused on coal, and the `plant` rung was then burned
+    in relief_tried with the one legal move never attempted at the size it was approved at.
+    """
+    more = gate_largest("power_capacity", target, params=params, params_for=params_for,
+                        state=st, relieves=relieves)
     if more <= 0:
-        return
-    if not gate("power_capacity", more, params={"projected_load_kw": PROJECTED_LOAD_KW},
-                state=st):
-        return
+        return False
     try:
         existing = plant_existing(p, st)
     except Exception as e:
         status.log("plant expand: cannot reconstruct the standing plant (%s: %s) - "
                    "refusing to re-plan a plant blind" % (type(e).__name__, str(e)[:160]))
-        return
+        return False
     if existing is None:
         status.log("plant expand: no plant to extend - neither a buildplan record nor a "
                    "standing plant this planner can reconstruct")
-        return
+        return False
     A.purpose("phase 0: +%d boiler column(s), now that coal leads them" % more)
     try:
         out = plant_planner.scale(existing, more * plant_planner.ENGINES_PER_BOILER)
     except plant_planner.PlantError as e:
         status.log("plant expand: %s" % str(e)[:220])
-        return
+        return False
     for w in out.get("warnings", ()):
         status.log("plant expand: " + str(w)[:200])
+    # THE DELTA, not the whole plant: scale() keeps every standing entity and `bom_delta` is
+    # exactly what the extension will place, so this crafts one column's parts, never a
+    # second plant's worth.
+    if not _provision(out.get("bom_delta") or {},
+                      "plant expansion (+%d column(s))" % out["added_columns"]):
+        return False
     rec = plant_planner.build(out["plan"])
     if not verified(rec, "plant expansion (+%d column(s))" % out["added_columns"]):
-        return
+        return False
     mark_build(p, "plant", rec)
     plan = out["plan"]
     intake = plan["intake"]
@@ -747,6 +886,7 @@ def stage_plant_expand(p):
         "pump": [int(plan["pump"][0]), int(plan["pump"][1])],   # keeps it reconstructable
     }
     save(p)
+    return True
 
 
 def _spine_anchor(p, end):
@@ -799,7 +939,12 @@ def stage_spine(p):
     obs = power_planner.obstacles_for(area)                          # READ ONLY
     blocked = power_planner.blocked_tiles(obs)
     try:
-        trunk = power_planner.plan_trunk(anchor, end, pole=POLE, blocked=blocked, area=area)
+        # ONLY the anchor is a standing pole. `end` is a brand-new tile beside the smelting
+        # zone, so it has to pass the same legality check as every interior pole of the run -
+        # without naming the anchor here, plan_trunk exempts BOTH endpoints and the far end is
+        # the one pole in the spine nobody checks (it can land on a belt).
+        trunk = power_planner.plan_trunk(anchor, end, pole=POLE, blocked=blocked, area=area,
+                                         existing=[anchor])
     except power_planner.GridError as e:
         status.log("spine: no legal trunk (%s) - retrying next pass" % e)
         return
@@ -879,7 +1024,8 @@ def stage_mines(p):
     """
     spine = p.get("spine") or {}
     anchor = _pt((spine.get("poles") or [None])[-1]) if spine.get("poles") else None
-    for ore, n in MINE_DRILLS:
+    for ore, target in MINE_DRILLS:
+        n = target
         key = _mine_key(ore)
         if build_done(p, key):
             continue
@@ -897,8 +1043,21 @@ def stage_mines(p):
         # close the live deadlock, and adds_kw_for() only fixes it for a caller that says
         # which drill it means. Without `ore` the relief keys degrade to the
         # `overbuild_within_budget:*` wildcard instead of naming the ore they raise.
-        if not gate("mine_outpost", n, params={"drills": n, "ore": ore, "drill": drill}):
+        #
+        # AND THE DRILL COUNT STEPS DOWN. `drills` scales with the count being asked for,
+        # because lane_capacity gates off it: holding it at the full target while shrinking n
+        # gates an outpost nobody is going to place. A short outpost that MINES beats a full one
+        # that was refused - the ore it lifts is what pays for the rest, and _relief_mine is
+        # already the path that grows a mine past what this one-shot stage laid.
+        want = gate_largest("mine_outpost", n,
+                            params_for=lambda k: {"drills": k, "ore": ore, "drill": drill})
+        if want <= 0:
             continue
+        if want < n:
+            status.log("mine %s: %d %s of %d approved - laying the short outpost; the relief "
+                       "ladder grows it once its own ore pays for the rest"
+                       % (ore, want, drill, n))
+        n = want
         A.purpose("phase 0: %s outpost (%d %s)" % (ore, n, drill))
         try:
             plan = mine_planner_v2.plan_outpost(
@@ -913,11 +1072,27 @@ def stage_mines(p):
         rec = mine_planner_v2.build(plan)
         if not verified(rec, "%s outpost" % ore):
             continue
-        mark_build(p, key, rec)
         p.setdefault("mines", {})[ore] = {
             "drill": drill, "n": n, "lane_y": plan["lane_y"],
             "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"]),
+            # the record id even when the stage is NOT done, so stage_electrify can still
+            # supersede the outpost it is re-planning (see below)
+            "plan": (rec or {}).get("id"),
         }
+        # A PARTIAL OUTPOST IS NOT A FINISHED ONE (2026-08-30). `mark_build` here was
+        # unconditional, so the moment `gate_largest` shrank the ask - 2 of 6 drills, say -
+        # `build_done()` reported the ore finished forever and the MINE_DRILLS target was
+        # abandoned at whatever one pass happened to allow. stage_arrays already gets this
+        # right ("if after >= n"), and this is that convention: the stage records the mine
+        # (the lanes need from_xy/to_xy either way) but stays RESUMABLE until the outpost
+        # reaches its target, at which point buildplan's probe-then-delta places only the
+        # drills that are missing.
+        if n >= target:
+            mark_build(p, key, rec)
+        else:
+            status.log("mine %s: %d of %d drills standing - leaving the stage OPEN so the "
+                       "next pass extends it (never marking a partial outpost done)"
+                       % (ore, n, target))
         save(p)
 
 
@@ -981,6 +1156,59 @@ def _array_furnaces(ore, n):
         return -1
 
 
+def _entity_tile(e, name=None):
+    """The TOP-LEFT TILE of a live entity dict from power_planner.scan / probe_lua.
+
+    NEVER int(). probe_lua reports `e.position.x` - the entity CENTRE, a float - and int()
+    truncates TOWARD ZERO, so every NEGATIVE coordinate lands one tile east/north of the
+    entity that is actually standing there: a 1x1 pole on tile (-15,3) reports (-14.5,3.5) and
+    int() reads (-14,3). Measured live 2026-08-30: 15 of the 40 poles in the smelting block's
+    area (-15,0,32,20) came back on the wrong tile, and those tiles feed `_too_near`,
+    plan_grid's connectivity nodes, validate's separation and split checks and apply's
+    join / tie_in / wire_pairs alike.
+
+    Uses the repo's two existing conventions, in the order power_planner.from_entities uses
+    them: the probe's own `bb` (already floored, engine-side) when it is there, else
+    floor(centre - size/2), which is what build_gates and mine_layout do. Lua's math.floor is
+    a true floor, which is why _live_poles() - the same read done in Lua - was never wrong.
+    """
+    name = name or e.get("n")
+    box = power_planner.consumer_box({"bb": e["bb"]} if e.get("bb") else
+                                     {"cx": e["x"], "cy": e["y"], "name": name})
+    return (box[0], box[1])
+
+
+def _standing_poles(ents):
+    """Poles already in the ground, from a power_planner.scan: (tiles, [(tier, tile)]).
+
+    TWO lists because they answer two different questions:
+      tiles      geometry - what plan_grid/validate/apply must not build on, must keep
+                 MIN_POLE_SEP from, and must end up on one network with.
+      by_tier    COVERAGE - and coverage is a property of the pole's OWN tier, not of the
+                 tier this stage happens to be laying. mine_layout.POLES: small supplies 2.5,
+                 medium 3.5, big only 2.0 (and is 2x2), substation 9.0. Crediting a standing
+                 BIG pole with the small pole's 5x5 window marks a consumer beside it as
+                 powered when it is not, and a consumer marked powered never gets a pole.
+                 A tier this repo has no prototype numbers for is left OUT of the coverage
+                 credit entirely - conservative in the only safe direction, an extra pole
+                 rather than a dark machine - while still counting as a tile.
+    """
+    tiles, by_tier = [], []
+    for e in ents:
+        if e.get("t") != "electric-pole" and e.get("n") not in build_gates.POLE_NAMES:
+            continue
+        name = e.get("n")
+        tile = _entity_tile(e, name if name in build_gates.POLE_NAMES else POLE)
+        tiles.append(tile)
+        if name in build_gates.POLE_NAMES:
+            by_tier.append((name, tile))
+        else:
+            status.log("array grid: pole %r at %s is a tier this planner has no supply "
+                       "numbers for - blocking its tile but crediting it no coverage"
+                       % (name, tile))
+    return tiles, by_tier
+
+
 def _array_ore_belt(ore):
     """West end of an array's ORE belt - where a supply lane hands off (build_smelter_array
     lays that row at oy+5, from ox-1 east)."""
@@ -1010,13 +1238,26 @@ def stage_array_grid(p):
     if not consumers:
         status.log("array grid: no electric consumers in the smelting block yet")
         return
+    # POLES ALREADY IN THE GROUND COUNT. build_smelter_array laid a pitch-4 lattice in the
+    # inserter rows years of passes ago; power_planner could only see those poles as BLOCKED
+    # tiles, so it picked the next free phase and planned a second, parallel lattice 2 tiles
+    # away that covered nothing. A consumer someone else already powers is not this stage's
+    # work - "never build anything unless it ACTUALLY DOES SOMETHING".
+    existing, by_tier = _standing_poles(ents)
+    want = [c for c in consumers
+            if not any(power_planner.covers(tier, px, py, power_planner.consumer_box(c))
+                       for tier, (px, py) in by_tier)]
+    if not want:
+        status.log("array grid: all %d consumer(s) are already covered by the %d pole(s) "
+                   "standing here - nothing to lay" % (len(consumers), len(existing)))
+        return                    # NOT mark_build: re-checkable, so the lattice can extend
     if not gate("power_grid", 1):
         return
     A.purpose("phase 0: pole lattice over the smelting block")
     obs = power_planner.obstacles_for(area)                          # READ ONLY
     try:
-        plan = power_planner.plan_grid(area, consumers, anchor=anchor, pole=POLE,
-                                       obstacles=obs)
+        plan = power_planner.plan_grid(area, want, anchor=anchor, pole=POLE,
+                                       obstacles=obs, existing=existing)
     except power_planner.GridError as e:
         status.log("array grid: %s - retrying next pass" % str(e)[:220])
         return
@@ -1024,8 +1265,8 @@ def stage_array_grid(p):
         status.log("array grid plan: " + str(w)[:200])
     if not plan:
         return
-    rec = power_planner.apply(plan, consumers=consumers, area=area, pole=POLE, anchor=anchor,
-                              obstacles=obs)
+    rec = power_planner.apply(plan, consumers=want, area=area, pole=POLE, anchor=anchor,
+                              obstacles=obs, existing=existing)
     if verified(rec, "array pole lattice"):
         mark_build(p, "array_grid", rec)
 
@@ -1159,9 +1400,13 @@ def stage_electrify(p):
         A.purpose("phase 0: re-planning the %s outpost as all-electric" % ore)
         # NB: no pole= here. upgrade_to_electric passes OPERATOR_MINE_SPEC["pole"] itself and
         # forwards **kw, so a pole= would arrive twice as the same keyword.
+        # `builds` OR the mine's own record: a PARTIAL outpost is deliberately not recorded in
+        # `builds` (stage_mines keeps it resumable), and re-planning it with old_record_id=None
+        # would leave the burner plan un-superseded instead of retired.
         out = mine_planner_v2.upgrade_to_electric(
             ore, patch=None, n_drills=n, center=_pt(B.STATE.get(ore)),
-            old_record_id=(p.get("builds") or {}).get(_mine_key(ore)),
+            old_record_id=((p.get("builds") or {}).get(_mine_key(ore))
+                           or (mine or {}).get("plan")),
             trunk=None, power_trunk_x=SPINE_X, grid_anchor=anchor)
         rec = out.get("build")
         if not verified(rec, "%s outpost (electric)" % ore):
@@ -1169,7 +1414,8 @@ def stage_electrify(p):
         mark_build(p, _mine_key(ore), rec)
         plan = out["plan"]
         p["mines"][ore] = {"drill": ELECTRIC_DRILL, "n": n, "lane_y": plan["lane_y"],
-                           "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"])}
+                           "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"]),
+                           "plan": (rec or {}).get("id")}
         # The lane's head moved with the drills, so the old lane record no longer describes
         # it. Forget it here and let stage_ore_lanes deal with it: plan_supply still sees the
         # old lane owning this (item, destination) pair, so it hands that lane back rather
@@ -1223,10 +1469,15 @@ def _relief_mine(p, ore, n, drill, relieves):
             "position={%d,%d},radius=30})" % (rx, ry)).strip())
     except ValueError:
         have = int(((p.get("mines") or {}).get(ore) or {}).get("n") or 0)
-    total = have + int(n)
-    if not gate("mine_outpost", int(n), relieves=relieves,
-                params={"drills": total, "ore": ore, "drill": drill}):
+    # `drills` is the TOTAL on the lane, so it steps down with the count: shrinking the ask
+    # while telling lane_capacity the full total gates an outpost that is not the one being
+    # planned. Fewer drills than the relief asked for still raises the constraint it was chosen
+    # to raise, and raising it a little beats refusing it entirely.
+    n = gate_largest("mine_outpost", int(n), relieves=relieves,
+                     params_for=lambda k: {"drills": have + k, "ore": ore, "drill": drill})
+    if n <= 0:
         return False
+    total = have + n
     A.purpose("phase 0 relief: %s mine -> %d %s" % (ore, total, drill))
     try:
         plan = mine_planner_v2.plan_outpost(
@@ -1244,6 +1495,7 @@ def _relief_mine(p, ore, n, drill, relieves):
     p.setdefault("mines", {})[ore] = {
         "drill": drill, "n": total, "lane_y": plan["lane_y"],
         "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"]),
+        "plan": (rec or {}).get("id"),
     }
     save(p)
     return True
@@ -1276,9 +1528,28 @@ def _relief_lane(p, item, relieves):
 
 
 def _relief_plant(p, r, rel):
-    stage_plant(p)
-    stage_plant_expand(p)
-    return build_done(p, "plant")
+    """Build the boiler column the detector approved - AT ITS OWN n AND PARAMS.
+
+    Calling the stages instead threw the approved order away: each re-derived its column count
+    from PROJECTED_LOAD_KW and took a refusal, so the relief's own x1 was never attempted and
+    the rung was burned in relief_tried anyway. The record's params are the relief ladder's
+    question (`projected_load_kw: 0.0` - capacity leads the load standing NOW), and they are
+    the params that must reach the gate.
+
+    A base with NO generation at all still goes through stage_plant - the same split stage_plant
+    itself makes on capacity_mw: there is nothing to extend, and the first column is a whole
+    plant plan, not a scale().
+    """
+    try:
+        st = gate_state()
+    except Exception as e:
+        status.log("relief plant: census failed (%s)" % e)
+        return False
+    if build_gates.capacity_mw(st) <= 0:
+        stage_plant(p, n=int(r.get("n") or 1), params=(r.get("params") or {}), relieves=rel)
+        return build_done(p, "plant")
+    return _plant_add(p, st, int(r.get("n") or 1), params=(r.get("params") or {}),
+                      relieves=rel)
 
 
 def _relief_spine(p, r, rel):

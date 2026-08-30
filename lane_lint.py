@@ -164,7 +164,7 @@ def _centre(t):
 
 
 # --------------------------------------------------------------------------- lua gathers
-def _lua_component(x, y, limit, contents):
+def _lua_component(x, y, limit, contents, store=STORE):
     """Flood the belt component from (x,y) over belt_neighbours PLUS the geometric
     underground hop (caveat 2 — without it the far side never lands in the dump), and emit
     compact single-letter keys into the private storage key. READ ONLY."""
@@ -174,7 +174,7 @@ def _lua_component(x, y, limit, contents):
         "local st;for _,e in pairs(s.find_entities_filtered{position={%f,%f},radius=0.7}) do"
         % (x + 0.5, y + 0.5) +
         " if BT[e.type] then st=e break end end;"
-        "if not st then %s='' rcon.print(0) return end;" % STORE +
+        "if not st then %s='' rcon.print(0) return end;" % store +
         ""
         # fle_lib.lua:230-243 F.ug_partner, inlined (see caveat 2: this geometry lives twice)
         "local function hop(b) local d=b.direction;"
@@ -208,11 +208,11 @@ def _lua_component(x, y, limit, contents):
            "   D[#D+1]={l=li,n=dc[k].stack.name,p=dc[k].position,u=dc[k].unique_id} end"
            " end end); r.L=L;r.D=D;") +
         " out[#out+1]=r end;"
-        "%s=helpers.table_to_json({s=st.unit_number,N=out});rcon.print(#%s)" % (STORE, STORE)
+        "%s=helpers.table_to_json({s=st.unit_number,N=out});rcon.print(#%s)" % (store, store)
     )
 
 
-def _lua_bbox(x1, y1, x2, y2):
+def _lua_bbox(x1, y1, x2, y2, store=STORE):
     """Padded-bbox sweep (control.lua:1270-1295): every inserter/mining-drill with its
     pickup/drop tiles RESOLVED to the entity there (control.lua:1373-1405 what_at), plus every
     belt in the box so python can subtract the component and get the orphans. READ ONLY."""
@@ -262,11 +262,11 @@ def _lua_bbox(x1, y1, x2, y2):
         " B[#B+1]={n=e.name,t=e.type,d=e.direction,u=e.unit_number,x=e.position.x,"
         "  y=e.position.y,p=pp}"
         " end end;"
-        "%s=helpers.table_to_json({I=I,B=B});rcon.print(#%s)" % (STORE, STORE)
+        "%s=helpers.table_to_json({I=I,B=B});rcon.print(#%s)" % (store, store)
     )
 
 
-def _lua_tail(tiles):
+def _lua_tail(tiles, store=STORE):
     """Lane counts + detailed contents for a handful of named tiles. READ ONLY."""
     spec = ";".join("%d,%d" % (t["x"], t["y"]) for t in tiles)
     return (
@@ -286,34 +286,34 @@ def _lua_tail(tiles):
         "  T[#T+1]={x=x,y=y,L=L,D=D} end end;"
         # explicit concat: the gmatch pattern above contains %d, so a trailing % on the whole
         # literal would try to format it
-        + ("%s=helpers.table_to_json({T=T});rcon.print(#%s)" % (STORE, STORE))
+        + ("%s=helpers.table_to_json({T=T});rcon.print(#%s)" % (store, store))
     )
 
 
-def _read(lua, tries=2):
-    """world.py:152's chunked-read protocol on a PRIVATE storage key.
+def _read(build_lua, tries=2):
+    """rcon.read_chunked on a PRIVATE, per-read buffer key. `build_lua(store)` returns the Lua.
 
-    NOT storage._world: world.scan_area/scan_tiles share that key and the autopilot calls them
+    This module minted its own key long before the shared reader existed: storage._world is
+    written by world.scan_area/scan_tiles AND by mine_layout, and the autopilot calls them
     concurrently on this server. Observed live — a mid-read clobber truncated a payload into
     "Unterminated string starting at: line 1" on a run that had traced cleanly moments before.
-    rcon.print appends a newline to EVERY response, so each slice is stripped or a control char
-    lands in the JSON at each chunk boundary (GOTCHAS "RCON client protocol").
-    A parse failure is retried once, then returned as a value rather than raised."""
+    A fixed private name was only ever half the fix, because two lane_lint reads on two threads
+    still shared it; read_chunked mints one per read and verifies the reassembled length.
+
+    A failed read is RETURNED as {"_err": ...}, never raised - the callers here report on lanes
+    rather than build, and an exception would lose the rest of the walk."""
     for attempt in range(tries):
-        head = rcon.run(_SC + lua).strip()
         try:
-            n = int(head or "0")
-        except ValueError:
-            return {"_err": head[:200]}                 # a lua error came back, not a length
-        if n == 0:
+            raw = rcon.read_chunked(lambda store: _SC + build_lua(store),
+                                    chunk=CHUNK, tries=1, empty="")
+        except rcon.ChunkedReadError as e:
+            if attempt + 1 >= tries:
+                return {"_err": str(e)[:200]}
+            continue
+        if not raw:
             return []
-        parts, i = [], 1
-        while i <= n:
-            parts.append(rcon.run(_SC + "rcon.print(%s:sub(%d,%d))" % (STORE, i, i + CHUNK - 1))
-                         .rstrip("\r\n"))
-            i += CHUNK
         try:
-            return json.loads("".join(parts))
+            return json.loads(raw)
         except ValueError as e:
             if attempt + 1 >= tries:
                 return {"_err": "chunked read did not parse: %s" % str(e)[:120]}
@@ -401,7 +401,7 @@ def trace(x, y, contents=True, limit=400, pad=3):
              "upstream": [], "downstream": [], "sideloads": [], "feeders": [], "tappers": [],
              "orphans": [], "flags": {"dead_start": False, "dead_end": False, "loops": False,
                                       "truncated": False}}
-    raw = _read(_lua_component(x, y, limit, contents))
+    raw = _read(lambda store: _lua_component(x, y, limit, contents, store=store))
     if not isinstance(raw, dict) or "N" not in raw:
         err = raw.get("_err") if isinstance(raw, dict) else "no belt at (%d,%d)" % (x, y)
         return dict(empty, error=err or "no belt at (%d,%d)" % (x, y))
@@ -440,7 +440,7 @@ def trace(x, y, contents=True, limit=400, pad=3):
     xs = [t["x"] for t in tiles] or [int(x)]
     ys = [t["y"] for t in tiles] or [int(y)]
     box = (min(xs) - pad, min(ys) - pad, max(xs) + pad + 1, max(ys) + pad + 1)
-    env = _read(_lua_bbox(*box))
+    env = _read(lambda store: _lua_bbox(*box, store=store))
     env = env if isinstance(env, dict) else {}
 
     run_uids = {t["uid"] for t in tiles}
@@ -752,7 +752,7 @@ def _sample_tail(tiles):
     sample. Re-tracing the whole run instead cost ~60 extra RCON round trips (18s on a live
     70-tile run) and gave the run 18 more seconds to change under the comparison. Returns None
     if the read failed — the caller must then decline to claim movement, never assume it."""
-    raw = _read(_lua_tail(tiles))
+    raw = _read(lambda store: _lua_tail(tiles, store=store))
     if not isinstance(raw, dict) or "T" not in raw:
         return None
     return [{"x": r["x"], "y": r["y"], "lanes": _lanes_of(r),

@@ -56,6 +56,8 @@ class FakeRcon:
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:160])
         sub, resp = self.script.pop(0)
@@ -481,18 +483,21 @@ def test_a_failed_probe_raises_rather_than_reading_as_zero_consumers(ctx):
     res, _, _ = _lay(ctx, "coal", (0, 0), (20, 0), obs=obstacles())
     rec = SP.get_lane(res["lane"]["id"])
 
-    # 1. the /sc threw: the response is Lua prose where a payload length should be
+    # 1. the /sc threw: the response is Lua prose where a payload length should be.
+    # Two steps: read_chunked retries a failed read once (tries=2) before giving up.
     ctx.fake.script = [("find_entities_filtered",
-                        "Error: The mod level (level) caused a non-recoverable error.")]
+                        "Error: The mod level (level) caused a non-recoverable error.")] * 2
     try:
         SP.probe_consumers(rec)
         raise AssertionError("a Lua error must not read back as 'no consumers'")
     except RuntimeError as e:
         assert "FAILED" in str(e)
 
-    # 2. the payload came back truncated (the >4KB single-response cap): invalid JSON
+    # 2. the payload came back SHORT of the length Lua reported - a truncated read, or the
+    # buffer clobbered mid-read. read_chunked's length check names it; it used to surface only
+    # as a JSONDecodeError at whatever offset the bytes happened to stop making sense.
     ctx.fake.payload = '{"c":["0,0","1,'
-    ctx.fake.script = [("find_entities_filtered", lambda cmd: "999")]
+    ctx.fake.script = [("find_entities_filtered", lambda cmd: "999")] * 2
     try:
         SP.probe_consumers(rec)
         raise AssertionError("a truncated payload must not read back as 'no consumers'")
@@ -500,7 +505,7 @@ def test_a_failed_probe_raises_rather_than_reading_as_zero_consumers(ctx):
         assert "FAILED" in str(e)
 
     # 3. and end to end: retire_obsolete with the REAL probe spares the lane
-    ctx.fake.script = [("find_entities_filtered", "Error: something broke")]
+    ctx.fake.script = [("find_entities_filtered", "Error: something broke")] * 2
     assert SP.retire_obsolete() == []
     assert SP.get_lane(rec["id"])["status"] == "active", "a flaky read is never a delete order"
 

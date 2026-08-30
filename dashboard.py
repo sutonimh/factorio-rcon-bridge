@@ -73,21 +73,16 @@ def live_metrics():
 
 
 def _rcon_chunked(key, build_lua, ttl=30):
-    """Chunked storage read (architect.py pattern) with TTL cache — for payloads >4KB that a
-    single RCON response would truncate. build_lua must end with storage._dash=<json string>
-    and rcon.print(#storage._dash)."""
+    """Chunked storage read with a TTL cache — for payloads >4KB that a single RCON response
+    would truncate. `build_lua` is a template containing __STORE__ wherever the buffer global
+    goes; rcon.read_chunked mints that name per read so two dashboard panels refreshing at once
+    cannot splice each other's payloads together."""
     now = time.time()
     hit = _cache.get(key)
     if hit and now - hit[0] < ttl:
         return hit[1]
     try:
-        n = int(rcon.run(build_lua).strip() or "0")
-        parts, i = [], 1
-        while i <= n:
-            parts.append(rcon.run("/sc rcon.print(storage._dash:sub(%d,%d))" % (i, i + 2999)).rstrip("\r\n"))
-            i += 3000
-        rcon.run("/sc storage._dash=nil")
-        out = "".join(parts)
+        out = rcon.read_chunked(lambda store: build_lua.replace("__STORE__", store))
     except Exception as e:
         out = json.dumps({"error": str(e)[:100]})
     _cache[key] = (now, out)
@@ -103,7 +98,7 @@ def terrain():
         "for _,e in pairs(s.find_entities_filtered{force='player'}) do"
         "  local p=e.position; if p.x<x1 then x1=p.x end; if p.x>x2 then x2=p.x end;"
         "  if p.y<y1 then y1=p.y end; if p.y>y2 then y2=p.y end end;"
-        "if x1>x2 then storage._dash='{}' rcon.print(2) return end;"
+        "if x1>x2 then __STORE__='{}' rcon.print(2) return end;"
         "x1,y1,x2,y2=math.floor(x1)-14,math.floor(y1)-14,math.floor(x2)+14,math.floor(y2)+14;"
         "local STEP=2; local W=math.floor((x2-x1)/STEP)+1; local H=math.floor((y2-y1)/STEP)+1;"
         "local grid={}; for r=1,H do grid[r]={} for c=1,W do grid[r][c]='.' end end;"
@@ -114,8 +109,8 @@ def terrain():
         "for _,r in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}},type='resource'}) do mark(r.position.x,r.position.y,OC[r.name] or 's') end;"
         "for _,t in pairs(s.find_entities_filtered{area={{x1,y1},{x2,y2}},type='tree'}) do mark(t.position.x,t.position.y,'t') end;"
         "local rows={}; for r=1,H do rows[r]=table.concat(grid[r]) end;"
-        "storage._dash=helpers.table_to_json({x1=x1,y1=y1,step=STEP,rows=rows});"
-        "rcon.print(#storage._dash)"
+        "__STORE__=helpers.table_to_json({x1=x1,y1=y1,step=STEP,rows=rows});"
+        "rcon.print(#__STORE__)"
     ), ttl=30)
     try:
         return json.loads(out)
@@ -180,7 +175,7 @@ def _researched():
     out = _rcon_chunked("techs", (
         "/sc local t={}; for n,tech in pairs(game.forces.player.technologies) do"
         "  if tech.researched then t[#t+1]=n end end;"
-        "storage._dash=helpers.table_to_json(t); rcon.print(#storage._dash)"), ttl=30)
+        "__STORE__=helpers.table_to_json(t); rcon.print(#__STORE__)"), ttl=30)
     try:
         return set(json.loads(out))
     except (ValueError, TypeError):
@@ -192,7 +187,7 @@ def _producing():
     out = _rcon_chunked("prod", (
         "/sc local s=game.surfaces[1]; local ps=game.forces.player.get_item_production_statistics(s);"
         "local t={}; for n,c in pairs(ps.input_counts) do if c>0 then t[#t+1]=n end end;"
-        "storage._dash=helpers.table_to_json(t); rcon.print(#storage._dash)"), ttl=30)
+        "__STORE__=helpers.table_to_json(t); rcon.print(#__STORE__)"), ttl=30)
     try:
         return set(json.loads(out))
     except (ValueError, TypeError):

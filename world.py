@@ -150,17 +150,22 @@ def patches(ore):
 
 # --------------------------------------------------------------------------- live reads
 def _chunked(build_lua):
-    """Run a /sc that stores a JSON string in storage._world and prints its length, then read
-    it back in CHUNK slices (architect.py pattern: single large RCON responses truncate;
-    rcon.print appends a newline per response, so strip each slice)."""
-    n = int(rcon.run("/sc " + build_lua).strip() or "0")
-    if n == 0:
-        return "[]"
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage._world:sub(%d,%d))" % (i, i + CHUNK - 1)).rstrip("\r\n"))
-        i += CHUNK
-    return "".join(parts)
+    """rcon.read_chunked on a PRIVATE buffer key. `build_lua(store)` returns the Lua body.
+
+    storage._world was shared with mine_layout.scan_patch, and the two use INCOMPATIBLE wire
+    formats - JSON here, newline-joined text there. A mid-read clobber between them does not
+    merely fail to parse; it can parse into a plausible-but-wrong ore patch and put drills on
+    the wrong tiles. Hence one minted key per read (see rcon.read_chunked).
+    """
+    return rcon.read_chunked(lambda store: "/sc " + build_lua(store),
+                             chunk=CHUNK, empty="[]")
+
+
+def _store_lua(store):
+    """The tail every scan here shares: park `out` as JSON in the minted buffer, print its
+    length. An empty result is the literal '[]' so the length is never 0 for a real read."""
+    return ("if #out==0 then %s='[]' else %s=helpers.table_to_json(out) end;"
+            "rcon.print(#%s)" % (store, store, store))
 
 
 def _names_lua(names):
@@ -181,10 +186,8 @@ def scan_area(x1, y1, x2, y2, names=None):
         "    local okd,d=pcall(function() return e.direction end);"
         "    out[#out+1]={n=n,x=math.floor(e.position.x),y=math.floor(e.position.y),d=(okd and tonumber(d)) or 0}"
         "  end end;"
-        "if #out==0 then storage._world='[]' else storage._world=helpers.table_to_json(out) end;"
-        "rcon.print(#storage._world)"
     )
-    return json.loads(_chunked(lua))
+    return json.loads(_chunked(lambda store: lua + _store_lua(store)))
 
 
 def scan_tiles(tiles, names):
@@ -201,10 +204,8 @@ def scan_tiles(tiles, names):
         "  local e=s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.6,name=NM}[1];"
         "  if e then local okd,d=pcall(function() return e.direction end);"
         "    out[#out+1]={n=e.name,x=math.floor(e.position.x),y=math.floor(e.position.y),d=(okd and tonumber(d)) or 0} end end;"
-        "if #out==0 then storage._world='[]' else storage._world=helpers.table_to_json(out) end;"
-        "rcon.print(#storage._world)"
     )
-    return json.loads(_chunked(lua))
+    return json.loads(_chunked(lambda store: lua + _store_lua(store)))
 
 
 def reconcile(pad=3, tol=1.5):

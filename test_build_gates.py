@@ -24,7 +24,8 @@ SNAPS = pathlib.Path(__file__).resolve().parent / "snapshots"
 # --------------------------------------------------------------------------- harness
 class FakeRcon:
     """Scripted rcon.run: (substring, response) steps consumed in order, plus native handling
-    of the chunked storage._gates read. Mirrors test_world_executor.FakeRcon."""
+    of the chunked read. The buffer key is minted per read (rcon.read_chunked), so the
+    slice and clear patterns match ANY scratch global. Mirrors test_world_executor."""
     def __init__(self, script=()):
         self.script = list(script)
         self.calls = []
@@ -36,10 +37,12 @@ class FakeRcon:
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\._gates:sub\((\d+),(\d+)\)", cmd)
+        m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:160])
         sub, resp = self.script.pop(0)
@@ -243,17 +246,20 @@ def test_first_power_column_is_unconditional():
 
 def test_boiler_columns_are_capped_by_what_the_mine_can_fuel():
     """The bound is FUELABILITY: the plant after the build, at full tilt, must be something the
-    mine can actually run. On after.json the mine delivers 120 coal/min and the fed furnaces
-    take 22.95, so 97 remain — enough to run 6.5 MW of boilers.
+    mine can actually run. On after.json the mine delivers 120 coal/min and the 14 SMELTING
+    furnaces take 18.9, so 101 remain — enough to run 6.7 MW of boilers.
 
     ONE more column (5.4 MW total = 81/min) fits and is allowed; TWO (7.2 MW = 108/min) do not
     and are refused. The old model charged every INSTALLED boiler at full tilt whether it was
-    loaded or not, which made capacity self-blocking and refused even the first column."""
+    loaded or not, which made capacity self-blocking and refused even the first column.
+
+    18.9 and not 22.95: the 3 furnaces at `full_output` are jammed, not smelting, and burn
+    nothing (test_a_jammed_furnace_burns_nothing). The cap it produces is unchanged."""
     after = snap("after")
     if after is None:
         print("    (skipped: snapshots/ not present)")
         return
-    assert round(G.furnace_coal_per_min(after), 2) == 22.95
+    assert round(G.furnace_coal_per_min(after), 2) == 18.9
     assert G.gate("power_capacity", 1, after)[0] is True
     ok, why = G.gate("power_capacity", 2, after)
     assert ok is False and "coal_at_boiler" in why and "at full tilt" in why, why
@@ -352,11 +358,53 @@ def test_derived_constants_match_the_measured_ones():
 
 
 def test_idle_furnaces_do_not_count_as_coal_demand():
-    """17 of 28 furnaces are fed; the 11 at no_ingredients burn nothing. With no electric
-    consumers in the census the plant is unloaded, so the whole demand is the furnaces."""
+    """Only the 14 that are WORKING burn. The 11 at no_ingredients have nothing to smelt and
+    the 3 at full_output are jammed by back-pressure; neither is converting fuel. With no
+    electric consumers in the census the plant is unloaded, so the demand is the furnaces."""
     st = state(counts={"boiler": 2, "steam-engine": 4, "stone-furnace": 28},
                status={"stone-furnace": {"working": 14, "full_output": 3, "no_ingredients": 11}})
-    assert round(G.coal_demand_per_min(st), 2) == 22.95      # 17 * 1.35, no electric load
+    assert round(G.coal_demand_per_min(st), 2) == 18.9       # 14 * 1.35, no electric load
+
+
+def test_a_jammed_furnace_burns_nothing():
+    """REGRESSION, measured live 2026-08-30. All 28 stone furnaces on the base sat at
+    `full_output`, and the sum of their `burner.remaining_burning_fuel` was identical
+    (59_536_100 J) 1852 ticks apart - not one joule burned. `furnace_coal_per_min` charged
+    every furnace that was not at `no_ingredients`, so it invented 28 * 1.35 = 37.8 coal/min,
+    which was the BINDING constraint that refused a second boiler column against a base whose
+    own consumption statistic read 6 coal/min out of 120 produced.
+
+    The blacklist was the bug: excluding one idle status prices every OTHER idle status as a
+    fire. The test is a whitelist, so a status nobody thought about reads as idle.
+    """
+    jam = state(counts={"stone-furnace": 28},
+                status={"stone-furnace": {"full_output": 28}})
+    assert G.furnace_coal_per_min(jam) == 0.0
+    for idle in ("no_ingredients", "no_fuel", "waiting_for_space_in_destination",
+                 "disabled_by_script", "marked_for_deconstruction", "item_ingredient_shortage"):
+        st = state(counts={"stone-furnace": 28}, status={"stone-furnace": {idle: 28}})
+        assert G.furnace_coal_per_min(st) == 0.0, idle
+    work = state(counts={"stone-furnace": 28}, status={"stone-furnace": {"working": 28}})
+    assert round(G.furnace_coal_per_min(work), 2) == 37.8
+    # an ELECTRIC furnace draws from the grid; charging it coal is the same phantom in miniature
+    ef = state(counts={"electric-furnace": 10}, status={"electric-furnace": {"working": 10}})
+    assert G.furnace_coal_per_min(ef) == 0.0
+    # a census with NO status at all still cannot prove a furnace idle: stay conservative
+    blind = state(counts={"stone-furnace": 28}, status={})
+    assert round(G.furnace_coal_per_min(blind), 2) == 37.8
+
+
+def test_the_jam_no_longer_blocks_the_second_boiler_column():
+    """The consequence, on the live shape: 2 boilers / 4 engines, 120 coal/min from the mine,
+    28 stone furnaces ALL jammed at full_output. The phantom 37.8/min made `coal_at_boiler`
+    refuse a second column; without it the demand is the plant's own full-tilt burn and the
+    column is legal."""
+    st = state(counts={"boiler": 2, "steam-engine": 4, "stone-furnace": 28},
+               status={"stone-furnace": {"full_output": 28}},
+               flows={"coal": 120.0}, boiler_coal_min=50)
+    assert G.furnace_coal_per_min(st) == 0.0
+    ok, why = G._pr_coal_at_boiler(st, 2, None, {})
+    assert ok is True, why
 
 
 def test_idle_boilers_do_not_count_as_coal_demand():
@@ -689,8 +737,8 @@ def test_sense_parses_the_chunked_payload():
                "recipes": {"iron-plate": {"full_output": 16}}, "ghosts": {"lab": 26},
                "networks": 1, "boiler_water_min": 200, "boiler_coal_min": 5,
                "generated_kw": 323, "research": "", "flows": {"iron-plate": 0.0}}
-    fake.script = [("storage._gates=helpers.table_to_json", lambda c: fake.payload_len(payload)),
-                   ("storage._gates=nil", "")]
+    # the store name is minted per read, so the build step is identified by the assignment
+    fake.script = [("=helpers.table_to_json", lambda c: fake.payload_len(payload))]
     rcon.run = fake
     G._CACHE["state"] = None
     try:
@@ -705,7 +753,7 @@ def test_sense_parses_the_chunked_payload():
     ok, why = G.gate("lab", 9, st)
     assert ok is False, why
     # the scratch key is cleared, and nothing but reads went out
-    assert any("storage._gates=nil" in c for c in fake.calls)
+    assert any(re.search(r"storage\._\w+=nil", c) for c in fake.calls)
     for c in fake.calls:
         for verb in ("create_entity", "destroy", "set_recipe", "walking_state", "rotate"):
             assert verb not in c, c
@@ -716,7 +764,8 @@ def test_sense_raises_on_a_broken_scan():
     this module exists to stop. bottleneck.py's rule: a monitor that lies when it breaks is
     worse than one that stops."""
     import rcon
-    orig, fake = rcon.run, FakeRcon([("storage._gates", "Error: unknown key")])
+    # twice: read_chunked retries a failed read once before giving up (tries=2)
+    orig, fake = rcon.run, FakeRcon([("rcon.print(#storage.", "Error: unknown key")] * 2)
     rcon.run = fake
     G._CACHE["state"] = None
     try:
@@ -727,6 +776,39 @@ def test_sense_raises_on_a_broken_scan():
     finally:
         rcon.run = orig
         G._CACHE["state"] = None
+
+
+def test_an_EMPTY_chunked_response_is_never_read_as_an_empty_answer():
+    """rcon.read_chunked's own documented invariant, which its code contradicted: "a failed
+    read must be indistinguishable from no read at all, never from an answer."
+
+    `int(head or "0")` folded an EMPTY response into 0, and n == 0 returns the `empty` payload
+    as a SUCCESS. So a dropped connection, a /sc that never ran, or a Lua error swallowed
+    before the print all reached build_gates.sense as a clean "{}", i.e. as "this area has no
+    entities" - and a world with no entities is a world where every gate allows everything.
+
+    "0" itself stays a legitimate answer: the builder always ends in `rcon.print(#store)`, so a
+    genuinely empty payload IS the string "0", and an empty area is not a failure.
+    """
+    import rcon
+    calls = []
+
+    def nothing(cmd, timeout=10.0):
+        calls.append(cmd)
+        return ""
+    try:
+        rcon.read_chunked(lambda store: "/sc %s='x' rcon.print(#%s)" % (store, store),
+                          tries=1, run=nothing)
+    except rcon.ChunkedReadError as e:
+        assert "NOTHING" in str(e), e
+    else:
+        raise AssertionError("an empty response was accepted as an empty answer")
+    assert any("=nil" in c for c in calls), "the scratch key must still be cleared"
+
+    def zero(cmd, timeout=10.0):
+        return "0" if "rcon.print(#" in cmd else ""
+    assert rcon.read_chunked(lambda store: "/sc %s='' rcon.print(#%s)" % (store, store),
+                             tries=1, run=zero, empty="{}") == "{}"
 
 
 def test_state_from_snapshot_matches_the_snapshot():

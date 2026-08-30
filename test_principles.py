@@ -22,8 +22,11 @@ import principles as P
 
 # --------------------------------------------------------------------------- harness
 class FakeRcon:
-    """Scripted rcon.run for principles.probe(): serves the length reply, then the
-    chunked storage._principles:sub(i,j) slices, then swallows the cleanup write."""
+    """Scripted rcon.run for principles.probe(): serves the length reply, then the chunked
+    storage.<key>:sub(i,j) slices, then swallows the cleanup write.
+
+    The key is whatever the probe command MINTED - rcon.read_chunked mints a private one per
+    read - so the slice and clear patterns match any scratch global, not one fixed name."""
 
     def __init__(self, payload_obj):
         self.payload = json.dumps(payload_obj, separators=(",", ":"))
@@ -31,13 +34,13 @@ class FakeRcon:
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\._principles:sub\((\d+),(\d+)\)", cmd)
+        m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
-        if "storage._principles=nil" in cmd:
+        if re.search(r"storage\._\w+=nil", cmd):
             return ""
-        return "%d\n" % len(self.payload)          # the initial PROBE_LUA call
+        return "%d\n" % len(self.payload)          # the initial probe_lua() call
 
 
 def ent(n, x, y, t=None, **kw):
@@ -429,7 +432,7 @@ def test_probe_reads_chunked_payload_and_cleans_up():
         rcon.run = orig
     assert len(w.ents) == 200 and w.meta["tick"] == 42
     assert len(fake.payload) > P.CHUNK, "payload must span multiple chunks"
-    assert any("storage._principles=nil" in c for c in fake.calls), "scratch not cleared"
+    assert any(re.search(r"storage\._\w+=nil", c) for c in fake.calls), "scratch not cleared"
 
 
 def test_probe_lua_is_read_only():

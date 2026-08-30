@@ -81,8 +81,14 @@ def sense():
         "  if a.status==defines.entity_status.working then aw=aw+1 elseif a.status==defines.entity_status.no_power then anp=anp+1 end end;"
         "local dr,dw=0,0; for _,x in pairs(s.find_entities_filtered{type='mining-drill'}) do dr=dr+1;"
         "  if x.status==defines.entity_status.waiting_for_space_in_destination then dw=dw+1 end end;"
-        "local fu,fs,fw=0,0,0; for _,x in pairs(s.find_entities_filtered{name={'stone-furnace','steel-furnace'}}) do fu=fu+1;"
-        "  if x.status==defines.entity_status.no_ingredients then fs=fs+1 elseif x.status==defines.entity_status.working then fw=fw+1 end end;"
+        # full_output is BACK-PRESSURE and gets its own bucket. Counted in the total and
+        # reported nowhere, a saturated chain read furnaces_starved=0 / furnaces_working=0:
+        # 28 furnaces, none doing anything, and no field saying why. That is the state the
+        # triage LLM was handed, and with no signature for it, it guessed "broken ore lane".
+        "local fu,fs,fw,fo=0,0,0,0; for _,x in pairs(s.find_entities_filtered{name={'stone-furnace','steel-furnace'}}) do fu=fu+1;"
+        "  if x.status==defines.entity_status.no_ingredients then fs=fs+1"
+        "  elseif x.status==defines.entity_status.working then fw=fw+1"
+        "  elseif x.status==defines.entity_status.full_output then fo=fo+1 end end;"
         "local free=d and d.valid and d.get_main_inventory().count_empty_stacks() or -1;"
         "local packs=d and d.valid and (d.get_main_inventory().get_item_count('automation-science-pack')+d.get_main_inventory().get_item_count('logistic-science-pack')) or 0;"
         "local nets={}; local nc=0; for _,p2 in pairs(s.find_entities_filtered{type='electric-pole'}) do local id=p2.electric_network_id; if id and not nets[id] then nets[id]=true; nc=nc+1 end end;"
@@ -94,6 +100,7 @@ def sense():
         "engines=engl,engine_energy=math.floor(eng),boiler_fuel=(b and b.get_fuel_inventory().get_item_count('coal') or -1),"
         "labs=labs,labs_working=lw,asm=am,asm_working=aw,asm_no_power=anp,"
         "drills=dr,drills_blocked=dw,furnaces=fu,furnaces_starved=fs,furnaces_working=fw,"
+        "furnaces_full_output=fo,"
         "free_slots=free,packs_carried=packs,power_networks=nc,"
         "research=(f.current_research and f.current_research.name or ''),"
         "research_pct=(f.current_research and math.floor(f.research_progress*100) or -1)}))").strip()
@@ -119,6 +126,16 @@ def detect(d):
     now = time.time()
     _HIST.append((now, d))
     del _HIST[:-600]
+    # DOWNSTREAM BACK-PRESSURE, and it is NOT a broken lane. Every furnace at full_output with
+    # the drills at waiting_for_space is a chain with nothing on the end of it: the terminal
+    # chest fills, the furnaces stop, the belts back up and the drills stop. build_gates.py's
+    # own note records the same base doing it - iron-chest(28.5,3.5) at 3200 plates, 25/28
+    # furnaces full_output, iron_pm 174 -> 0. `fix_lanes` cannot clear that, because the lane
+    # is intact and merely full; it fired every ~20s for hours and accomplished nothing.
+    # Deciding it FIRST is what keeps the lane rules below off a lane that is working.
+    full_out = d.get("furnaces_full_output", 0)
+    backpressure = (full_out > d.get("furnaces", 1) * 0.6
+                    and d.get("drills_blocked", 0) >= 3)
     # PROGRESS WATCHDOG: the only detector that would have caught the silent dead month
     # (Jul->Aug: one log line/day, zero production, nothing noticed). 15 min of zero plate
     # AND zero science flow with a built base = severity 0, straight to escalation.
@@ -128,8 +145,10 @@ def detect(d):
         flat = (d.get("iron_pm", 0) == 0 and p0.get("iron_pm", 0) == 0
                 and d.get("science_pm", 0) == 0 and p0.get("science_pm", 0) == 0)
         if flat:
+            # the flow really is flat either way; only the ACTUATOR differs, and under
+            # back-pressure lane work is the one thing that certainly will not restart it
             add(Issue("no_progress", 0, "zero plate+science flow for 15+ min on a built base",
-                      _fix_lanes, cooldown=300))
+                      _report_backpressure if backpressure else _fix_lanes, cooldown=300))
     built = d.get("engines", 0) or d.get("drills", 0) or d.get("labs", 0)
     if not built:
         return issues                       # nothing exists yet: builder's job, no issues
@@ -141,7 +160,15 @@ def detect(d):
         add(Issue("grid_split", 1, f"{d['power_networks']} electric networks", B.ensure_grid_connected))
     if d.get("asm_no_power", 0) > 0:
         add(Issue("consumers_unpowered", 1, f"{d['asm_no_power']} assemblers no_power", B.fix_unpowered))
-    if d.get("drills_blocked", 0) >= 3 and d.get("furnaces_starved", 0) >= 3:
+    if backpressure:
+        # REPORT AND ESCALATE, never fix_lanes. The relief is a CONSUMER drawing off those
+        # chests - a build decision - so the honest move is to say so and let the repeat-
+        # failure path hand it to the architect.
+        add(Issue("backpressure", 1,
+                  f"{full_out}/{d.get('furnaces', 0)} furnaces full_output + "
+                  f"{d['drills_blocked']} drills blocked - chain saturated, nothing consuming",
+                  _report_backpressure, cooldown=120))
+    elif d.get("drills_blocked", 0) >= 3 and d.get("furnaces_starved", 0) >= 3:
         add(Issue("lane_stalled", 1,
                   f"{d['drills_blocked']} drills blocked + {d['furnaces_starved']} furnaces starved",
                   _fix_lanes))
@@ -170,6 +197,32 @@ def _fix_lanes():
     B.scrub_mixed_ore()
     B.repair_belt_gaps()
     return B.ensure_lanes()
+
+
+def _report_backpressure():
+    """The BACK-PRESSURE fixer: REPORT and LEARN. Deliberately not a repairer.
+
+    There is no server-side action that clears a saturated chain. The lane is intact, the
+    belts are full because the terminal chest is full, and the terminal chest is full because
+    nothing draws from it - 0 assembling machines on the map and 9 labs all at
+    missing_science_packs. The relief is a CONSUMER, which is a build decision, so this reports
+    and lets the repeat-failure path escalate to the architect (_escalate after 3 laps).
+
+    Routing it to _fix_lanes instead is the bug it exists to end: scrub_mixed_ore +
+    repair_belt_gaps + ensure_lanes ran every ~20s against a lane that was working, and it
+    could never clear the condition. "Never build anything unless it ACTUALLY DOES SOMETHING"
+    applies to repairs as much as to builds.
+    """
+    status.log("backpressure: the chain is SATURATED, not broken - furnaces are at "
+               "full_output because the terminal chests are full and nothing consumes the "
+               "plates. No lane work can clear this; the relief is a consumer (science "
+               "assembler) drawing off those chests.")
+    lessons.add(condition="furnaces full_output + drills blocked + plate flow 0",
+                mistake="classified as a broken ore lane and 'fixed' with fix_lanes",
+                rule="that is DOWNSTREAM back-pressure: the lane is intact and full. Build "
+                     "the consumer; lane work cannot clear a saturated chain",
+                tags=("controller", "triage", "backpressure"), key="issue:backpressure")
+    return 0
 
 
 def _fix_science():

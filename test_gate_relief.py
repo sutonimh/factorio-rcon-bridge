@@ -955,6 +955,226 @@ def test_a_plant_that_cannot_be_adopted_still_refuses_to_expand(ctx):
     assert not ok and "no standing plant this planner can reconstruct" in why
 
 
+# ------------------------------------------- 4. the stage that asked for 4 and built nothing
+#
+# 2026-08-29, live. The relief ladder proved `power_capacity x1` legal, said so, and the base
+# then took TWO x4 refusals and built nothing:
+#
+#   relief: attempting power_capacity x1 [plant] - it increases power_headroom, which is
+#           blocking mine_outpost, lab, science_assembler
+#   gate BLOCK: BLOCKED power_capacity x4 [coal_at_boiler] - coal 120/min < 200/min ...
+#   gate BLOCK: BLOCKED power_capacity x4 [coal_at_boiler] - coal 120/min < 200/min ...
+#   relief: plant not executable - escalating
+#
+# Two mechanisms, and BOTH had to go. The stage asked its gate for the full computed column
+# count and read the refusal as "build nothing"; and the relief executor threw away the n and
+# the params the detector had approved, calling the stage instead, which re-derived x4.
+
+
+def _gate_spy(ctx):
+    """Record every gate() call while still answering with the REAL gate.
+
+    The whole point of the step-down is that it asks the genuine gate for every n, so a spy
+    that faked the answers would be testing nothing. This one only watches.
+    """
+    real = planner.gate
+    seen = []
+
+    def spy(structure, n=1, params=None, **kw):
+        ok = real(structure, n, params=params, **kw)
+        seen.append({"structure": structure, "n": int(n), "params": dict(params or {}),
+                     "ok": bool(ok)})
+        return ok
+
+    ctx.patch(planner, "gate", spy)
+    return seen
+
+
+def test_the_feasible_column_count_is_not_downward_closed():
+    """WHY gate_largest WALKS, and must never binary-search or assume smaller is safer.
+
+    `headroom_after` is a sufficiency FLOOR - too few columns is refused - and `coal_at_boiler`
+    is a fuel CEILING - too many is refused. On the live base the two cross, so under the
+    stage's own params the allowed set is EMPTY and a smaller n is MORE refused, not less.
+    """
+    st = live()
+    floor = G.gate_report("power_capacity", 1, st,
+                          {"projected_load_kw": planner.PROJECTED_LOAD_KW}, None)
+    ceiling = G.gate_report("power_capacity", 4, st,
+                            {"projected_load_kw": planner.PROJECTED_LOAD_KW}, None)
+    assert not floor[0] and "headroom_after" in floor[1], floor[1]
+    assert not ceiling[0] and "coal_at_boiler" in ceiling[1], ceiling[1]
+
+
+@_with_ctx
+def test_gate_largest_returns_the_largest_n_the_gate_actually_allows(ctx):
+    """x4 is refused on coal and x2 is allowed, so the answer is 2 - and the two refusals on
+    the way down are real gate calls, all logged, all recorded for the deadlock detector.
+
+    IT WAS 1 UNTIL 2026-08-30, and it was 1 for a reason that is not true: all 28 furnaces on
+    this base sit at `full_output`, and `furnace_coal_per_min` charged every one of them 1.35
+    coal/min for a fire that measurement shows is not burning (their total
+    `remaining_burning_fuel` did not move over 1852 ticks). Deleting that phantom 37.8/min
+    moves the coal ceiling from 81/min (1 column) to 108/min (2) against 120 supplied - which
+    is the ceiling that was blocking the coal mine."""
+    st = live()
+    seen = _gate_spy(ctx)
+    n = planner.gate_largest("power_capacity", 4, state=st,
+                             params_for=planner._plant_params_for(4))
+    assert n == 2, n
+    assert [c["n"] for c in seen] == [4, 3, 2], seen
+    assert [c["ok"] for c in seen] == [False, False, True], seen
+    # the FULL target still leads the FUTURE load; only a partial column is held to the load
+    # standing now
+    assert seen[0]["params"]["projected_load_kw"] == planner.PROJECTED_LOAD_KW
+    assert all(c["params"]["projected_load_kw"] == 0.0 for c in seen[1:])
+    assert ctx.log.count("gate BLOCK:") == 2, ctx.log.lines
+    assert len(planner._PASS["blocked"]) == 2, "a refusal the deadlock detector never saw"
+
+
+@_with_ctx
+def test_gate_largest_returns_zero_rather_than_bypassing_a_gate(ctx):
+    """When every n in the range is refused the answer is 0 and NOTHING is built. A step-down
+    that ever answered with an n the gate did not pass would be a bypass wearing a helper's
+    name."""
+    st = live()
+    seen = _gate_spy(ctx)
+    n = planner.gate_largest("power_capacity", 4, state=st,
+                             params={"projected_load_kw": planner.PROJECTED_LOAD_KW})
+    assert n == 0
+    assert [c["n"] for c in seen] == [4, 3, 2, 1]
+    assert not any(c["ok"] for c in seen), "the gate allowed one and the helper hid it"
+    assert len(planner._PASS["blocked"]) == 4
+
+
+def _expandable(ctx):
+    """A standing plant to extend, with plant_planner stubbed at its placing edge."""
+    scaled = {}
+
+    def scale(existing, engines):
+        scaled["engines"] = engines
+        cols = engines // planner.plant_planner.ENGINES_PER_BOILER
+        return {"added_columns": cols, "warnings": (),
+                "plan": {"anchor": (0, 0), "bbox": (0, 0, 1, 1), "n_columns": 2 + cols,
+                         "power_MW": 1.8 * (2 + cols), "intake": {"tile": (1, 2)},
+                         "pump": (-32, 51)}}
+
+    ctx.patch(planner, "plant_existing", lambda p, st: {"stub": True})
+    ctx.patch(planner.plant_planner, "scale", scale)
+    ctx.patch(planner.plant_planner, "build",
+              lambda plan: {"id": "bp1", "status": "verified",
+                            "verify": {"check": {"detail": "pump 100, boiler water 200"}}})
+    ctx.patch(planner.plant_planner, "plan_poles", lambda plan: [("small-electric-pole", 1, 1)])
+    return scaled
+
+
+@_with_ctx
+def test_plant_expansion_builds_the_largest_legal_column_count(ctx):
+    """The defect end to end: the stage wants 4, the coal ceiling allows 2, and it now places
+    those 2 instead of none. Two columns take this base from headroom 1.014 to 2.028.
+
+    (The ceiling was 1 until the jammed-furnace phantom demand was deleted on 2026-08-30 - see
+    test_gate_largest_returns_the_largest_n_the_gate_actually_allows. What this test pins is
+    the STEP-DOWN, not the number: whatever the ceiling is, the stage builds it.)"""
+    st = live()
+    ctx.patch(planner, "gate_state", lambda force=False: st)
+    scaled = _expandable(ctx)
+    p = {}
+    planner.stage_plant_expand(p)
+    assert scaled["engines"] == 2 * planner.plant_planner.ENGINES_PER_BOILER, scaled
+    assert ctx.log.has("plant expansion (+2 column(s)): VERIFIED")
+    assert p["plant"]["n_columns"] == 4
+
+
+@_with_ctx
+def test_the_relief_builds_the_column_it_was_APPROVED_for(ctx):
+    """_relief_plant used to ignore r['n'] and r['params'] and call the stages, which each
+    re-derived x4 against PROJECTED_LOAD_KW and were refused - so the one move the detector had
+    proved legal was never attempted at the size it was approved at, and the rung was burned in
+    relief_tried anyway."""
+    st = live()
+    ctx.patch(planner, "gate_state", lambda force=False: st)
+    _expandable(ctx)
+    seen = _gate_spy(ctx)
+    p = {"relief": {"structure": "power_capacity", "n": 1, "key": "plant",
+                    "params": {"projected_load_kw": 0.0},
+                    "constraint": "power_headroom",
+                    "unblocks": ["mine_outpost", "lab", "science_assembler"]}}
+    planner.stage_relief(p)
+    assert seen, "the relief gated nothing"
+    assert [c["n"] for c in seen] == [1], seen
+    assert seen[0]["params"] == {"projected_load_kw": 0.0}, seen
+    assert not any(c["params"].get("projected_load_kw") == planner.PROJECTED_LOAD_KW
+                   for c in seen), "the relief re-derived the stage's own column count again"
+    assert p["relief_done"] == ["plant"]
+    assert "plant" not in (p.get("relief_tried") or []), "a legal move was burned as tried"
+
+
+def _fresh_plant(ctx):
+    """A base with NOTHING to scale, so _relief_plant takes the stage_plant branch."""
+    built = []
+    ctx.patch(planner.B, "STATE", {"water": (-32, 52), "coal": (-40, 15)})
+    ctx.patch(planner.plant_planner, "scan_shore", lambda cx, cy, radius=30: object())
+    ctx.patch(planner.plant_planner, "plan_plant", lambda n_engines, **kw: {
+        "anchor": (-32, 46), "bbox": [-38, 36, -26, 54], "n_columns": n_engines // 2,
+        "power_MW": 0.9 * n_engines, "warnings": (), "intake": {"tile": (-34, 48)},
+        "entities": []})
+    ctx.patch(planner.plant_planner, "plan_poles", lambda plan: [])
+    ctx.patch(planner.plant_planner, "build",
+              lambda plan, **kw: built.append(plan) or
+              {"id": "bp0", "status": "verified", "verify": {}})
+    return built
+
+
+@_with_ctx
+def test_the_relief_carries_its_n_AND_params_into_the_FIRST_plant_too(ctx):
+    """THE OTHER HALF OF THE SAME BUG, left standing on the other branch. A base with NO
+    generation at all goes through stage_plant - there is nothing to extend, and the first
+    column is a whole plant plan, not a scale() - and `_relief_plant` called it BARE.
+
+    So the n, the params and the `relieves` the deadlock detector had already proved legal were
+    all discarded, stage_plant re-derived its own column count against PROJECTED_LOAD_KW, and
+    it took exactly the refusal the relief exists to route around: the approved x1 was never
+    attempted and the rung was burned in relief_tried anyway. That is verbatim the defect the
+    rewrite fixed on the _plant_add branch.
+    """
+    st = state(counts={"offshore-pump": 1}, networks=0, boiler_coal_min=5,
+               flows={"coal": 120.0},
+               drills_by_ore={"coal": {"electric-mining-drill": 4}})
+    assert G.capacity_mw(st) <= 0, "fixture must have NO generation"
+    ctx.patch(planner, "gate_state", lambda force=False: st)
+    _fresh_plant(ctx)
+    seen = _gate_spy(ctx)
+    p = {"relief": {"structure": "power_capacity", "n": 1, "key": "plant",
+                    "params": {"projected_load_kw": 0.0},
+                    "constraint": "power_headroom", "unblocks": ["mine_outpost"]}}
+    planner.stage_relief(p)
+    assert seen, "the relief gated nothing"
+    assert [c["n"] for c in seen] == [1], seen
+    assert seen[0]["params"] == {"projected_load_kw": 0.0}, seen
+    assert not any(c["params"].get("projected_load_kw") == planner.PROJECTED_LOAD_KW
+                   for c in seen), "the relief re-derived the stage's own column count again"
+
+
+@_with_ctx
+def test_the_mine_stepdown_scales_the_drills_param_with_n(ctx):
+    """`lane_capacity` gates off params['drills']. Shrinking the ask while still declaring the
+    full target gates an outpost nobody is going to place, so the two move together."""
+    seen = []
+    ctx.patch(planner, "gate", lambda s, n=1, params=None, **k: (
+        seen.append((int(n), dict(params or {}))) or False))
+    ctx.patch(planner.B, "STATE", {"iron-ore": (10, 10, 9), "copper-ore": (20, 20, 9),
+                                   "coal": (30, 30, 9)})
+    ctx.patch(planner.B, "_tech_done", lambda name: False)          # -> burner tier
+    planner.stage_mines({})
+    assert seen, "stage_mines gated nothing"
+    for n, params in seen:
+        assert params["drills"] == n, (n, params)
+    for ore, want in planner.MINE_DRILLS:
+        asked = [n for n, params in seen if params.get("ore") == ore]
+        assert asked == list(range(want, 0, -1)), (ore, asked)
+
+
 # --------------------------------------------------------------------------- plain runner
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items())

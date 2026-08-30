@@ -93,10 +93,13 @@ class FakeRcon:
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\._world:sub\((\d+),(\d+)\)", cmd)
+        # the buffer key is minted per read (rcon.read_chunked), so match ANY scratch
+        m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:200])
         sub, resp = self.script.pop(0)

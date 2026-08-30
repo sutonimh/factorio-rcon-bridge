@@ -36,10 +36,13 @@ class FakeRcon:
 
     def __call__(self, cmd, timeout=10.0):
         self.calls.append(cmd)
-        m = re.search(r"storage\._world:sub\((\d+),(\d+)\)", cmd)
+        # the buffer key is minted per read (rcon.read_chunked), so match ANY scratch
+        m = re.search(r"storage\._\w+:sub\((\d+),(\d+)\)", cmd)
         if m:
             i, j = int(m.group(1)), int(m.group(2))
             return self.payload[i - 1:j] + "\n"
+        if re.search(r"storage\._\w+=nil", cmd):
+            return ""                      # read_chunked clears its scratch key in a finally
         if not self.script:
             raise AssertionError("unexpected RCON call (script exhausted): %s" % cmd[:160])
         sub, resp = self.script.pop(0)
@@ -208,7 +211,7 @@ def test_list_trains_chunked(ctx):
             {"id": 2, "group": "", "state": "no_schedule", "station": "", "cargo": []},
         ])
 
-    ctx.fake.script = [("storage._world", serve)]
+    ctx.fake.script = [("rcon.print(#storage.", serve)]
     ts = trains.list_trains()
     assert [t["id"] for t in ts] == [1, 2]
     assert ts[0]["cargo"] == {"iron-ore": 4000}
@@ -230,7 +233,7 @@ def test_train_status(ctx):
              "station": "", "cargo": {"iron-ore": 1200}, "current": 1,
              "records": [], "interrupts": ["iron-ore pickup", "iron-ore dropoff", "refuel"]})
 
-    ctx.fake.script = [("storage._world", serve)]
+    ctx.fake.script = [("rcon.print(#storage.", serve)]
     st = trains.train_status(5)
     assert st["group"] == "iron shuttle" and st["state"] == "on_the_path"
     assert st["interrupts"] == ["iron-ore pickup", "iron-ore dropoff", "refuel"]
@@ -239,7 +242,7 @@ def test_train_status(ctx):
 
 @_with_ctx
 def test_train_status_missing(ctx):
-    ctx.fake.script = [("storage._world",
+    ctx.fake.script = [("rcon.print(#storage.",
                         lambda cmd: ctx.fake.payload_len({"err": "NO_TRAIN"}))]
     try:
         trains.train_status(99)

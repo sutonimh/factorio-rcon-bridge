@@ -140,17 +140,13 @@ def footprint(name, tile_x, tile_y):
 
 # --------------------------------------------------------------------------- patch scan
 def _chunked(build_lua):
-    """Store a string in storage._world, print its length, read it back in slices (the
-    architect.py/world.py pattern - one large RCON response truncates)."""
-    n = int((rcon.run("/sc " + build_lua) or "0").strip() or "0")
-    if n <= 0:
-        return ""
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage._world:sub(%d,%d))"
-                              % (i, i + CHUNK - 1)).rstrip("\r\n"))
-        i += CHUNK
-    return "".join(parts)
+    """rcon.read_chunked on a PRIVATE buffer key. `build_lua(store)` returns the Lua body.
+
+    This module's wire format is newline-joined TEXT, not JSON, and it used to share
+    storage._world with world.scan_area's JSON. A clobber between two formats that disagree
+    can still parse - into a plausible-but-wrong ore patch, which is drills on the wrong tiles.
+    """
+    return rcon.read_chunked(lambda store: "/sc " + build_lua(store), chunk=CHUNK, empty="")
 
 
 def scan_patch(ore, cx, cy, radius=40):
@@ -166,9 +162,9 @@ def scan_patch(ore, cx, cy, radius=40):
            "  b[#b+1]=math.floor(e.position.x)..','..math.floor(e.position.y)..','..math.floor(e.amount)"
            " end;"
            "local out={}; for n,b in pairs(acc) do out[#out+1]=n..'|'..table.concat(b,' ') end;"
-           "storage._world=table.concat(out,'\\n'); rcon.print(#storage._world)"
            % (x1, y1, x2, y2))
-    return parse_patch(ore, _chunked(lua))
+    return parse_patch(ore, _chunked(
+        lambda store: lua + "%s=table.concat(out,'\\n'); rcon.print(#%s)" % (store, store)))
 
 
 def parse_patch(ore, raw):

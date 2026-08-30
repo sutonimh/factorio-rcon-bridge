@@ -941,7 +941,7 @@ def check_all(w, only=None):
 
 
 # --------------------------------------------------------------------------- RCON (READ-ONLY)
-PROBE_LUA = r"""/sc
+_PROBE_BODY = r"""/sc
 local s=game.surfaces[1]
 local SN={} for k,v in pairs(defines.entity_status) do SN[v]=k end
 local o={}
@@ -976,24 +976,23 @@ local function pm(n) return math.floor(ps.get_flow_count{name=n,category='input'
 local g={tick=game.tick,research=(f.current_research and f.current_research.name or ''),
          production={['iron-plate']=pm('iron-plate'),['copper-plate']=pm('copper-plate'),
                      ['coal']=pm('coal')}}
-storage._principles=helpers.table_to_json({ents=o,meta=g})
-rcon.print(#storage._principles)
 """.replace("\n", " ")
+
+
+def probe_lua(store="storage._principles"):
+    """The READ-ONLY probe command, writing its payload to `store`. Parameterised because the
+    chunked buffer key must be private per read - see rcon.read_chunked."""
+    return _PROBE_BODY + ("%s=helpers.table_to_json({ents=o,meta=g}) rcon.print(#%s)"
+                          % (store, store))
+
+
+PROBE_LUA = probe_lua()          # the default rendering, for read-only auditing of the command
 
 
 def probe():
     """READ-ONLY live read of the whole player force. Never mutates the world."""
     import rcon
-    n = int((rcon.run(PROBE_LUA) or "0").strip() or "0")
-    if not n:
-        raise RuntimeError("probe returned nothing")
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage._principles:sub(%d,%d))"
-                              % (i, i + CHUNK - 1)).rstrip("\r\n"))
-        i += CHUNK
-    rcon.run("/sc storage._principles=nil")
-    data = json.loads("".join(parts))
+    data = json.loads(rcon.read_chunked(probe_lua, chunk=CHUNK, empty=""))
     return World(data["ents"], data.get("meta"))
 
 

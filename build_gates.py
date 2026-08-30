@@ -165,6 +165,22 @@ RECIPE_INPUTS = {
 }
 CONTAINER_NAMES = ("wooden-chest", "iron-chest", "steel-chest")
 FURNACE_NAMES = ("stone-furnace", "steel-furnace", "electric-furnace")
+# The furnaces that burn COAL. An electric furnace is in FURNACE_NAMES because it is a furnace
+# (the overbuild budget counts smelting capacity, not fuel), but it draws from the grid and
+# charging it 1.35 coal/min is the same phantom demand in miniature. There are none on the
+# base yet, so this costs nothing today and stops a tier upgrade from re-inflating the gate.
+BURNER_FURNACE_NAMES = ("stone-furnace", "steel-furnace")
+# The statuses under which a BURNER is actually converting fuel. A burner entity consumes its
+# `currently_burning` item only while it is crafting; every idle status - jammed, starved,
+# unfuelled, disabled - freezes `remaining_burning_fuel` where it is.
+#
+# MEASURED live 2026-08-30 on the 28 stone furnaces of the operator's base, all at
+# `full_output`: the sum of `burner.remaining_burning_fuel` over all 28 was 59_536_100 J at
+# tick 2382447 and 59_536_100 J at tick 2384299 - 1852 ticks (~31 s) later, not one joule
+# burned. Over the same window the force's own consumption statistic read 6 coal/min against
+# 120 produced, and 6/min is the plant's 405 kW load alone. The two boilers that ARE burning
+# read `working`, which is why that is the whole whitelist.
+BURNING_STATUSES = ("working",)
 ORE_PLATE = {"iron-ore": "iron-plate", "copper-ore": "copper-plate"}
 
 # Items whose one-minute flow sense() pulls back. Anything a gate can ask for must be here.
@@ -367,15 +383,35 @@ def coal_demand_per_min(st, extra_boilers=0, projected_kw=0.0):
 
 
 def furnace_coal_per_min(st):
-    """Coal the burner furnaces burn. Only the FED ones: a furnace at `no_ingredients` burns
-    nothing, which is the same property that makes an array safe to pre-build (LAW 3)."""
+    """Coal the burner furnaces burn. Only the ones that are actually SMELTING.
+
+    THIS IS THE SAME ERROR AS THE BOILER MODEL, ONE FUNCTION OVER (fixed 2026-08-30). The
+    docstring above says "a boiler burns for its load, not for existing"; this charged every
+    furnace that was not at `no_ingredients`, which is the *blacklist* form of the same wrong
+    idea - it silently prices every OTHER idle status as a fire.
+
+    On the live base all 28 stone furnaces sit at `full_output`: jammed by back-pressure, not
+    crafting, and burning nothing (see BURNING_STATUSES for the measurement). That was 28 *
+    1.35 = 37.8 coal/min of demand that does not exist, and it was the BINDING constraint -
+    `coal_at_boiler` refused a second boiler column at 158/min needed against 120 supplied,
+    while the game's own consumption statistic read 6/min.
+
+    So the test is a WHITELIST: a furnace is charged when its status says it is converting
+    fuel, and no status name is assumed benign by omission. The direction matters - a new
+    status the engine adds now reads as idle (cheap, and the gate re-checks every pass)
+    instead of silently re-inflating the demand that deadlocked the base.
+    """
     fed = 0.0
-    for name in FURNACE_NAMES:
+    for name in BURNER_FURNACE_NAMES:
         hist = (st.get("status") or {}).get(name) or {}
         if hist:
-            fed += sum(v for k, v in hist.items() if k != "no_ingredients")
+            fed += sum(v for k, v in hist.items() if k in BURNING_STATUSES)
         else:
-            fed += _f(st.get("counts", {}), name)      # no status info: assume all are fed
+            # NO STATUS INFO IS THE ONE CONSERVATIVE CASE. A census that cannot see status
+            # cannot prove a furnace idle, and "never build blind" outranks the deadlock risk
+            # here: sense() and state_from_snapshot both always carry status, so this is the
+            # hand-built-state path only.
+            fed += _f(st.get("counts", {}), name)
     return fed * FURNACE_COAL_PER_MIN
 
 
@@ -776,7 +812,7 @@ def _pr_coal_at_boiler(st, n, g, p):
     known = "coal" in (st.get("flows") or {}) or cap_mined is not None
     if known and supply < need:
         return False, ("coal %.0f/min < %.0f/min — a %.1f MW plant (%d column(s) added) burns "
-                       "%.0f/min at full tilt plus %.0f/min in fed furnaces, and the mine "
+                       "%.0f/min at full tilt plus %.0f/min in SMELTING furnaces, and the mine "
                        "cannot fuel that; mine more coal first (a 50/50 splitter tap can only "
                        "deliver half the mine)"
                        % (supply, need, cap_after_mw, max(0, int(n)),
@@ -1864,43 +1900,39 @@ local function pm(n) return ps.get_flow_count{name=n,category='input',
   precision_index=defines.flow_precision_index.one_minute} end
 local flows={}
 for _,it in pairs({__ITEMS__}) do flows[it]=pm(it) end
-storage._gates=helpers.table_to_json({tick=game.tick,counts=counts,counts_type=ctype,
+__STORE__=helpers.table_to_json({tick=game.tick,counts=counts,counts_type=ctype,
  status=stat,status_type=stype,recipes=recipes,ghosts=ghosts,networks=nn,drills_by_ore=byore,
  boiler_water_min=bwater,boiler_coal_min=bcoal,generated_kw=math.floor(gen*60/1000),
  research=(f.current_research and f.current_research.name or ''),flows=flows})
-rcon.print(#storage._gates)
+rcon.print(#__STORE__)
 """
 
 
 def sense(ttl=5.0, force=False, items=FLOW_ITEMS):
     """One READ-ONLY census + flow read -> the state every gate is a pure function of.
 
-    Chunked through `storage._gates` (its own key, so it never races bottleneck's _bn,
-    architect's _arch, world's _world, principles' _principles or dashboard's _dash), and the
-    key is cleared afterwards. A failed scan RAISES: a gate that silently sees an empty world
-    would allow everything, which is the exact failure this module exists to stop."""
+    Chunked through rcon.read_chunked, which mints a PRIVATE buffer key per read and clears it
+    afterwards. The key used to be the fixed `storage._gates`, argued safe because no other
+    module wrote that name — but sense() itself runs on the builder loop and on the
+    controller's invariant thread, and two concurrent senses share a name just as ruinously as
+    two modules would. A failed scan RAISES: a gate that silently sees an empty world would
+    allow everything, which is the exact failure this module exists to stop."""
     now = time.time()
     if not force and _CACHE["state"] is not None and now - _CACHE["t"] < ttl:
         return _CACHE["state"]
     import rcon
-    lua = SENSE_LUA.replace("__ITEMS__", ",".join("'%s'" % i for i in items)).replace("\n", " ")
-    raw = (rcon.run(lua) or "").strip()
-    if not raw.lstrip("-").isdigit():
-        raise RuntimeError("build_gates.sense failed (RCON/Lua): %s" % (raw[:200] or "(empty)"))
-    n = int(raw)
-    if n <= 0:
-        raise RuntimeError("build_gates.sense built a %d-length payload" % n)
-    parts, i = [], 1
+
+    def build(store):
+        return (SENSE_LUA.replace("__ITEMS__", ",".join("'%s'" % i for i in items))
+                .replace("__STORE__", store).replace("\n", " "))
+
     try:
-        while i <= n:
-            parts.append(rcon.run("/sc rcon.print(storage._gates:sub(%d,%d))"
-                                  % (i, i + CHUNK - 1)).rstrip("\r\n"))
-            i += CHUNK
-    finally:
-        # ALWAYS clear the scratch key, including when a chunk read throws mid-way — a stale
-        # storage._gates would otherwise be re-read as a fresh census by the next caller.
-        rcon.run("/sc storage._gates=nil")
-    st = json.loads("".join(parts))
+        raw = rcon.read_chunked(build, chunk=CHUNK, empty="")
+    except rcon.ChunkedReadError as e:
+        raise RuntimeError("build_gates.sense failed (RCON/Lua): %s" % str(e)[:220])
+    if not raw:
+        raise RuntimeError("build_gates.sense built a 0-length payload")
+    st = json.loads(raw)
     st.setdefault("ts", now)
     _CACHE["t"], _CACHE["state"] = now, st
     return st

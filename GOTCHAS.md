@@ -544,6 +544,28 @@ Recent lessons codified:
   EACH response, so `.rstrip("\r\n")` every slice before concatenating, or you inject a
   control char into the JSON at every chunk boundary (invalid-control-character at char N).
   Compact JSON (helpers.table_to_json) has no other trailing whitespace, so the strip is safe.
+- THE BUFFER KEY MUST BE PRIVATE PER READ, AND THE READER MUST VERIFY THE REASSEMBLED LENGTH.
+  That chunked read is N+1 SEPARATE RCON round-trips against one Lua global. Any other caller
+  writing the same key between two slice reads swaps the buffer out from under the reader, and
+  what comes back is the head of one document spliced onto the tail of another — two valid
+  documents, neither of them the answer. Live, 2026-08-29 23:27:07: the invariant thread's
+  `power_planner.audit` was reading a 46926-char scan out of `storage._pgrid` while the
+  builder's `stage_array_grid` wrote its own 32962-char scan to that same key, and the audit
+  died on `Expecting ',' delimiter: line 1 column 9003 (char 9002)`. Offset 9002 is a chunk
+  boundary, not a corruption: A ended slice 3 mid-string at `...,"s":"working"},{"n":"` and B
+  resumed at 9000 with `,"bb":[-6,5,-5,6],...`, so B's `,"` closed A's dangling string and the
+  parser then hit a bare `b`. It is NOT truncation, NOT a UTF-8 boundary and NOT a trimmed
+  `rcon.print` — chasing those wastes the day. THREE writers shared `_pgrid` (audit, builder
+  scan, pole-plan verify), and `storage._world` had more with INCOMPATIBLE wire formats (JSON
+  in world.py, newline-joined text in mine_layout.py) where a splice can PARSE and put drills
+  on the wrong tiles. FIX: `rcon.read_chunked(build_lua)` — `build_lua(store)` is a CALLABLE so
+  the key is minted per read (`storage._rd<pid>_<n>`), the reassembled length is compared
+  against the length Lua reported, a non-int head raises instead of reading as zero, and the
+  scratch is cleared in a `finally`. Never hand-roll the slice loop again: a shared key fails
+  SILENTLY, as a JSON error at a meaningless offset, and lane_lint.py hit exactly this in
+  2026-08, fixed it locally with a private key, and the lesson never left that file.
+  (`storage.fle_out` is the one exemption — the key is chosen by the vendored lua/fle_lib.lua,
+  not by Python, so it cannot be minted from this side.)
 
 ## Power grid: never delete connector poles; self-heal islanded generators (2026-06-28)
 
@@ -1334,6 +1356,71 @@ Note what `COAL_HEADROOM_MIN = 1.5` was: "measured 120 supplied / 77 demanded = 
 margin calibrated from the output of the very model it was multiplying. **A constant derived
 from a model cannot validate that model.** If a threshold's justification cites a number the
 code itself computed, it has not been measured; go and measure it against the game.
+
+## int() IS NOT floor(): every NEGATIVE entity coordinate lands one tile off (2026-08-30)
+
+`e.position.x` from any Lua probe is the entity **CENTRE**, a float. Python's `int()` truncates
+**toward zero**, so it is `floor()` only in the eastern/southern half of the map:
+
+    1x1 pole on tile (-15, 3)  ->  position (-14.5, 3.5)  ->  int() = (-14, 3)   WRONG
+                                                           ->  floor() = (-15, 3) OK
+
+`planner.stage_array_grid` read standing poles that way and put **15 of the 40 poles** in area
+`(-15,0,32,20)` on the wrong tile. Nothing crashes: the tiles flow straight into `_too_near`,
+`plan_grid`'s connectivity nodes, `validate`'s separation and split checks and `apply`'s
+join / tie_in / wire_pairs, all of which then reason confidently about poles that are not
+there. Note that `_live_poles()` does the identical read **in Lua**, where `math.floor` is a
+true floor, and was never wrong — so the two halves of the same module disagreed.
+
+**THE RULE.** Never `int()` a coordinate that came off the wire. Use the probe's own `bb`
+(`power_planner.probe_lua` supplies it, already floored engine-side, and `from_entities` /
+`consumer_box` consume it), or `math.floor(centre - size/2)` as `build_gates.py` does. And the
+size matters: a 2x2 entity's top-left tile is not `floor(centre)`.
+
+Same shape, one field over: a standing pole's **supply radius is a property of its own tier**,
+not of the tier you happen to be laying. `mine_layout.POLES` — small 2.5, medium 3.5,
+**big 2.0** (and 2x2), substation 9.0 — so a big pole's supply area is SMALLER than a small
+one's. Crediting a standing big pole with the small-pole window marks a machine beside it as
+powered when it is not, and a machine marked powered never gets a pole: a dark machine wearing
+a finished stage's clothes.
+
+## A JAMMED FURNACE BURNS NOTHING EITHER — the SAME error, one function over (2026-08-30)
+
+The boiler lesson above was fixed and then reproduced verbatim in `furnace_coal_per_min`,
+which charged **every furnace that was not at `no_ingredients`**:
+
+    fed += sum(v for k, v in hist.items() if k != "no_ingredients")
+
+Measured against the running game, 2026-08-30. All 28 stone furnaces sat at `full_output` —
+back-pressured, output full, nothing moving:
+
+    sum(burner.remaining_burning_fuel) over 28 furnaces
+      tick 2382447 : 59,536,100 J
+      tick 2384299 : 59,536,100 J        (1852 ticks / ~31 s later)
+
+Not one joule. A burner consumes its `currently_burning` item **only while it is crafting**;
+every idle status freezes the fuel where it is. Meanwhile the force's own statistic read
+**6 coal/min consumed against 120 produced** — and 6/min is the plant's own 405 kW load, so
+the furnaces were provably contributing zero. The gate was inventing `28 * 1.35 = 37.8
+coal/min`, and it was the **binding** constraint: `coal_at_boiler` refused a second boiler
+column. Deleting the phantom makes 2 columns legal (108/min needed vs 120 supplied, verified
+live) and unblocks the coal mine.
+
+**THE RULE — A BLACKLIST OF IDLE STATUSES IS ALWAYS WRONG.** Excluding one idle status
+(`no_ingredients`) silently prices every *other* idle status as a running machine:
+`full_output`, `no_fuel`, `waiting_for_space_in_destination`, `disabled_by_script`,
+`marked_for_deconstruction`. Whitelist the statuses that mean *converting fuel* — for a burner
+that is `working`, which is also what the two live boilers report — so a status nobody thought
+about reads as idle. Being wrong that way costs one cheap re-check next pass; being wrong the
+other way costs a base that cannot grow. (Same test caught `electric-furnace` being charged
+coal it does not burn.)
+
+Generalise it: **"is it built?" is never the same question as "is it consuming?"** Whenever a
+gate prices a resource, price it off measured WORK (status, load, or the game's own flow
+statistic), never off an entity count — and confirm it against
+`force.get_item_production_statistics(...).get_flow_count{category='output'}` before believing
+the number. A gate whose demand exceeds the game's own consumption figure by 6x is not being
+conservative, it is broken.
 
 ## NO TIER REGRESSION: never relieve a constraint by rebuilding what the operator removed
 

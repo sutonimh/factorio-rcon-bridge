@@ -344,7 +344,7 @@ def plan_tiles(plan):
 
 # ----------------------------------------------------------------------------- trunk
 def plan_trunk(from_xy, to_xy, spacing=TRUNK_SPACING, pole=POLE_DEFAULT, blocked=(),
-               area=None, corner=None, include_ends=True):
+               area=None, corner=None, include_ends=True, existing=None):
     """A straight, axis-aligned pole run from tile `from_xy` to tile `to_xy`.
 
     The operator's transmission spine: 25 of his 69 poles (36%) power nothing and exist only
@@ -362,6 +362,16 @@ def plan_trunk(from_xy, to_xy, spacing=TRUNK_SPACING, pole=POLE_DEFAULT, blocked
     A blocked lattice point is nudged BACK along the axis (never sideways - the run stays in
     its column) so the hop only ever shrinks.
 
+    `existing` NAMES THE ENDPOINTS THAT ARE ALREADY POLES. An endpoint that is a standing pole
+    is in `blocked` (a pole occupies its own tile) and must be emitted regardless; every other
+    endpoint is a tile this run would NEWLY place, so it belongs to `_run`'s legality check
+    like an interior one. That check existed and was VACUOUS: `hard` was the unconditional
+    {a, b}, so both endpoints were exempt and the loop could never fire. It is the same hole
+    `_corners` was written to close one tile over - stage_spine's far end (SPINE_X, oy) is a
+    brand-new tile nobody was checking, and a pole planned onto a belt there is exactly the
+    2026-08-29 failure. `existing=None` keeps the historical contract (both endpoints are the
+    caller's own poles) for callers that really do join two standing poles.
+
     Returns [{'x','y','entity'}]; executes nothing.
     """
     warn = []
@@ -375,33 +385,75 @@ def plan_trunk(from_xy, to_xy, spacing=TRUNK_SPACING, pole=POLE_DEFAULT, blocked
         raise GridError("trunk spacing %d exceeds the %s wire reach %.1f"
                         % (spacing, pole, wire_reach(pole)))
 
-    if a[0] == b[0] or a[1] == b[1]:
-        legs = [(a, b)]
+    # the caller's OWN poles: deliberately blocked, always kept. Anything else is checked.
+    if existing is None:
+        hard = {a, b}
     else:
-        c1 = (a[0], b[1])          # turn at the end of the from-COLUMN
-        c2 = (b[0], a[1])          # turn at the end of the from-ROW
-        pick = corner
-        if pick is None:
-            pick = "x" if _leg_blocked(a, c1, b, blocked) <= _leg_blocked(a, c2, b, blocked) \
-                   else "y"
-        c = c1 if pick == "x" else c2
-        legs = [(a, c), (c, b)]
-
-    tiles = []
-    for (p, q) in legs:
-        run = _run(p, q, spacing, pole, blocked, area, warn)
-        if run is None:
+        have = {(int(x), int(y)) for x, y in existing}
+        hard = {t for t in (a, b) if t in have}
+    if a[0] == b[0] or a[1] == b[1]:
+        routes = [[(a, b)]]
+    else:
+        routes = [[(a, c), (c, b)] for c in _corners(a, b, pole, blocked, area, corner)]
+        if not routes:
             LAST_WARNINGS[:] = warn
-            raise GridError("no legal %s trunk from %s to %s: %s"
-                            % (pole, p, q, "; ".join(warn) or "blocked"))
-        for t in run:
-            if t not in tiles:
-                tiles.append(t)
+            which = ("the forced %s corner %s is occupied"
+                     % (corner, (a[0], b[1]) if corner == "x" else (b[0], a[1]))) if corner \
+                else "both corners are occupied (%s and %s)" % ((a[0], b[1]), (b[0], a[1]))
+            raise GridError("no legal %s trunk from %s to %s: %s" % (pole, a, b, which))
+
+    tiles, legs, last = None, routes[0], []
+    for route in routes:
+        attempt, leg_warn = [], []
+        for (p, q) in route:
+            run = _run(p, q, spacing, pole, blocked, area, leg_warn, hard)
+            if run is None:
+                break
+            for t in run:
+                if t not in attempt:
+                    attempt.append(t)
+        else:
+            tiles, legs = attempt, route
+            warn += leg_warn
+            break
+        last = leg_warn              # this corner's legs would not route; try the other one
+    if tiles is None:
+        LAST_WARNINGS[:] = warn + last
+        raise GridError("no legal %s trunk from %s to %s: %s"
+                        % (pole, a, b, "; ".join(last or warn) or "blocked"))
     if not include_ends:
         tiles = [t for t in tiles if t != a and t != b]
     LAST_WARNINGS[:] = warn
     LAST_INFO.update({"trunk": {"legs": len(legs), "spacing": spacing, "poles": len(tiles)}})
     return [{"x": t[0], "y": t[1], "entity": pole} for t in tiles]
+
+
+def _corners(a, b, pole, blocked, area, forced=None):
+    """The LEGAL turn tiles for the two-leg route a->b, best first.
+
+    A corner is a real pole tile and obeys L1 like every other tile in the run. It never was:
+    every INTERIOR tile of a leg went through `_fits`, but the corner is leg 1's endpoint and
+    leg 2's start, and `_run` anchors its endpoints unconditionally - so the one brand-new tile
+    nobody checked was emitted straight into the plan. Live, 2026-08-29: `_reach_anchor` turned
+    (-5,4)->(-15,3) into a corner at (-5,3), which is a transport-belt tile on the iron plate
+    row, and phase 0's array_grid stage then failed `validate` with the same GridError every
+    pass forever. `_leg_blocked` only ever COUNTED blocked tiles as a tie-break; it never
+    rejected a corner.
+
+    THERE ARE EXACTLY TWO. Sliding the turn off them would put a jog in the route - three legs
+    instead of two - and the operator's standard for a trunk is straight lines, so an occupied
+    corner is answered by taking the OTHER one, and a route with neither is refused. `_lay`
+    already reads that refusal as "this pitch/phase cannot reach the grid" and tries the next
+    (see plan_grid), which is what turns a cornered candidate into a different lattice rather
+    than a stall.
+    """
+    c1 = (a[0], b[1])          # turn at the end of the from-COLUMN
+    c2 = (b[0], a[1])          # turn at the end of the from-ROW
+    if forced:
+        cand = [c1] if forced == "x" else [c2]
+    else:
+        cand = sorted((c1, c2), key=lambda c: _leg_blocked(a, c, b, blocked))
+    return [c for c in cand if _fits(pole, c[0], c[1], area, blocked)]
 
 
 def _leg_blocked(a, c, b, blocked):
@@ -418,10 +470,20 @@ def _leg_blocked(a, c, b, blocked):
     return n
 
 
-def _run(a, b, spacing, pole, blocked, area, warn):
-    """One straight leg: anchor both ends, fill at `spacing`, shorten the last hop."""
+def _run(a, b, spacing, pole, blocked, area, warn, hard=()):
+    """One straight leg: anchor both ends, fill at `spacing`, shorten the last hop.
+
+    `hard` names the tiles that are the CALLER'S OWN existing poles. Those are deliberately in
+    `blocked` - a pole occupies its own tile - and must be emitted regardless. Every other
+    endpoint is a tile this run would newly place, so it is checked like an interior one;
+    without that, a leg endpoint is the one pole nobody legality-checks (see _corners).
+    """
     if a == b:
         return [a]
+    for end in (a, b):
+        if end not in hard and not _fits(pole, end[0], end[1], area, blocked):
+            warn.append("trunk leg %s->%s cannot anchor at %s (occupied)" % (a, b, end))
+            return None
     axis = 0 if a[1] == b[1] else 1
     step = 1 if b[axis] > a[axis] else -1
     out, cur = [a], a
@@ -454,7 +516,7 @@ def _run(a, b, spacing, pole, blocked, area, warn):
 # ----------------------------------------------------------------------------- area grid
 def plan_grid(area, consumers, anchor=None, pole=POLE_DEFAULT, obstacles=None,
               pitch=None, phase=None, extra_blocked=(), trunk_spacing=TRUNK_SPACING,
-              min_row_sep=None):
+              min_row_sep=None, existing=()):
     """A REGULAR LATTICE of poles covering every consumer inside `area`.
 
     area       inclusive tile box (x1,y1,x2,y2) the poles may occupy.
@@ -465,6 +527,14 @@ def plan_grid(area, consumers, anchor=None, pole=POLE_DEFAULT, obstacles=None,
                is required to REACH it: if the lattice lands out of wire range, a straight
                `plan_trunk` run joins them - the operator's own tie-in (his array lattice at
                x=-7 reaches the x=-15 trunk through 1-2 poles, not a chain).
+    existing   poles ALREADY IN THE GROUND inside `area`. This module had no notion of them:
+               they landed in `blocked` and so only EXCLUDED tiles, while their coverage was
+               never credited and MIN_POLE_SEP was never measured against them. On the live
+               smelter block - already a correct pitch-4 lattice at phase x = 1 (mod 4), in
+               the inserter rows - that made the planner pick phase 3 and lay a full PARALLEL
+               lattice 2.0 tiles away, covering nothing new. Given here, they push candidate
+               tiles out to MIN_POLE_SEP and count as nodes for the connectivity check, so a
+               lattice wires into a standing pole instead of trunking past it.
 
     Structure (why this is a lattice and not a cover):
       * ONE pitch and ONE phase for the whole area, shared by every pole row. That single
@@ -491,7 +561,12 @@ def plan_grid(area, consumers, anchor=None, pole=POLE_DEFAULT, obstacles=None,
     """
     area = tuple(int(v) for v in area)
     boxes = [consumer_box(c) for c in consumers]
-    blocked = blocked_tiles(obstacles, boxes, extra_blocked)
+    have = [(int(x), int(y)) for x, y in (existing or ())]
+    # A tile inside MIN_POLE_SEP of a standing pole is not a legal tile for a new one, so it
+    # is blocked outright rather than left for `validate` to warn about after the fact -
+    # validate could not see it either, and 61 planned/existing pairs 2.0 apart is the
+    # redundant_pole pathology this module was written to eliminate.
+    blocked = blocked_tiles(obstacles, boxes, list(extra_blocked) + _too_near(have, pole, area))
     reach = wire_reach(pole)
     hop = max_hop(pole)
     sep = MIN_POLE_SEP if min_row_sep is None else min_row_sep
@@ -512,7 +587,7 @@ def plan_grid(area, consumers, anchor=None, pole=POLE_DEFAULT, obstacles=None,
         for p in pitches:
             for ph in ([int(phase) % p] if phase is not None else range(p)):
                 cand = _lay(area, boxes, blocked, pole, p, ph, anchor, sep, reach,
-                            trunk_spacing, limit)
+                            trunk_spacing, limit, have)
                 if cand is None:
                     continue
                 tiles, uncovered, bridged = cand
@@ -535,11 +610,17 @@ def plan_grid(area, consumers, anchor=None, pole=POLE_DEFAULT, obstacles=None,
     if uncovered:
         warn.append("%d consumer(s) uncovered: %s%s"
                     % (len(uncovered), uncovered[:4], " ..." if len(uncovered) > 4 else ""))
-    nodes = tiles + ([tuple(anchor)] if anchor else [])
-    if not connected(nodes, pole, reach):
-        raise GridError("lattice pitch %d phase %d is SPLIT into %d networks - refusing to "
-                        "hand back a grid that cannot be one electric network"
-                        % (p, ph, len(components(nodes, pole, reach))))
+    stray, orphans = _split_check(tiles, have, anchor, pole, reach)
+    if stray:
+        raise GridError("lattice pitch %d phase %d leaves %d planned pole(s) off the %s "
+                        "(%s%s) - refusing to hand back a grid that cannot be one electric "
+                        "network"
+                        % (p, ph, len(stray), "anchor's network" if anchor else "main network",
+                           stray[:4], " ..." if len(stray) > 4 else ""))
+    if orphans:
+        warn.append("%d standing pole(s) in the area are out of wire reach of this lattice "
+                    "(%s%s); they were ALREADY islanded and this plan does not change that"
+                    % (len(orphans), orphans[:4], " ..." if len(orphans) > 4 else ""))
 
     LAST_WARNINGS[:] = warn
     LAST_INFO.clear()
@@ -547,6 +628,37 @@ def plan_grid(area, consumers, anchor=None, pole=POLE_DEFAULT, obstacles=None,
                       "rows": sorted({t[1] for t in tiles}), "bridged": bridged,
                       "uncovered": len(uncovered), "derived_pitch": want_pitch})
     return [{"x": t[0], "y": t[1], "entity": pole} for t in tiles]
+
+
+def _split_check(tiles, have, anchor, pole, reach):
+    """LAW 3, scoped to what the PLAN controls -> (stray planned tiles, pre-existing orphans).
+
+    The old test was `connected(tiles + have + anchor)`: "are the plan AND every pole standing
+    in this area ONE network?". That is not a question a lattice can answer. One pole someone
+    left further than the wire reach from everything else makes the answer no for EVERY pitch
+    and EVERY phase, so plan_grid raised on all of them, and stage_array_grid absorbs a
+    GridError as "retrying next pass" - a permanent, silent stall over a pole the plan was
+    never going to touch. (validate() asked the identical question, so apply() refused for the
+    same reason: both had to move together or the fix would be dead.)
+
+    What the law actually requires: every pole this plan PLACES ends up on one network, and
+    that network is the one the anchor is already on. A standing pole outside it is reported,
+    not raised on - the plan leaves it exactly as islanded as it found it, and repairing
+    someone else's island is `audit`'s job (_audit_islands), not the lattice's.
+    """
+    tiles = [tuple(t) for t in tiles]
+    have = [tuple(t) for t in have]
+    if not tiles:
+        return [], []
+    nodes = tiles + [t for t in have if t not in tiles]
+    root = tuple(anchor) if anchor else None
+    if root is not None and root not in nodes:
+        nodes = nodes + [root]
+    comps = components(nodes, pole, reach)
+    keep = root if root is not None else tiles[0]
+    main = set(next((c for c in comps if keep in c), comps[0] if comps else []))
+    return ([t for t in tiles if t not in main],
+            [t for t in have if t not in main and t not in tiles])
 
 
 def _pitch_candidates(hop, want):
@@ -581,8 +693,28 @@ def _anchor_dist(pole, tiles, anchor):
     return round(min(_dist(pole, t, tuple(anchor)) for t in tiles), 3)
 
 
+def _too_near(existing, pole, area):
+    """Tiles a NEW pole may not take because a standing pole is already within MIN_POLE_SEP.
+
+    Measured centre-to-centre, the same way `validate`'s separation rule measures it, so the
+    planner and the checker cannot disagree about what "too close" means.
+    """
+    if not existing:
+        return []
+    x1, y1, x2, y2 = area
+    r = int(math.ceil(MIN_POLE_SEP))
+    out = set()
+    for (ex, ey) in existing:
+        for x in range(ex - r, ex + r + 1):
+            for y in range(ey - r, ey + r + 1):
+                if x1 <= x <= x2 and y1 <= y <= y2 \
+                        and _dist(pole, (x, y), (ex, ey)) < MIN_POLE_SEP - 1e-9:
+                    out.add((x, y))
+    return sorted(out)
+
+
 def _lay(area, boxes, blocked, pole, p, ph, anchor, sep, reach, trunk_spacing,
-         service_limit=MAX_SERVICE_DIST):
+         service_limit=MAX_SERVICE_DIST, existing=()):
     """Build one candidate lattice for a fixed (pitch, phase). -> (tiles, uncovered, bridged)."""
     xs = _lattice_xs(area, p, ph, pole)
     if not xs:
@@ -617,7 +749,7 @@ def _lay(area, boxes, blocked, pole, p, ph, anchor, sep, reach, trunk_spacing,
     if anchor:
         try:
             tiles = _reach_anchor(tiles, tuple(anchor), pole, blocked, area, reach,
-                                  trunk_spacing, bridged)
+                                  trunk_spacing, bridged, existing)
         except GridError:
             return None          # this (pitch, phase) cannot reach the grid; try the next
     return tiles, uncovered, bridged
@@ -799,10 +931,18 @@ def _lattice_bridge(src, dst, xs, area, blocked, pole, reach, used):
     return None
 
 
-def _reach_anchor(tiles, anchor, pole, blocked, area, reach, spacing, bridged):
+def _reach_anchor(tiles, anchor, pole, blocked, area, reach, spacing, bridged, existing=()):
     """Join the lattice to an existing grid pole. Within reach: nothing to do. Otherwise a
-    straight `plan_trunk` run - the operator's spine, not an opportunistic chain."""
+    straight `plan_trunk` run - the operator's spine, not an opportunistic chain.
+
+    Poles ALREADY IN THE GROUND count as part of the path. Without them the planner trunks all
+    the way to the far anchor past a standing lattice it could simply have wired into, which is
+    how a tie-in becomes a second parallel run.
+    """
     if not tiles:
+        return tiles
+    have = [(int(x), int(y)) for x, y in (existing or ())]
+    if have and connected(list(tiles) + have + [anchor], pole, reach):
         return tiles
     near = min(tiles, key=lambda t: _dist(pole, t, anchor))
     if _dist(pole, near, anchor) <= reach + 1e-9:
@@ -888,9 +1028,15 @@ def wire_pairs(tiles, existing=(), pole=POLE_DEFAULT, reach=None,
 
 # ----------------------------------------------------------------------------- validation
 def validate(plan, consumers=(), obstacles=None, pole=POLE_DEFAULT, anchor=None,
-             extra_blocked=()):
-    """Pre-flight findings for a plan. Errors here are what `apply` refuses on."""
+             extra_blocked=(), existing=()):
+    """Pre-flight findings for a plan. Errors here are what `apply` refuses on.
+
+    `existing` are poles already in the ground. They belong in the separation and connectivity
+    checks or the module cannot see its own worst failure mode: a plan whose every pole is 2.0
+    tiles from a standing one passes a check that only compares planned poles to each other.
+    """
     tiles = plan_tiles(plan)
+    have = [(int(x), int(y)) for x, y in (existing or ())]
     boxes = [consumer_box(c) for c in consumers]
     blocked = blocked_tiles(obstacles, boxes, extra_blocked)
     reach = wire_reach(pole)
@@ -916,24 +1062,37 @@ def validate(plan, consumers=(), obstacles=None, pole=POLE_DEFAULT, anchor=None,
                                           "no pole powers consumer %s" % (box,),
                                           (box[0] + 0.5, box[1] + 0.5)))
 
-    nodes = tiles + ([tuple(anchor)] if anchor else [])
-    comps = components(nodes, pole, reach)
-    if len(comps) > 1:
+    # Same scoping as plan_grid's own check, and for the same reason: `apply` refuses on an
+    # ERROR here, so asking "is the plan AND every standing pole one network?" turned one
+    # pre-existing island into a permanent refusal of every plan in the area. A planned pole
+    # off the network is still an error - that is the split this module exists to prevent.
+    stray, orphans = _split_check(tiles, have, anchor, pole, reach)
+    if stray:
         out.append(principles.finding(
             "grid_split", "P2",
-            "plan is %d electric networks, not one (largest %d poles, next %d)"
-            % (len(comps), len(comps[0]), len(comps[1])),
-            centre(pole, *comps[1][0])))
+            "%d planned pole(s) are not on the %s: %s"
+            % (len(stray), "anchor's network" if anchor else "plan's main network", stray[:6]),
+            centre(pole, *stray[0])))
+    if orphans:
+        out.append(principles.finding(
+            "orphan_pole", "P2",
+            "%d pole(s) already standing here are out of wire reach of this plan: %s - "
+            "already islanded before it, and not this plan's to join" % (len(orphans),
+                                                                        orphans[:6]),
+            centre(pole, *orphans[0]), severity="warn"))
 
-    for i in range(len(tiles)):
-        for j in range(i + 1, len(tiles)):
-            d = _dist(pole, tiles[i], tiles[j])
+    # Planned-vs-planned AND planned-vs-standing. The second half is the interleave: a whole
+    # lattice laid 2.0 tiles beside one that is already there reads perfectly clean if you
+    # only compare the plan to itself.
+    for i, t in enumerate(tiles):
+        for other in tiles[i + 1:] + have:
+            d = _dist(pole, t, other)
             if d < MIN_POLE_SEP - 1e-9:
                 out.append(principles.finding(
                     "poles_too_close", "P5",
                     "poles %s and %s are %.2f apart (operator minimum %.1f)"
-                    % (tiles[i], tiles[j], d, MIN_POLE_SEP),
-                    centre(pole, *tiles[i]), severity="warn"))
+                    % (t, other, d, MIN_POLE_SEP),
+                    centre(pole, *t), severity="warn"))
     return out
 
 
@@ -1010,10 +1169,14 @@ def wire_lua(pairs, pole=POLE_DEFAULT):
     return _batch(head, tail, ["%d,%d,%d,%d" % (a[0], a[1], b[0], b[1]) for a, b in pairs])
 
 
-def verify_lua(area, pole=POLE_DEFAULT):
+def verify_lua(area, pole=POLE_DEFAULT, store="storage._pgrid"):
     """READ-ONLY: every pole in `area` with its electric_network_id, plus every entity whose
-    status says it is not actually powered. One command; the payload comes back through the
-    chunked storage._pgrid protocol."""
+    status says it is not actually powered. One command; the payload comes back through
+    rcon.read_chunked.
+
+    `store` IS A PARAMETER because the buffer key has to be private per read. It was baked in
+    as storage._pgrid, which this verify, the invariant thread's audit and the builder's
+    array_grid scan all wrote concurrently - see rcon.read_chunked for the splice that made."""
     x1, y1, x2, y2 = (int(v) for v in area)
     return (
         "/sc local s=game.surfaces[1]; local SN={} for k,v in pairs(defines.entity_status) do"
@@ -1030,13 +1193,14 @@ def verify_lua(area, pole=POLE_DEFAULT):
         "  if nm=='no_power' or nm=='low_power' or nm=='not_plugged_in_electric_network' then"
         "   U[#U+1]={n=e.name,x=math.floor(e.position.x),y=math.floor(e.position.y),s=nm}"
         "  end end end;"
-        "storage._pgrid=helpers.table_to_json{poles=P,unpowered=U};"
-        "rcon.print(#storage._pgrid)"
-        % (x1, y1, x2 + 1, y2 + 1, x1, y1, x2 + 1, y2 + 1))
+        % (x1, y1, x2 + 1, y2 + 1, x1, y1, x2 + 1, y2 + 1)
+        # explicit concat: the store name is not a coordinate and must not ride the %d tuple
+        + "%s=helpers.table_to_json{poles=P,unpowered=U};rcon.print(#%s)" % (store, store))
 
 
-def probe_lua(area):
-    """READ-ONLY area scan in `principles.World` shape - the input to `audit`."""
+def probe_lua(area, store="storage._pgrid"):
+    """READ-ONLY area scan in `principles.World` shape - the input to `audit`. `store` is a
+    parameter for the same reason it is on verify_lua: one private buffer key per read."""
     x1, y1, x2, y2 = (int(v) for v in area)
     return (
         "/sc local s=game.surfaces[1]; local SN={} for k,v in pairs(defines.entity_status) do"
@@ -1054,8 +1218,8 @@ def probe_lua(area):
         "  a,v=pcall(function() return e.drop_position end) if a and v then d.dp={v.x,v.y} end;"
         "  a,v=pcall(function() return e.pickup_position end) if a and v then d.pp={v.x,v.y} end;"
         "  o[#o+1]=d end end;"
-        "storage._pgrid=helpers.table_to_json{ents=o}; rcon.print(#storage._pgrid)"
-        % (x1, y1, x2 + 1, y2 + 1))
+        % (x1, y1, x2 + 1, y2 + 1)
+        + "%s=helpers.table_to_json{ents=o};rcon.print(#%s)" % (store, store))
 
 
 def _batch(head, tail, entries):
@@ -1073,36 +1237,30 @@ def _batch(head, tail, entries):
     return cmds
 
 
-def _chunked(build_lua, key="_pgrid"):
-    """Run a builder command that stores JSON in storage.<key>, read it back in slices, then
-    clear the scratch. (One large RCON response truncates, and rcon.print appends a newline
-    to EACH response - every slice must be rstripped.)"""
-    n = int((rcon.run(build_lua) or "0").strip() or "0")
-    if n == 0:
-        return "{}"
-    parts, i = [], 1
-    while i <= n:
-        parts.append(rcon.run("/sc rcon.print(storage.%s:sub(%d,%d))"
-                              % (key, i, i + READ_CHUNK - 1)).rstrip("\r\n"))
-        i += READ_CHUNK
-    rcon.run("/sc storage.%s=nil" % key)
-    return "".join(parts)
+def _chunked(build_lua, what):
+    """rcon.read_chunked with this module's command-size ceiling checked on the way out.
+
+    `build_lua(store)` is the builder; the store name is minted per read, so the audit thread,
+    the builder loop and the pole verify can no longer clobber one another's buffer.
+    """
+    def build(store):
+        cmd = build_lua(store)
+        if len(cmd) > CMD_LIMIT:
+            raise ValueError("%s command is %d bytes (>%d)" % (what, len(cmd), CMD_LIMIT))
+        return cmd
+
+    return rcon.read_chunked(build, chunk=READ_CHUNK)
 
 
 def scan(area):
     """READ-ONLY live entity scan of `area` -> [entity dict] in principles.World shape."""
-    cmd = probe_lua(area)
-    if len(cmd) > CMD_LIMIT:
-        raise ValueError("probe command is %d bytes (>%d)" % (len(cmd), CMD_LIMIT))
-    return json.loads(_chunked(cmd)).get("ents", [])
+    return json.loads(_chunked(lambda store: probe_lua(area, store=store),
+                               "probe")).get("ents", [])
 
 
 def read_grid(area):
     """READ-ONLY: {'poles': [...], 'unpowered': [...]} for `area`."""
-    cmd = verify_lua(area)
-    if len(cmd) > CMD_LIMIT:
-        raise ValueError("verify command is %d bytes (>%d)" % (len(cmd), CMD_LIMIT))
-    return json.loads(_chunked(cmd))
+    return json.loads(_chunked(lambda store: verify_lua(area, store=store), "verify"))
 
 
 # ----------------------------------------------------------------------------- apply
@@ -1269,7 +1427,7 @@ def apply(plan, consumers=(), area=None, pole=POLE_DEFAULT, existing=(), anchor=
         raise ValueError("empty plan")
     boxes = [consumer_box(c) for c in consumers]
     bad = [f for f in validate(plan, consumers=consumers, obstacles=obstacles, pole=pole,
-                               anchor=anchor) if f["severity"] == "error"]
+                               anchor=anchor, existing=existing) if f["severity"] == "error"]
     if bad:
         raise GridError("refusing to apply: %s" % "; ".join(f["msg"] for f in bad[:4]))
     if area is None:
