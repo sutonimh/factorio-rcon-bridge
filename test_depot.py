@@ -208,3 +208,15 @@ def test_the_science_chain_builds_red_as_well_as_green():
     chain = src.split("chain = [", 1)[1].split("]", 1)[0]
     assert chain.count("automation-science-pack") >= 1, "red science is missing from the chain"
     assert chain.count("logistic-science-pack") >= 1, "green science fell out of the chain"
+
+
+def test_science_chain_never_blanket_clears():
+    """It used to call clear_area with a radius that SCALED WITH HOW MUCH WAS MISSING. That
+    never fired while the chain was complete; the moment red science was added it fired and
+    destroyed the two existing green assemblers it was walking over to reach. More missing ->
+    bigger blast radius is exactly backwards."""
+    import bootstrap
+    import inspect
+    src = inspect.getsource(bootstrap.automate_green_science)
+    assert "clear_area" not in src, "the science chain regained a blanket area clear"
+    assert "clear=1" in src, "each machine should clear only its own footprint"

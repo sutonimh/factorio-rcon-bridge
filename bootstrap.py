@@ -1651,19 +1651,29 @@ def automate_green_science(origin=(30, -16)):
     if _count("assembling-machine-1") < n:
         make("assembling-machine-1", n - _count("assembling-machine-1"))
     ox, oy = origin
-    A.now("Oil phase: building GREEN science assembler chain")
+    A.now("phase 0: building the science-pack assembler chain")
     A.stop(); A.walk(ox, oy + 4, tol=3.0)
-    A.clear_area(ox + n * 2, oy, n * 2 + 10)
+    # NO BLANKET clear_area HERE. It used to be `clear_area(ox+n*2, oy, n*2+10)` - a destroy
+    # whose RADIUS SCALED WITH HOW MUCH WAS MISSING. It never fired while the chain was
+    # green-only and complete (`need` was empty, so the function returned above it); the moment
+    # red science was added to the chain it fired with n=2 and destroyed the two existing green
+    # assemblers it was walking over to reach. More missing -> bigger blast radius -> more of
+    # the base destroyed, which is precisely backwards.
+    # Each machine now clears only its own footprint, and an occupied slot is SKIPPED rather
+    # than cleared: A.place refuses on ground it cannot legally build on.
     placed = 0
-    for k, recipe in enumerate(need):
-        x = ox + k * 4
-        r = A.place("assembling-machine-1", x, oy, clear=0).strip()
-        if "BUILT" in r:
-            A._print(f"/sc local s=game.surfaces[1]; local a=s.find_entities_filtered{{name='assembling-machine-1',position={{{x+1},{oy+1}}},radius=2}}[1]; if a then pcall(function() a.set_recipe('{recipe}') end) end")
-            placed += 1
-        A.place("small-electric-pole", x + 1, oy + 3, clear=1)
-    # dedupe any pole overlap we just created
-    dedupe_poles()
+    slot = 0
+    for recipe in need:
+        x = None
+        for _ in range(24):                      # walk the row for the next free 3x3 slot
+            x = ox + slot * 4
+            slot += 1
+            r = A.place("assembling-machine-1", x, oy, clear=1).strip()
+            if "BUILT" in r:
+                A._print(f"/sc local s=game.surfaces[1]; local a=s.find_entities_filtered{{name='assembling-machine-1',position={{{x+1},{oy+1}}},radius=2}}[1]; if a then pcall(function() a.set_recipe('{recipe}') end) end")
+                placed += 1
+                A.place("small-electric-pole", x + 1, oy + 3, clear=1)
+                break
     return placed
 
 
