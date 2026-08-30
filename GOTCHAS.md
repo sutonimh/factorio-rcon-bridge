@@ -1038,3 +1038,16 @@ belt/underground/container and undoes itself if not, and separately verifies pow
 unpowered electric drill mines nothing) and reverts to a fuelled burner drill if it cannot be
 powered. GENERAL RULE: any tier swap must re-verify the ENTIRE interface it participates in -
 footprint, drop/pickup tiles, power, and fuel - not just that create_entity succeeded.
+
+## PLAN, then place - and ADJUST rather than revert (Seth, 2026-08-30)
+
+"Why are you reverting instead of adjusting the belts? Check space requirements and outputs
+before placing anything; a plan should be in place to ensure routing before you place things."
+`plan_mine_geometry(ore)` is that plan for a mine: it derives the lane row and span FROM THE
+DRILLS, clears the lane row of anything that isn't lane (relocating my own poles instead of
+deleting them, collecting spilled items), fills missing lane tiles, then makes every drill's
+drop_position land on the lane by ROTATING it, and only nudging its position if rotation
+can't work. Reverting an upgrade is the last resort, never the first move. electrify_mines
+now calls this after a swap, so a footprint change repairs the routing instead of undoing the
+upgrade. Two self-inflicted wounds this taught: my pole line was placed ON the mine's belt
+row (blocking it), and a burner<->electric revert shifted drills onto the lane itself.

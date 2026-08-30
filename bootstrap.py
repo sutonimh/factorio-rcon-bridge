@@ -1770,6 +1770,99 @@ def scrub_mixed_ore():
             "if n>0 then game.print('scrub_mixed_ore: pulled '..n..' wrong-ore items') end")
 
 
+def plan_mine_geometry(ore, apply=True):
+    """PLAN-THEN-PLACE for a mine row (Seth, 2026-08-30: "check space requirements and outputs
+    before placing anything; a plan should be in place to ensure routing").
+
+    Computes the intended layout from the DRILLS themselves - drill row, its drop row, the
+    belt lane - then makes the world match it:
+      1. the drop row must be a clear BELT lane: anything else there (poles I dropped on it,
+         spilled items) is moved/collected, never left to block the lane;
+      2. every drill's drop_position must land ON that lane; a drill that doesn't is rotated
+         or nudged so it does - the drill is ADJUSTED, never reverted to a worse tier;
+      3. missing lane tiles are filled, all pointing at the lane exit.
+    Returns a dict describing the plan and what changed."""
+    spot = STATE.get(ore) or A.richest_spot(ore, 0, 0, radius=160)
+    if not spot:
+        return {"error": "no patch"}
+    rx, ry = int(spot[0]), int(spot[1])
+    raw = A._print(
+        f"/sc local s=game.surfaces[1]; local o={{}};"
+        f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='mining-drill'}}) do"
+        "  local dp=d.drop_position;"
+        "  o[#o+1]=d.name..'|'..math.floor(d.position.x)..'|'..math.floor(d.position.y)..'|'..d.direction"
+        "        ..'|'..math.floor(dp.x)..'|'..math.floor(dp.y) end;"
+        "rcon.print(table.concat(o,';'))").strip()
+    drills = []
+    for rec in raw.split(";"):
+        f = rec.split("|")
+        if len(f) == 6:
+            drills.append({"name": f[0], "x": int(f[1]), "y": int(f[2]), "d": int(f[3]),
+                           "dx": int(f[4]), "dy": int(f[5])})
+    if not drills:
+        return {"error": "no drills"}
+    # the lane row is where most drills already drop
+    from collections import Counter
+    lane_y = Counter(d["dy"] for d in drills).most_common(1)[0][0]
+    xs = [d["x"] for d in drills]
+    lo, hi = min(xs) - 1, max(xs) + 2
+    plan = {"ore": ore, "lane_y": lane_y, "span": [lo, hi], "drills": len(drills)}
+    if not apply:
+        return plan
+    # 1) clear the lane row of NON-belt obstructions (my own poles ended up here), collect items
+    A._print(
+        f"/sc local s=game.surfaces[1]; local inv=storage.derpface.get_main_inventory(); local moved=0;"
+        f"for _,e in pairs(s.find_entities_filtered{{area={{{{{lo},{lane_y}}},{{{hi},{lane_y + 1}}}}}}}) do"
+        "  local ty=e.type;"
+        "  if ty=='item-entity' then local st=e.stack; if st and st.valid_for_read then inv.insert{name=st.name,count=st.count} end; e.destroy(); moved=moved+1"
+        "  elseif ty=='electric-pole' then"
+        # relocate the pole two tiles off the lane instead of deleting the power link
+        "    local px,py=e.position.x,e.position.y; local nm=e.name; inv.insert{name=nm,count=1}; e.destroy();"
+        "    for _,off in pairs({{0,-2},{0,2},{-2,0},{2,0}}) do"
+        "      if inv.get_item_count(nm)>0 and s.can_place_entity{name=nm,position={px+off[1],py+off[2]},force='player'} then"
+        "        local np=s.create_entity{name=nm,position={px+off[1],py+off[2]},force='player'};"
+        "        if np then inv.remove{name=nm,count=1}; break end end end; moved=moved+1"
+        "  elseif ty~='transport-belt' and ty~='underground-belt' and ty~='mining-drill' and ty~='resource' and e.name~='character' then"
+        "    inv.insert{name=e.name,count=1}; e.destroy(); moved=moved+1 end end;"
+        "if moved>0 then game.print('lane row cleared: '..moved) end")
+    # 2) fill the lane across the span (direction set later by fix_mine_row_flow)
+    A._print(
+        f"/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory(); local made=0;"
+        f"for x={lo},{hi} do"
+        f"  if #s.find_entities_filtered{{position={{x+0.5,{lane_y}+0.5}},radius=0.4,type={{'transport-belt','underground-belt'}}}}==0 then"
+        "    if inv.get_item_count('transport-belt')<1 then"
+        "      local g=inv.get_item_count('iron-gear-wheel'); local pl=inv.get_item_count('iron-plate');"
+        "      if g>=1 and pl>=1 then inv.remove{name='iron-gear-wheel',count=1}; inv.remove{name='iron-plate',count=1}; inv.insert{name='transport-belt',count=2}"
+        "      elseif pl>=3 then inv.remove{name='iron-plate',count=3}; inv.insert{name='transport-belt',count=2} end end;"
+        f"    if inv.get_item_count('transport-belt')>0 and s.can_place_entity{{name='transport-belt',position={{x+0.5,{lane_y}+0.5}},direction=4,force=f}} then"
+        f"      s.create_entity{{name='transport-belt',position={{x+0.5,{lane_y}+0.5}},direction=4,force=f}};"
+        "      inv.remove{name='transport-belt',count=1}; made=made+1 end end end;"
+        "if made>0 then game.print('lane tiles filled: '..made) end")
+    # 3) ADJUST each drill (rotate, then nudge) until its drop lands on the lane - never revert
+    fixed = A._print(
+        f"/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory(); local n=0;"
+        f"local function onlane(p) return math.floor(p.y)=={lane_y} and #s.find_entities_filtered{{position=p,radius=0.5,type={{'transport-belt','underground-belt'}}}}>0 end;"
+        f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='mining-drill'}}) do"
+        "  if not onlane(d.drop_position) then"
+        "    local nm,pos,dir=d.name,d.position,d.direction; local done=false;"
+        "    for _,nd in pairs({0,4,8,12}) do if not done then"
+        "      d.direction=nd; if onlane(d.drop_position) then done=true; n=n+1 end end end;"
+        "    if not done then"                       # rotation failed: nudge the drill one row
+        "      d.direction=dir; inv.insert{name=nm,count=1}; d.destroy();"
+        "      for _,off in pairs({{0,-1},{0,1},{-1,0},{1,0}}) do"
+        "        if inv.get_item_count(nm)>0 then"
+        "          local np={pos.x+off[1], pos.y+off[2]};"
+        "          if s.can_place_entity{name=nm,position=np,direction=8,force=f} then"
+        "            local e=s.create_entity{name=nm,position=np,direction=8,force=f};"
+        "            if e and onlane(e.drop_position) then inv.remove{name=nm,count=1}; n=n+1; break"
+        "            elseif e then e.destroy() end end end end end end end;"
+        "rcon.print(n)").strip()
+    plan["drills_adjusted"] = fixed
+    fix_mine_row_flow(ore)
+    status.log(f"plan_mine_geometry({ore}): lane y={lane_y} span={lo}..{hi}, drills adjusted={fixed}")
+    return plan
+
+
 def fix_mine_row_flow(ore):
     """FLOW-DIRECTION self-heal for a mine's drop row (GOTCHAS: belt flow must point AT the
     consumer). The iron row was half-west half-east (drills fed both; the east half ran ore
@@ -2221,7 +2314,7 @@ def electrify_mines():
             "  if e then local dp=e.drop_position; local ok=false;"
             "    for _,q in pairs(s.find_entities_filtered{position=dp,radius=0.5}) do"
             "      if q.type=='transport-belt' or q.type=='underground-belt' or q.type=='container' then ok=true end end;"
-            "    if not ok then e.destroy(); e=nil end end;"
+            "    if not ok then e.destroy(); e=nil end end;"   # geometry is repaired below, not reverted
             "  if e then inv.remove{name='electric-mining-drill',count=1}; n=n+1"
             "  else local rb=s.create_entity{name='burner-mining-drill',position=pos,direction=dir,force=f};"
             "    if rb then inv.remove{name='burner-mining-drill',count=1} end end end;"
@@ -2245,6 +2338,7 @@ def electrify_mines():
             f"/sc local s=game.surfaces[1]; local n=0;"
             f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name='electric-mining-drill'}}) do"
             "  if d.status==defines.entity_status.no_power then n=n+1 end end; rcon.print(n)").strip()
+        plan_mine_geometry(ore)        # ADJUST the lane/drills to the new footprint first
         if still not in ("0", ""):
             status.log(f"electrify {ore}: {still} drills STILL unpowered - reverting them to burner")
             A._print(
