@@ -1669,6 +1669,8 @@ def scrub_mixed_ore():
     """Remove WRONG-ORE items from each smelter array's intake belts + furnace inputs (the
     shared-column era put copper on the iron lane; a furnace fed the wrong ore mixes plates
     on the output belt - GOTCHAS: never mix ores)."""
+    if operator_present():
+        return 0
     for ore, (ox, oy) in SMELT_ZONE.items():
         A._print(
             f"/sc local s=game.surfaces[1]; local inv=storage.derpface and storage.derpface.valid and storage.derpface.get_main_inventory(); if not inv then return end; local n=0;"

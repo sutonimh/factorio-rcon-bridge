@@ -30,6 +30,9 @@ import status
 
 import pathlib
 
+LAYOUT_ISSUES = {"lane_stalled", "arrays_starved", "consumers_unpowered",
+                 "grid_split", "no_progress"}   # suspended while the operator plays
+
 PREEMPT = {"want": None}            # set to an Issue id when a character fixer is needed
 _COOLDOWN = {}                      # issue id -> monotonic ts of last fix attempt (in-proc)
 _FAILS = {}                         # issue id -> consecutive verify failures
@@ -185,6 +188,11 @@ def controller_loop(stop_flag):
             d = sense()
             issues = detect(d)
             live = [i for i in issues if time.monotonic() - _COOLDOWN.get(i.id, 0) > i.cooldown]
+            if live and B.operator_present():
+                # truce: LAYOUT issues aren't even attempted while a human plays (they were
+                # logging 'fixing' and no-oping, which made the log lie). Power/fuel/research
+                # servicing continues - it moves items, never structures.
+                live = [i for i in live if i.id not in LAYOUT_ISSUES]
             if live:
                 top = live[0]
                 _COOLDOWN[top.id] = time.monotonic()
