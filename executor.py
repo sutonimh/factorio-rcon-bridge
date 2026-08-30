@@ -253,7 +253,8 @@ def _op_belt_path(args, order):
     wps = [tuple(int(v) for v in w) for w in args["waypoints"]]
     if len(wps) < 2:
         raise ExecError("belt_path needs >=2 waypoints")
-    gaps = bootstrap.lay_belt_path(wps)
+    bootstrap.lay_belt_path(wps)
+    gaps = bootstrap.LAST_LAY_GAPS   # lay_belt_path returns its TILES now (lane registry)
     if gaps:
         raise ExecError("lay_belt_path left %d unbridged gaps" % gaps)
     # post-condition: read back the path tiles; endpoints MUST hold belt (mid-path tiles may

@@ -639,6 +639,9 @@ def build_smelter_array(ore, n=8):
     ensure_grid_connected()
 
 
+LAST_LAY_GAPS = 0        # unbridged gaps from the most recent lay_belt_path (verification)
+
+
 def lay_belt_path(waypoints):
     """Lay a transport-belt along an L-path of (x,y) CORNER waypoints, SERVER-SIDE (no walk),
     auto-undergrounding blocked spans up to 5 tiles. REPLACES autopilot.build_belt for long
@@ -687,7 +690,9 @@ def lay_belt_path(waypoints):
         "      pcall(function() s.create_entity{name='underground-belt',position={T[j][1]+0.5,T[j][2]+0.5},direction=T[j][3],type='output',force=f} end);"
         "    else gaps=gaps+1 end; i=j+1 end end;"
         "rcon.print(gaps)").strip()
-    _ = int(gaps or 0)          # gap count is diagnostic; callers need the TILES to register
+    # callers need the TILES (lane registry); the gap count stays available for verification
+    global LAST_LAY_GAPS
+    LAST_LAY_GAPS = int(gaps or 0)
     return laid_tiles
 
 
