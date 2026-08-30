@@ -215,6 +215,9 @@ def phase0(p):
     A.purpose("phase 0: science I/O cells + powering them")
     B.setup_science_io()
     B.ensure_science_cells()   # delta-build any recipe cells the all-or-nothing pass missed
+    A.purpose("phase 0: coal belt to the boiler (self-sustaining power)")
+    B.coal_to_boiler()
+    B.electrify_mines()        # no-op until electric-mining-drill is researched
     A.purpose("phase 0: locating crude oil for phase 1")
     scout_oil(p)
 

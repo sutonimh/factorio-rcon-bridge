@@ -709,6 +709,9 @@ def build_belt_supply():
     mine to its array by belt (no more character ore-hauling), run a coal belt to the arrays, and
     a plate belt from the arrays to a science feed chest. Large; runs as a queued build task on
     Charon so derpface builds it. Iron array may already exist (built + validated by hand)."""
+    if operator_present():
+        status.log("build_belt_supply: operator online - deferring layout work")
+        return
     build_smelter_array("iron-ore", 16)
     build_smelter_array("copper-ore", 12)
     for _ore in ("iron-ore", "copper-ore"):
@@ -1507,6 +1510,8 @@ def fix_unpowered(limit=8):
     it to the engine's network if it landed as an island. power_row VERIFIED coverage but
     nothing ACTED on the gaps - the 2026-08-29 science-cell stall (5 assemblers + inserters
     dark on a healthy grid) was exactly this. Server-side, no walk."""
+    if operator_present():
+        return 0
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
         "local eng=s.find_entities_filtered{name='steam-engine'}[1]; if not eng or eng.energy<=0 then return end; local main=eng.electric_network_id;"
@@ -1548,12 +1553,23 @@ def _lane_connected(ore):
         "/sc local s=game.surfaces[1]; local seen={}; local q={}; local best=1e9;"
         f"for _,b in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,type='transport-belt'}}) do q[#q+1]=b end;"
         "local n=0;"
+        "local DV={[0]={0,-1},[4]={1,0},[8]={0,1},[12]={-1,0}};"
         "while #q>0 and n<800 do local b=table.remove(q); n=n+1;"
         "  local k=math.floor(b.position.x)..':'..math.floor(b.position.y);"
         "  if not seen[k] then seen[k]=true;"
         f"    local d=math.abs(b.position.x-({ax}))+math.abs(b.position.y-({ay}));"
         "    if d<best then best=d end;"
-        "    for _,o in pairs(b.belt_neighbours.outputs) do if o.type=='transport-belt' then q[#q+1]=o end end end end;"
+        "    for _,o in pairs(b.belt_neighbours.outputs) do"
+        "      if o.type=='transport-belt' then q[#q+1]=o"
+        # geometric underground hop: 2.1 belt_neighbours omits the partner entirely
+        "      elseif o.type=='underground-belt' and o.belt_to_ground_type=='input' then"
+        "        local dv=DV[o.direction];"
+        "        for k2=1,6 do local px,py=o.position.x+dv[1]*k2, o.position.y+dv[2]*k2;"
+        "          local pr=s.find_entities_filtered{position={px,py},radius=0.4,name='underground-belt'}[1];"
+        "          if pr and pr.belt_to_ground_type=='output' and pr.direction==o.direction then"
+        "            for _,o2 in pairs(pr.belt_neighbours.outputs) do if o2.type=='transport-belt' then q[#q+1]=o2 end end;"
+        f"            local d2=math.abs(px-({ax}))+math.abs(py-({ay})); if d2<best then best=d2 end;"
+        "            break end end end end end end;"
         "rcon.print(math.floor(best))").strip()
     try:
         return int(out) <= 6
@@ -1613,7 +1629,9 @@ def fix_mine_row_flow(ore):
         "for _,b in pairs(row) do local y=math.floor(b.position.y);"
         "  if y==ry2 then local x=math.floor(b.position.x);"
         "    local want=(x>exitx) and 12 or ((x<exitx) and 4 or b.direction);"
-        "    if b.direction~=want and x~=exitx then b.direction=want; n=n+1 end end end;"
+        # never touch the exit/corner zone (exitx +-1): a bulk re-point once swept the corner
+        # east and the full row dead-ended at it (copper, 2026-08-30)
+        "    if b.direction~=want and math.abs(x-exitx)>1 then b.direction=want; n=n+1 end end end;"
         "if n>0 then game.print('fix_mine_row_flow: pointed '..n..' belts at the row exit') end")
 
 
@@ -1625,6 +1643,8 @@ def ensure_lanes(lap=0):
     array by belt connectivity - no chest shuttles where a belt belongs, no trusting that a lay
     finished. Verify each ore lane by BFS; a broken lane gets fully re-laid via
     connect_mine_to_array (exact-tile path layer joins misaligned rows with a corner)."""
+    if operator_present():
+        return 0                            # operator truce: never fight manual edits
     fixed = 0
     scrub_mixed_ore()
     fix_mine_row_flow("coal")               # no dedicated array lane yet; flow fix only
@@ -1655,6 +1675,118 @@ def ensure_lanes(lap=0):
     return fixed
 
 
+_OP_CACHE = {"t": 0.0, "present": False}
+
+
+def operator_present():
+    """True while a real player is connected (Seth editing by hand). Layout-modifying
+    self-heals SUSPEND during manual edits - the repairer un-deleting his deletions
+    ("something keeps putting things back") was the final straw, 2026-08-30."""
+    import time as _t
+    if _t.monotonic() - _OP_CACHE["t"] < 10:
+        return _OP_CACHE["present"]
+    out = A._print("/sc rcon.print(#game.connected_players)").strip()
+    _OP_CACHE["t"] = _t.monotonic()
+    try:
+        _OP_CACHE["present"] = int(out) > 0
+    except ValueError:
+        pass
+    return _OP_CACHE["present"]
+
+
+def coal_to_boiler():
+    """SELF-SUSTAINING POWER (Seth, 2026-08-30): belt coal from the coal lane to the boiler
+    with a splitter tap + burner inserter, so the plant feeds itself and keep_power's
+    hand-feed becomes a backup. Idempotent: skips when a fed boiler inserter exists."""
+    if operator_present():
+        return False
+    b = A._print(
+        "/sc local s=game.surfaces[1]; local b=s.find_entities_filtered{name='boiler',limit=1}[1];"
+        "if not b then rcon.print('none') return end;"
+        "local bi=s.find_entities_filtered{position=b.position,radius=3,name='burner-inserter'}[1];"
+        "local fed=false;"
+        "if bi then local pp=bi.pickup_position;"
+        "  fed=#s.find_entities_filtered{position=pp,radius=0.5,type='transport-belt'}>0 end;"
+        "rcon.print(math.floor(b.position.x)..','..math.floor(b.position.y)..','..tostring(fed))").strip()
+    if b == "none":
+        return False
+    bx, by, fed = b.split(",")
+    if fed == "true":
+        return True
+    bx, by = int(bx), int(by)
+    A.purpose("belting coal to the boiler so power self-sustains")
+    # materials
+    if _count("transport-belt") < 40:
+        make("transport-belt", 45)
+    if _count("splitter") < 1:
+        make("splitter", 1)
+    if _count("burner-inserter") < 1:
+        make("burner-inserter", 1)
+    # splitter tap on the coal row (y=15, flowing east): span y15-16 at x=-36
+    A._print(
+        "/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory();"
+        "if #s.find_entities_filtered{position={-35.5,16.0},radius=0.6,name='splitter'}==0 then"
+        "  local old=s.find_entities_filtered{position={-35.5,15.5},radius=0.4,type='transport-belt'}[1]; if old then old.destroy() end;"
+        "  local sp=s.create_entity{name='splitter',position={-35.5,16.0},direction=4,force=f};"
+        "  if sp then inv.remove{name='splitter',count=1} end end")
+    # branch belt: from the splitter's south output east one tile, then a column south to the
+    # boiler row, then west to the inserter pickup tile
+    lay_belt_path([(-35, 16), (-34, 16), (-34, by - 1), (-36, by - 1), (-36, by), (-36, by + 1)])
+    # burner inserter: picks the belt column (west), drops into the boiler (east)
+    A._print(
+        f"/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory();"
+        f"local b2=s.find_entities_filtered{{name='boiler',limit=1}}[1];"
+        f"if #s.find_entities_filtered{{position={{{bx - 1},{by}}},radius=1.2,name='burner-inserter'}}==0 then"
+        f"  local i=s.create_entity{{name='burner-inserter',position={{{bx - 1}+0.5,{by}+0.5}},direction=4,force=f}};"
+        f"  if i then inv.remove{{name='burner-inserter',count=1}};"
+        f"    i.pickup_position={{{bx - 2}+0.5,{by}+0.5}}; i.drop_position=b2.position;"
+        "    local c=math.min(5,inv.get_item_count('coal')); if c>0 then i.insert{name='coal',count=c}; inv.remove{name='coal',count=c} end end end")
+    status.log("coal_to_boiler: splitter tap + belt + inserter placed")
+    return True
+
+
+def electrify_mines():
+    """ELECTRIC DRILLS (Seth's priority): once electric-mining-drill is researched, swap each
+    burner drill for an electric one AT THE EXACT POSITION/DIRECTION (GOTCHAS swap rule),
+    after ensuring pole coverage at the mine. Idempotent + incremental (a few per pass)."""
+    if not _tech_done("electric-mining-drill"):
+        return 0
+    burners = int(A._print("/sc rcon.print(#game.surfaces[1].find_entities_filtered{name='burner-mining-drill'})").strip() or "0")
+    if burners == 0:
+        return 0
+    A.purpose("swapping burner drills for electric (mines self-power, no more coal fueling)")
+    need = min(burners, 6)
+    if _count("electric-mining-drill") < need:
+        make("electric-mining-drill", need)
+    for ore in ("iron-ore", "copper-ore", "coal"):
+        spot = STATE.get(ore)
+        if not spot:
+            continue
+        rx, ry = int(spot[0]), int(spot[1])
+        # pole coverage first (electric drills on an unpowered mine = dead mine)
+        import fle_tools
+        try:
+            fle_tools.connect((0, 0), (rx, ry), "pole")
+        except Exception as e:
+            status.log(f"electrify {ore}: pole run failed: {e}")
+            continue
+        if _count("small-electric-pole") < 6:
+            make("small-electric-pole", 10)
+        A._print(
+            f"/sc local s=game.surfaces[1]; local f=game.forces.player; local inv=storage.derpface.get_main_inventory(); local n=0;"
+            f"for _,d in pairs(s.find_entities_filtered{{position={{{rx},{ry}}},radius=26,name='burner-mining-drill'}}) do"
+            "  if n>=3 or inv.get_item_count('electric-mining-drill')<1 then break end;"
+            "  local pos,dir=d.position,d.direction;"
+            "  local fi=d.get_fuel_inventory(); if fi then for _,c in pairs(fi.get_contents()) do inv.insert{name=c.name,count=c.count} end end;"
+            "  inv.insert{name='burner-mining-drill',count=1}; d.destroy();"
+            "  local e=s.create_entity{name='electric-mining-drill',position=pos,direction=dir,force=f};"
+            "  if e then inv.remove{name='electric-mining-drill',count=1}; n=n+1"
+            "  else local rb=s.create_entity{name='burner-mining-drill',position=pos,direction=dir,force=f};"
+            "    if rb then inv.remove{name='burner-mining-drill',count=1} end end end;"
+            "if n>0 then game.print('electrified '..n..' drills') end")
+    return 1
+
+
 def repair_belt_gaps(max_span=30):
     """BELT CONTINUITY self-heal: a lane with a mid-route break starves everything downstream
     (GOTCHAS: a belt lane must be CONTINUOUS). Interrupted lay_belt_path runs (restart mid-lay,
@@ -1662,6 +1794,8 @@ def repair_belt_gaps(max_span=30):
     find dead-end belts, and where the SAME lane resumes within max_span tiles in the belt's
     direction, bridge the span with belts from inventory (script-crafting from plates/gears if
     short). No continuation found = leave it (could be a legit terminus) - log only."""
+    if operator_present():
+        return 0
     A._print(
         "/sc local p=storage.derpface; if not (p and p.valid) then return end; local s=p.surface; local f=p.force; local inv=p.get_main_inventory();"
         "local D={[0]={0,-1},[4]={1,0},[8]={0,1},[12]={-1,0}};"
@@ -1706,6 +1840,8 @@ def ensure_grid_connected():
     fragmented-generator failure - engine islanded from the base, so the whole base browns out and
     the smelter arrays lose power - now repairs ITSELF each power cycle instead of needing a human
     to re-bridge. Pairs with dedupe_poles no longer deleting connector poles. Server-side, no walk."""
+    if operator_present():
+        return
     A._print(
         "/sc local s=game.surfaces[1]; local f=game.forces.player;"
         "local cnt={}; for _,p in pairs(s.find_entities_filtered{type='electric-pole'}) do cnt[p.electric_network_id]=(cnt[p.electric_network_id] or 0)+1 end;"
