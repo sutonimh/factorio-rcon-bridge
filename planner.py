@@ -1491,6 +1491,16 @@ def phase0(p):
     """
     gate_reset()                # every pass gates against a freshly sensed world
     pass_reset()                # ...and counts what this pass actually built and refused
+    # ROOM TO BUILD, BEFORE ANY GATE IS ASKED. A full inventory makes can_insert false for every
+    # item, so the crafter produces nothing and A.place refuses with NO_ITEM - and none of that
+    # is visible from up here: the pass just looks gate-blocked. Cheap and idempotent (a free-
+    # space read, then nothing) so it belongs at the top of the pass rather than behind a
+    # condition someone has to remember to check. See bootstrap.ensure_inventory_room.
+    try:
+        B.ensure_inventory_room()
+    except Exception as e:
+        status.log("depot: offload failed (%s: %s) - continuing; builds may hit NO_ITEM"
+                   % (type(e).__name__, str(e)[:120]))
     for name, fn in PHASE0_STAGES:
         if B.operator_present():
             status.log("operator online mid-pass - stopping phase 0 before stage %s" % name)
