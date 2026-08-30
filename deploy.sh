@@ -19,6 +19,8 @@ scp ./blueprints/library/* charon:"$CHARON_DIR"/blueprints/library/
 # GOTCHAS: a process kill mid-walk leaves walking_state=true (character runs forever).
 # Best-effort stop before the restart; ignore failures (server may be down).
 FACTORIO_RCON_HOST=100.100.199.83 FACTORIO_RCON_PORT=27015 python3 rcon.py "/sc if storage.derpface and storage.derpface.valid then storage.derpface.walking_state={walking=false} end" || true
-echo "==> restart the autopilot container"
-ssh charon "sudo docker restart factorio-autopilot"
+echo "==> restart the autopilot + dashboard containers"
+# factorio-dash is a SEPARATE container: it re-reads dashboard.html per request, but dashboard.py
+# is loaded once at start, so a shipped dashboard.py did nothing until this restart existed.
+ssh charon "sudo docker restart factorio-autopilot factorio-dash"
 echo "==> deployed. status: ssh charon cat $CHARON_DIR/status.json"
