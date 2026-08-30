@@ -1,0 +1,7220 @@
+{
+ "ents": [
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -33.5,
+   "y": -67.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -31.5,
+   "y": -65.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -34.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -32.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -33.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -42.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "working",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -43.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -42.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 6
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -42.5,
+   "y": 17.5,
+   "d": 0,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -40.5,
+   "y": 11.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -39.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -40.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -41.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -39.5,
+   "y": 17.5,
+   "d": 0,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -40.5,
+   "y": 19.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -38.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -39.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -37.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 22.5,
+   "d": 8,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 23.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 24.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 25.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 26.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 27.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 28.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 29.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 30.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 31.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -35.5,
+   "y": 12.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -35.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -34.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -35.5,
+   "y": 19.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -35.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -34.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -35.5,
+   "y": 26.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -32.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -33.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -33.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -32.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 32.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 33.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 34.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 35.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 36.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 37.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 38.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 39.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 40.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 41.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 42.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 43.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 44.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 45.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 46.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 47.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -36.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -35.5,
+   "y": 33.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "steam-engine",
+   "t": "generator",
+   "x": -33.5,
+   "y": 37.5,
+   "d": 0,
+   "s": "working",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -35.5,
+   "y": 40.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "steam-engine",
+   "t": "generator",
+   "x": -33.5,
+   "y": 42.5,
+   "d": 0,
+   "s": "working",
+   "e": 535
+  },
+  {
+   "n": "boiler",
+   "t": "boiler",
+   "x": -33.5,
+   "y": 46,
+   "d": 0,
+   "s": "working",
+   "fuel": 5
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -34.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -35.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "burner-inserter",
+   "t": "inserter",
+   "x": -33.5,
+   "y": 47.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "fuel": 1
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -32.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -33.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "offshore-pump",
+   "t": "offshore-pump",
+   "x": -31.5,
+   "y": 51.5,
+   "d": 8,
+   "s": "working"
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -28.5,
+   "y": -65.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -27.5,
+   "y": -67.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -25.5,
+   "y": -65.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -22.5,
+   "y": -65.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -20.5,
+   "y": -67.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -64.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -30.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -31.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 3
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -28.5,
+   "y": -61.5,
+   "d": 0,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -28.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -29.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": -25.5,
+   "y": -61.5,
+   "d": 0,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -27.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -26.5,
+   "y": -59.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -24.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -25.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -22.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -23.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -22.5,
+   "y": -60.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -20.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -21.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -18.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -19.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -16.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -17.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -14.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -15.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -57.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -50.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -43.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -36.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -12.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -13.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -10.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -11.5,
+   "y": -63.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -10.5,
+   "y": -44.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -63.5,
+   "d": 8,
+   "s": "working",
+   "items": 5
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -62.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -60.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -61.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -58.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -59.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -56.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -57.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -54.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -55.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -52.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -53.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -50.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -51.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -48.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -49.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -46.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -47.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -44.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -45.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -43.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -41.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -40.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -38.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -39.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -36.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -37.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -34.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -35.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -32.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -33.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -40.5,
+   "d": 8,
+   "s": "working",
+   "items": 5
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -6.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -38.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -39.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -36.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -37.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -34.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -35.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -32.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -33.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -4.5,
+   "y": -44.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -1.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -0.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -29.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -22.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -15.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -8.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": -1.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -30.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -31.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -28.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -29.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -26.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -27.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -24.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -25.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -22.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -23.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -20.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -21.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -18.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -19.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -16.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -17.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -14.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -15.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -12.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -13.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -10.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -11.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -8.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -9.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -6.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -7.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -4.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -5.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -2.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -3.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -0.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": -1.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -30.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -31.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -28.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -29.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -26.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -27.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -24.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -25.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -22.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -23.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -20.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -21.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -18.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -19.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -16.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -17.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -14.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -15.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -12.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -13.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -10.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -11.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -8.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -9.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -6.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -7.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -4.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -5.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -2.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -3.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -0.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": -1.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -31.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -30.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -31.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -30.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "splitter",
+   "t": "splitter",
+   "x": -28.5,
+   "y": 16,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -29.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -29.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -28.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -28.5,
+   "y": 26.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -27.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 17.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -27.5,
+   "y": 16.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 19.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 18.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 21.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 20.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -27.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -26.5,
+   "y": 22.5,
+   "d": 12,
+   "s": "working",
+   "items": 5
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -24.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -25.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -22.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -23.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -20.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -21.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -21.5,
+   "y": 26.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -18.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -19.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -16.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -17.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": 5.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": 12.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -14.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -15.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": 19.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -14.5,
+   "y": 26.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -12.5,
+   "y": 10.5,
+   "d": 4,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -12.5,
+   "y": 11.5,
+   "d": 0,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "splitter",
+   "t": "splitter",
+   "x": -12,
+   "y": 13.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -12.5,
+   "y": 12.5,
+   "d": 0,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -12.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -13.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -11.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -11.5,
+   "y": 10.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -10.5,
+   "y": 10.5,
+   "d": 4,
+   "bg": "input"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -11.5,
+   "y": 11.5,
+   "d": 4,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -10.5,
+   "y": 11.5,
+   "d": 4,
+   "bg": "input"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -11.5,
+   "y": 12.5,
+   "d": 0,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -11.5,
+   "y": 14.5,
+   "d": 0,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -11.5,
+   "y": 15.5,
+   "d": 0,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -10.5,
+   "y": 15.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -10.5,
+   "y": 17.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 1.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 0.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 3.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 2.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 5.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 6.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 9.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 8.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -8.5,
+   "y": 10.5,
+   "d": 4,
+   "bg": "output"
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -8.5,
+   "y": 11.5,
+   "d": 4,
+   "bg": "output"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 11.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 10.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 12.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 15.5,
+   "d": 8,
+   "s": "working"
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -9.5,
+   "y": 14.5,
+   "d": 8,
+   "bg": "input"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 17.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -9.5,
+   "y": 16.5,
+   "d": 8,
+   "bg": "output"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 19.5,
+   "d": 4,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -8.5,
+   "y": 19.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -9.5,
+   "y": 18.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 1.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 0.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 3.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 2.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -6.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 5.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -6.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 6.5,
+   "d": 8,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 9.5,
+   "d": 0,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -6.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 10.5,
+   "d": 0,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 11.5,
+   "d": 8,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -6.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 12.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -6.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 15.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 14.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -6.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -6.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 19.5,
+   "d": 0,
+   "s": "working",
+   "items": 7
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -7.5,
+   "y": 18.5,
+   "d": 0,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 3
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -5.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": -5,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -5.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 3
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -5.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": -5,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -5.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -5.5,
+   "y": 20.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -4.5,
+   "y": 24.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -5.5,
+   "y": 27.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -4.5,
+   "y": 31.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -2.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -3.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": -3,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -2.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -3.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -2.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -3.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": -3,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -2.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -3.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -1.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -0.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": -1,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -0.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -1.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -0.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -1.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": -1,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -0.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -1.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -0.5,
+   "y": 21.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -0.5,
+   "y": 23.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 0.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": -1.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "steam-engine",
+   "t": "generator",
+   "x": -29.5,
+   "y": 37.5,
+   "d": 0,
+   "s": "working",
+   "e": 535
+  },
+  {
+   "n": "steam-engine",
+   "t": "generator",
+   "x": -29.5,
+   "y": 42.5,
+   "d": 0,
+   "s": "working",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -31.5,
+   "y": 40.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "boiler",
+   "t": "boiler",
+   "x": -29.5,
+   "y": 46,
+   "d": 0,
+   "s": "working",
+   "fuel": 5
+  },
+  {
+   "n": "pipe-to-ground",
+   "t": "pipe-to-ground",
+   "x": -31.5,
+   "y": 47.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "pipe",
+   "t": "pipe",
+   "x": -31.5,
+   "y": 46.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "pipe-to-ground",
+   "t": "pipe-to-ground",
+   "x": -31.5,
+   "y": 49.5,
+   "d": 8,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -30.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -31.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "pipe",
+   "t": "pipe",
+   "x": -30.5,
+   "y": 50.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "pipe",
+   "t": "pipe",
+   "x": -31.5,
+   "y": 50.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "burner-inserter",
+   "t": "inserter",
+   "x": -29.5,
+   "y": 47.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "fuel": 1
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -29.5,
+   "y": 48.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "pipe",
+   "t": "pipe",
+   "x": -28.5,
+   "y": 50.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "pipe",
+   "t": "pipe",
+   "x": -29.5,
+   "y": 50.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "pipe",
+   "t": "pipe",
+   "x": -27.5,
+   "y": 50.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -5.5,
+   "y": 34.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -4.5,
+   "y": 36.5,
+   "d": 8,
+   "bg": "output"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 37.5,
+   "d": 8,
+   "s": "working"
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -5.5,
+   "y": 38.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -4.5,
+   "y": 38.5,
+   "d": 0,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -5.5,
+   "y": 40.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -5.5,
+   "y": 42.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -4.5,
+   "y": 42.5,
+   "d": 8,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 43.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 45.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 45.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 44.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 44.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -4.5,
+   "y": 46.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -5.5,
+   "y": 46.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -3.5,
+   "y": 36.5,
+   "d": 8,
+   "bg": "output"
+  },
+  {
+   "n": "underground-belt",
+   "t": "underground-belt",
+   "x": -2.5,
+   "y": 36.5,
+   "d": 0,
+   "bg": "input"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 37.5,
+   "d": 8,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 37.5,
+   "d": 8,
+   "s": "working"
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -2.5,
+   "y": 38.5,
+   "d": 0,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -3.5,
+   "y": 38.5,
+   "d": 0,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -3.5,
+   "y": 42.5,
+   "d": 8,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -2.5,
+   "y": 42.5,
+   "d": 8,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 43.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 43.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 45.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 44.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 44.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 45.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -2.5,
+   "y": 46.5,
+   "d": 0,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": -3.5,
+   "y": 46.5,
+   "d": 4,
+   "s": "working"
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -1.5,
+   "y": 34.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 0.5,
+   "y": 36.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -0.5,
+   "y": 34.5,
+   "d": 8,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -1.5,
+   "y": 38.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 0.5,
+   "y": 40.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 39.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -0.5,
+   "y": 38.5,
+   "d": 8,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 41.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -1.5,
+   "y": 40.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -1.5,
+   "y": 42.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 0.5,
+   "y": 44.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -0.5,
+   "y": 42.5,
+   "d": 0,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": -1.5,
+   "y": 46.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": -0.5,
+   "y": 46.5,
+   "d": 0,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 0.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": -1.5,
+   "y": 50.5,
+   "d": 0
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 0.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 1.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 2.5,
+   "y": -44.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 2.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 3.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 4.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 5.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 6.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 7.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 9.5,
+   "y": -44.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 8.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 9.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 10.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 11.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": 14.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 12.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 13.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 13.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": 16.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 14.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 15.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 14.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 15.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 16.5,
+   "y": -44.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": 18.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 16.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 17.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 16.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 17.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": 20.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 18.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 19.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 18.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 19.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": 22.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 20.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 21.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 20.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 21.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 22.5,
+   "y": -44.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "electric-mining-drill",
+   "t": "mining-drill",
+   "x": 24.5,
+   "y": -42.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 22.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 23.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 22.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 23.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 24.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working",
+   "items": 3
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 25.5,
+   "y": -40.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 24.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 25.5,
+   "y": -41.5,
+   "d": 12,
+   "s": "working"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 0.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 1.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 1.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 1,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 1.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 1.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 0.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 1.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 1.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 0.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 1,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 1.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 1.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 0.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 0.5,
+   "y": 19.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 2.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 3.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 3,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 3.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 2.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 3.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 2.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 3,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 3.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 2.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 4.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 2.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 2.5,
+   "y": 31.5,
+   "d": 12
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 4.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 5.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 5.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 4.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 5,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 5.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 4.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 5.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 4.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 5.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 5.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 4.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 4.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 5,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 5.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 4.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 5.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 4.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 6.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 7.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 7,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 7.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 6.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 7.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 6.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 7,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 7.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 6.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 8.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 6.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 6.5,
+   "y": 31.5,
+   "d": 12
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 8.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 9.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 9.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 8.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 9,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 9.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 8.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 9.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 8.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 9.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 9.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 8.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 8.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 9,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 9.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 8.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 9.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 8.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 10.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 11.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 11,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 11.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 10.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 11.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 10.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 11,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 11.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 10.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 12.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 10.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 10.5,
+   "y": 31.5,
+   "d": 12
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 12.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 13.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 13.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 12.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 13,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 13.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 12.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 13.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 12.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 13.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 13.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 12.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 12.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 13,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 13.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 12.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 13.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 12.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 14.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 15.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 14.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 15,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 14.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 15.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 14.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 15.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 14.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 14.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 15,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 14.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 15.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 14.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 16.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 31.5,
+   "d": 12
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 16.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 17.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 17.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 16.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 17,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 17.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 16.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 17.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 16.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 17.5,
+   "y": 13.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 17.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 16.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 16.5,
+   "y": 13.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 17,
+   "y": 15,
+   "d": 0,
+   "s": "full_output",
+   "r": "copper-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 17.5,
+   "y": 16.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 16.5,
+   "y": 16.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 16.5,
+   "y": 17.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 18.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 19.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 18.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 19,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 18.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 19.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 18.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 18.5,
+   "y": 12.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 19.5,
+   "y": 12.5,
+   "d": 12,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 20.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 31.5,
+   "d": 12
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 20.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 21.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 21.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 20.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 21,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 21.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 20.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 21.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 20.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "iron-chest",
+   "t": "container",
+   "x": 20.5,
+   "y": 12.5,
+   "d": 0,
+   "s": "normal"
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 22.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 23.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 22.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 23,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 22.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 23.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 22.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 24.5,
+   "y": 32.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 30.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 31.5,
+   "d": 12
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 24.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 25.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 25.5,
+   "y": 4.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 24.5,
+   "y": 4.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "stone-furnace",
+   "t": "furnace",
+   "x": 25,
+   "y": 6,
+   "d": 0,
+   "s": "full_output",
+   "r": "iron-plate",
+   "fuel": 5
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 25.5,
+   "y": 7.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 24.5,
+   "y": 7.5,
+   "d": 8,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 24.5,
+   "y": 8.5,
+   "d": 4,
+   "s": "working",
+   "items": 8
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 27.5,
+   "y": 3.5,
+   "d": 12,
+   "s": "waiting_for_space_in_destination",
+   "e": 535
+  },
+  {
+   "n": "transport-belt",
+   "t": "transport-belt",
+   "x": 26.5,
+   "y": 3.5,
+   "d": 4,
+   "s": "working",
+   "items": 4
+  },
+  {
+   "n": "iron-chest",
+   "t": "container",
+   "x": 28.5,
+   "y": 3.5,
+   "d": 0,
+   "s": "normal"
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 1.5,
+   "y": 34.5,
+   "d": 8,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 34.5,
+   "d": 8,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 1.5,
+   "y": 38.5,
+   "d": 8,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 38.5,
+   "d": 8,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 1.5,
+   "y": 42.5,
+   "d": 0,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 42.5,
+   "d": 0,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 1.5,
+   "y": 46.5,
+   "d": 0,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 0.5,
+   "y": 46.5,
+   "d": 0,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 33.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 2.5,
+   "y": 32.5,
+   "d": 12
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 2.5,
+   "y": 34.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 4.5,
+   "y": 36.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 35.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 36.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 37.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 2.5,
+   "y": 38.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 4.5,
+   "y": 40.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 39.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 41.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 40.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 2.5,
+   "y": 42.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 4.5,
+   "y": 44.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 43.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 44.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 45.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 2.5,
+   "y": 46.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 2.5,
+   "y": 47.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 4.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 2.5,
+   "y": 48.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 2.5,
+   "y": 49.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 2.5,
+   "y": 50.5,
+   "d": 0
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 33.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 6.5,
+   "y": 32.5,
+   "d": 12
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 6.5,
+   "y": 34.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 8.5,
+   "y": 36.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 35.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 36.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 37.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 6.5,
+   "y": 38.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 8.5,
+   "y": 40.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 39.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 41.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 40.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 6.5,
+   "y": 42.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "lab",
+   "t": "lab",
+   "x": 8.5,
+   "y": 44.5,
+   "d": 0,
+   "s": "no_research_in_progress",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 43.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 44.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 45.5,
+   "d": 12,
+   "s": "waiting_for_source_items",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 6.5,
+   "y": 46.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 6.5,
+   "y": 47.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 8.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 6.5,
+   "y": 48.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 6.5,
+   "y": 49.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 6.5,
+   "y": 50.5,
+   "d": 0
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 33.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 10.5,
+   "y": 32.5,
+   "d": 12
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 10.5,
+   "y": 34.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 35.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 12.5,
+   "y": 36.5,
+   "d": 0
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 37.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 36.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 10.5,
+   "y": 38.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 39.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 12.5,
+   "y": 40.5,
+   "d": 0
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 41.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 40.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 10.5,
+   "y": 42.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 43.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 12.5,
+   "y": 44.5,
+   "d": 0
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 44.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 45.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "small-electric-pole",
+   "t": "electric-pole",
+   "x": 10.5,
+   "y": 46.5,
+   "d": 0,
+   "e": 535
+  },
+  {
+   "n": "inserter",
+   "t": "inserter",
+   "x": 10.5,
+   "y": 47.5,
+   "d": 12,
+   "s": "waiting_for_target_to_be_built",
+   "e": 535
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 12.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 10.5,
+   "y": 48.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 10.5,
+   "y": 49.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 10.5,
+   "y": 50.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 32.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 33.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 16.5,
+   "y": 36.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 35.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 34.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 37.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 36.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 39.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 16.5,
+   "y": 40.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 38.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 40.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 41.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 42.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 16.5,
+   "y": 44.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 43.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 45.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 44.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 16.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 46.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 47.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 48.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 49.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 14.5,
+   "y": 50.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 32.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 33.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 20.5,
+   "y": 36.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 35.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 34.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 37.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 36.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 39.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 20.5,
+   "y": 40.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 38.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 40.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 41.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 42.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 20.5,
+   "y": 44.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 43.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 45.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 44.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 20.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 46.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 47.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 48.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 49.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 18.5,
+   "y": 50.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 32.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 33.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 35.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 24.5,
+   "y": 36.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 34.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 37.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 36.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 39.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 24.5,
+   "y": 40.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 38.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 40.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 41.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 42.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 24.5,
+   "y": 44.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 43.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 45.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 44.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 24.5,
+   "y": 48.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 46.5,
+   "d": 0
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 47.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 48.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 49.5,
+   "d": 12
+  },
+  {
+   "n": "entity-ghost",
+   "t": "entity-ghost",
+   "x": 22.5,
+   "y": 50.5,
+   "d": 0
+  }
+ ],
+ "globals": {
+  "tick": 1453100,
+  "research": "",
+  "research_pct": -1,
+  "iron_pm": 0,
+  "copper_pm": 0,
+  "coal_pm": 1,
+  "red_pm": 0,
+  "green_pm": 0
+ },
+ "captured_at": "2026-08-29 21:18:48"
+}

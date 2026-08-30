@@ -1302,3 +1302,48 @@ pre-laid pipes for a boiler column that doesn't exist yet - each costs something
 removes a future rebuild, and the bot has margin nowhere; (3) **honest stopping** - a consumer
 ahead of its supply is a liability that occupies tiles, demands pole coverage for nothing, and
 emits a false green signal. The bot cannot stop, because its notion of progress is THINGS BUILT.
+
+## A BOILER BURNS FOR ITS LOAD, NOT FOR EXISTING (measured 2026-08-29) — the coal deadlock
+
+The gates deadlocked the base for a day. The log line looked authoritative:
+
+    gate BLOCK: power_capacity x1 [coal_at_boiler] - coal 120/min < 178/min - mine more coal
+
+It was wrong. Measured against the running game with the game's own statistics:
+
+    boilers=2 engines=4 gen_kW=405.2 coal_mined_pm=120.0 coal_consumed_pm=6.0
+
+`boilers * BOILER_COAL_PER_MIN` predicted **54/min**. The truth was **6.0/min**, and it is
+exactly `405.2 kW * 60 s / 4 MJ = 6.08`. A boiler is not a fire that burns whether you use it
+or not: it converts fuel in proportion to the steam its engines are actually asked for. The
+plant was running at 11% load while the gate demanded 178 coal/min to protect it.
+
+Two consequences, both fatal:
+  * **capacity became self-blocking** — every boiler column raised the demand it had to
+    satisfy, so the base could never grow its own power;
+  * the only relief the ladder could then find was **12 burner coal drills**, on a map where
+    the operator had just converted every burner to electric and deleted their fuel belts.
+    A wrong model does not fail politely; it proposes undoing the operator's work.
+
+**THE RULE.** Coal demand is `min(load, capacity) * 60 / COAL_FUEL_MJ` plus fed furnaces. And
+the gate's bound is FUELABILITY, not a multiplier: the plant AFTER the build, charged at full
+tilt, must be something the mine can actually run. That keeps the real protection (four
+columns behind one drill is still refused) without inventing a constraint.
+
+Note what `COAL_HEADROOM_MIN = 1.5` was: "measured 120 supplied / 77 demanded = 1.56" — a
+margin calibrated from the output of the very model it was multiplying. **A constant derived
+from a model cannot validate that model.** If a threshold's justification cites a number the
+code itself computed, it has not been measured; go and measure it against the game.
+
+## NO TIER REGRESSION: never relieve a constraint by rebuilding what the operator removed
+
+`relief_drill` returns `None` — not `burner-mining-drill` — once a single electric drill stands
+on the base. If the grid cannot carry another electric drill, the honest relief is MORE POWER,
+and if that is blocked too then the base is genuinely cornered and the deadlock detector says
+so. Reporting "no move" is correct; smuggling in a tier the operator has already torn out and
+calling it progress is not.
+
+Same law for sizing: `_relief_mine` counts the drills that ACTUALLY STAND (RCON
+`find_entities_filtered` at the patch) rather than trusting `phase.json`. The ledger said
+`have=0` while four electric coal drills were standing on the patch — planning from it would
+have laid a second outpost on top of a working one.

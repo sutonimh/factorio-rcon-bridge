@@ -241,17 +241,22 @@ def test_first_power_column_is_unconditional():
     assert ok is True, why
 
 
-def test_third_boiler_column_blocked_on_coal():
-    """Measured ceiling: 2*27 + 17*1.35 = 77/min demand against 120 mined = 1.56x. A third
-    column takes demand past what a 50/50 splitter tap can carry."""
+def test_boiler_columns_are_capped_by_what_the_mine_can_fuel():
+    """The bound is FUELABILITY: the plant after the build, at full tilt, must be something the
+    mine can actually run. On after.json the mine delivers 120 coal/min and the fed furnaces
+    take 22.95, so 97 remain — enough to run 6.5 MW of boilers.
+
+    ONE more column (5.4 MW total = 81/min) fits and is allowed; TWO (7.2 MW = 108/min) do not
+    and are refused. The old model charged every INSTALLED boiler at full tilt whether it was
+    loaded or not, which made capacity self-blocking and refused even the first column."""
     after = snap("after")
     if after is None:
         print("    (skipped: snapshots/ not present)")
         return
-    assert round(G.coal_demand_per_min(after), 2) == 76.95
-    assert round(G.flow(after, "coal") / G.coal_demand_per_min(after), 2) == 1.56
-    ok, why = G.gate("power_capacity", 1, after)
-    assert ok is False and "coal" in why
+    assert round(G.furnace_coal_per_min(after), 2) == 22.95
+    assert G.gate("power_capacity", 1, after)[0] is True
+    ok, why = G.gate("power_capacity", 2, after)
+    assert ok is False and "coal_at_boiler" in why and "at full tilt" in why, why
 
 
 def test_coal_gate_blocks_at_zero_mined():
@@ -347,9 +352,23 @@ def test_derived_constants_match_the_measured_ones():
 
 
 def test_idle_furnaces_do_not_count_as_coal_demand():
+    """17 of 28 furnaces are fed; the 11 at no_ingredients burn nothing. With no electric
+    consumers in the census the plant is unloaded, so the whole demand is the furnaces."""
     st = state(counts={"boiler": 2, "steam-engine": 4, "stone-furnace": 28},
                status={"stone-furnace": {"working": 14, "full_output": 3, "no_ingredients": 11}})
-    assert round(G.coal_demand_per_min(st), 2) == 76.95      # 2*27 + 17*1.35
+    assert round(G.coal_demand_per_min(st), 2) == 22.95      # 17 * 1.35, no electric load
+
+
+def test_idle_boilers_do_not_count_as_coal_demand():
+    """MEASURED 2026-08-29 on the live map: 2 boilers, 4 engines, 405.2 kW generated, and the
+    game's own consumption statistic reading 6.0 coal/min. Charging installed boilers at full
+    tilt predicted 54/min and manufactured the coal deadlock - the gate demanded 178 coal/min
+    against 120 supplied to protect a plant that was running at 11% load."""
+    st = state(counts={"boiler": 2, "steam-engine": 4, "electric-mining-drill": 4},
+               status={})
+    # 4 drills = 360 kW; a boiler converts fuel for the work asked of it, not for existing
+    assert round(G.coal_demand_per_min(st), 2) == 5.4         # 0.36 MW * 60 / 4 MJ
+    assert G.coal_demand_per_min(st) < 6.0 * 1.2, "must land near the measured 6.0/min"
 
 
 # --------------------------------------------------------------------------- LAW 4
