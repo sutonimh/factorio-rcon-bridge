@@ -235,6 +235,8 @@ def controller_loop(stop_flag):
                     B.fuel_drills()
                     B.fuel_arrays()
                     B.restock_coal()
+                if lap % 4 == 0:
+                    B.reconcile_removals()   # operator deletions -> protected, always
                 if lap % 10 == 0:
                     B.reap_dead_drills()
                     B.keep_power()

@@ -699,6 +699,7 @@ def lay_belt_path(waypoints):
     # callers need the TILES (lane registry); the gap count stays available for verification
     global LAST_LAY_GAPS
     LAST_LAY_GAPS = int(gaps or 0)
+    record_built(laid_tiles)      # consent mechanism: we remember what WE placed
     return laid_tiles
 
 
@@ -747,6 +748,7 @@ def teardown_lane(ore, keep=()):
     except ValueError:
         n = 0
     if n:
+        forget_built(old)         # our own teardown - do NOT mistake it for an operator edit
         status.log(f"teardown_lane({ore}): removed {n} superseded belt tiles (refunded)")
     return n
 
@@ -1828,6 +1830,69 @@ def repair_plate_rows():
 
 
 
+
+
+def _built_load():
+    import json as _j
+    import pathlib as _pl
+    f = _pl.Path(__file__).resolve().parent / "built-tiles.json"
+    try:
+        return set(tuple(x) for x in _j.loads(f.read_text()))
+    except (OSError, ValueError):
+        return set()
+
+
+def _built_save(tiles):
+    import json as _j
+    import pathlib as _pl
+    f = _pl.Path(__file__).resolve().parent / "built-tiles.json"
+    try:
+        f.write_text(_j.dumps(sorted(list(tiles))))
+    except OSError:
+        pass
+
+
+def record_built(tiles):
+    """Remember every belt tile the BOT placed. Paired with reconcile_removals() this is the
+    durable consent mechanism - it needs no login/logoff edge, survives restarts, and cannot
+    be bypassed by a manual or architect-driven call."""
+    if not tiles:
+        return
+    _built_save(_built_load() | set(tuple(t) for t in tiles))
+
+
+def forget_built(tiles):
+    """The bot removed these itself (teardown/supersede) - not an operator deletion."""
+    if not tiles:
+        return
+    _built_save(_built_load() - set(tuple(t) for t in tiles))
+
+
+def reconcile_removals():
+    """THE RULE (Seth, 2026-08-30, after I rebuilt his deletions twice): if the bot built a
+    tile, that tile is now EMPTY, and the bot did not remove it, then a human removed it -
+    protect it forever and never rebuild. Runs continuously, so it does not depend on
+    catching a logoff edge or on any in-memory snapshot surviving a restart."""
+    built = _built_load()
+    if not built:
+        return 0
+    known = sorted(built)[:900]
+    spec = ";".join(f"{x},{y}" for (x, y) in known)
+    out = A._print(
+        "/sc local s=game.surfaces[1]; local gone={};"
+        "for a,b in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+)') do"
+        "  local x,y=tonumber(a),tonumber(b);"
+        "  if #s.find_entities_filtered{position={x+0.5,y+0.5},radius=0.4,"
+        "     type={'transport-belt','underground-belt','splitter'}}==0 then gone[#gone+1]=x..','..y end end;"
+        "rcon.print(table.concat(gone,';'))").strip()
+    gone = set(tuple(map(int, s.split(","))) for s in out.split(";") if "," in s)
+    if not gone:
+        return 0
+    _protected_save(_protected_load() | gone)
+    _built_save(built - gone)
+    status.log(f"reconcile: {len(gone)} bot-built tiles were removed by the OPERATOR "
+               f"-> protected forever (never rebuild)")
+    return len(gone)
 
 
 def _protected_load():
