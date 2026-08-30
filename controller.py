@@ -30,8 +30,9 @@ import status
 
 import pathlib
 
+INVARIANT_ID = "invariant_violation"
 LAYOUT_ISSUES = {"lane_stalled", "arrays_starved", "consumers_unpowered",
-                 "grid_split", "no_progress"}   # suspended while the operator plays
+                 "grid_split", "no_progress", INVARIANT_ID}   # suspended while the operator plays
 
 PREEMPT = {"want": None}            # set to an Issue id when a character fixer is needed
 _COOLDOWN = {}                      # issue id -> monotonic ts of last fix attempt (in-proc)
@@ -153,6 +154,14 @@ def detect(d):
         add(Issue("research_idle", 2, "no current research", _fix_research, cooldown=30))
     if 0 <= d.get("free_slots", -1) < 5:
         add(Issue("inventory_clogged", 2, f"free_slots={d['free_slots']}", B.trim_inventory))
+    # STRUCTURAL invariants, filled asynchronously by the audit battery (a census cannot see
+    # them). severity comes from the worst finding: an islanded pole or a mixed/merged lane is
+    # supply-chain (1); an off-lattice or obsolete one is progress (2).
+    if _INV["findings"]:
+        codes = sorted({f["code"] for f in _INV["findings"]})
+        add(Issue(INVARIANT_ID, min(f["sev"] for f in _INV["findings"]),
+                  "%d structural finding(s): %s" % (len(_INV["findings"]), ", ".join(codes[:6])),
+                  _report_invariants, cooldown=30))
     return sorted(issues, key=lambda i: i.sev)
 
 
@@ -175,6 +184,170 @@ def _fix_science():
 def _fix_research():
     B._advance_research()
     return 1
+
+
+# ------------------------------------------------------- INVARIANTS (read-only audit battery)
+# The detectors above sense STATE ("is anything stalled right now"). These sense STRUCTURE:
+# the standing properties the operator's hand-optimization proved the bot kept violating - a
+# split grid, off-lattice poles, mixed/merged/duplicate lanes, lanes nothing draws from. None
+# of them shows up in a status census, which is why 107 poles could be laid over 2 networks
+# and 92 belts of parallel duplicates could accumulate without one line in the log.
+INVARIANT_PERIOD_S = 300      # a chunked area scan + one belt trace per lane: not a 3s job
+INVARIANT_REPORT_MAX = 8      # findings named per issue; the log is a report, not a dump
+INVARIANT_MIN_TILES = 20      # below this the base has no invariants worth auditing
+INVARIANT_MAX_SPAN = 400      # tiles per side; a bigger box is a survey, not an audit
+_INV = {"t": 0.0, "busy": False, "findings": [], "ran": 0}
+_PRINCIPLE_SEV = {"error": 1, "warn": 2, "info": 3}
+
+
+def _invariant_area(pad=12):
+    """The box the audits cover: everything THIS BOT recorded building, padded and clamped.
+
+    The built-tile ledger is the honest scope. It is the same ledger reconcile_removals uses
+    to tell our own construction from the operator's, so the audit can never wander onto
+    ground nobody has touched and start having opinions about it. None when too little is
+    built to audit.
+    """
+    try:
+        built = B._built_load()
+    except Exception:
+        return None
+    tiles = [(int(t[0]), int(t[1])) for t in built
+             if isinstance(t, (list, tuple)) and len(t) >= 2]
+    if len(tiles) < INVARIANT_MIN_TILES:
+        return None
+    xs = sorted(t[0] for t in tiles)
+    ys = sorted(t[1] for t in tiles)
+    x1, y1, x2, y2 = xs[0] - pad, ys[0] - pad, xs[-1] + pad, ys[-1] + pad
+    # Clamp around the centroid rather than skipping: a base that has spread past the cap
+    # still deserves an audit of its core, and an unbounded scan is how a "read-only" pass
+    # turns into a multi-megabyte chunked read.
+    cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+    h = INVARIANT_MAX_SPAN // 2
+    return (max(x1, cx - h), max(y1, cy - h), min(x2, cx + h), min(y2, cy + h))
+
+
+def _finding(src, code, sev, pos, detail):
+    return {"src": src, "code": str(code), "sev": int(sev),
+            "pos": [int(pos[0]), int(pos[1])] if pos else None, "detail": str(detail)[:220]}
+
+
+def _run_invariants():
+    """READ-ONLY audit battery -> findings. Writes NOTHING, ever.
+
+      power_planner.audit(area)     off-lattice / redundant / ISLANDED poles. The islanded
+                                    check is the one that would have caught net 405 - six
+                                    electric drills on a network with no generator in it.
+      lane_lint.lint_lane(trace)    per REGISTERED supply lane: MIXED_ITEMS, DEAD_END, DRAIN,
+                                    DIRECTION_SPLIT, SIDELOAD_CONTENTION, STARVED.
+      supply_planner.retire_obsolete(dry_run=True)
+                                    lanes nothing draws from, and parallel duplicates. DRY
+                                    RUN: in that mode it neither writes nor probes for the
+                                    truce, and the teardown it describes is left to a builder
+                                    pass, never done from here.
+
+    Every remediation these findings imply is CONSTRUCTION, and construction belongs to the
+    builder - gated by build_gates, applied through buildplan, suspended by the truce and by
+    BUILDER_ENABLED=0. So this returns findings and stops.
+    """
+    out = []
+    try:
+        prot = {(int(t[0]), int(t[1])) for t in B._protected_load()}
+    except Exception as e:
+        status.log("invariants: protected-tile registry unreadable (%s) - aborting the audit "
+                   "rather than reporting his deletions as defects" % e)
+        return []
+
+    area = _invariant_area()
+    if area:
+        try:
+            import power_planner
+            for f in power_planner.audit(area):
+                out.append(_finding("power", f.get("check", "?"),
+                                    _PRINCIPLE_SEV.get(f.get("severity"), 2),
+                                    f.get("pos"), f.get("msg", "")))
+        except Exception as e:
+            status.log("invariants: power audit failed (%s)" % e)
+
+    try:
+        import lane_lint
+        import supply_planner
+        for rec in supply_planner.lanes(status=supply_planner.ACTIVE):
+            head = rec.get("from")
+            if not head:
+                continue
+            tr = lane_lint.trace(int(head[0]), int(head[1]))
+            for f in lane_lint.lint_lane(tr, expect=rec.get("item")):
+                out.append(_finding("lane:%s" % rec.get("item"), f["code"], f["sev"],
+                                    (f["x"], f["y"]), f["detail"]))
+    except Exception as e:
+        status.log("invariants: lane lint failed (%s)" % e)
+
+    try:
+        import supply_planner
+        for row in supply_planner.retire_obsolete(dry_run=True):
+            if not row.get("id"):
+                continue                        # the truce/refusal row, not a finding
+            out.append(_finding("obsolete", "OBSOLETE_LANE", 2, None,
+                                "%s %s: %s" % (row["id"], row.get("item"), row.get("reason"))))
+    except Exception as e:
+        status.log("invariants: retire_obsolete dry-run failed (%s)" % e)
+
+    # BUILD LAW 3. A finding ON a tile the operator deliberately cleared is not a defect, it
+    # is his intent. Dropping it here is what stops the audit becoming the next thing in this
+    # codebase that argues with his deletions.
+    kept = [f for f in out if not (f["pos"] and tuple(f["pos"]) in prot)]
+    if len(kept) != len(out):
+        status.log("invariants: %d finding(s) dropped on operator-protected tiles"
+                   % (len(out) - len(kept)))
+    return [f for f in kept if f["sev"] <= 2]        # info-level findings are not issues
+
+
+def _invariant_worker():
+    try:
+        _INV["findings"] = _run_invariants()
+        _INV["ran"] += 1
+        if _INV["findings"]:
+            status.log("invariants: %d finding(s) from the audit battery"
+                       % len(_INV["findings"]))
+    except Exception as e:
+        status.log("invariants: audit battery error: %s" % e)
+    finally:
+        _INV["busy"] = False
+
+
+def _report_invariants():
+    """The INVARIANT fixer: REPORT and LEARN. Deliberately not a repairer.
+
+    A controller that "fixed" a lattice violation would be relaying poles - i.e. doing exactly
+    the unrequested building the operator switched the builder off to stop, from the one loop
+    BUILDER_ENABLED does not gate. So the fix for "an invariant is violated" is that it stops
+    being invisible: it lands in the log and, deduped by key, in lessons.
+    """
+    fs, _INV["findings"] = _INV["findings"], []
+    if not fs:
+        return 0
+    for f in fs[:INVARIANT_REPORT_MAX]:
+        status.log("invariant[%d] %s/%s%s: %s"
+                   % (f["sev"], f["src"], f["code"],
+                      (" @%d,%d" % (f["pos"][0], f["pos"][1])) if f["pos"] else "",
+                      f["detail"]))
+    if len(fs) > INVARIANT_REPORT_MAX:
+        status.log("invariant: +%d more finding(s) this pass" % (len(fs) - INVARIANT_REPORT_MAX))
+    by_src = {}
+    for f in fs:
+        by_src.setdefault(f["src"], []).append(f)
+    for src, group in sorted(by_src.items()):
+        codes = sorted({g["code"] for g in group})
+        lessons.add(condition="invariant violated: %s" % src,
+                    mistake="%d finding(s): %s" % (len(group), ", ".join(codes)),
+                    rule="the audit is not the repair - re-PLAN this through its planner "
+                         "module (power_planner / supply_planner / mine_planner_v2) so the "
+                         "replacement supersedes what is standing instead of joining it",
+                    evidence=group[0]["detail"],
+                    tags=("controller", "invariant", src.split(":")[0]),
+                    key="invariant:%s:%s" % (src, ",".join(codes)))
+    return len(fs)
 
 
 # --------------------------------------------------------------------- loop
@@ -240,6 +413,15 @@ def controller_loop(stop_flag):
                 if lap % 10 == 0:
                     B.reap_dead_drills()
                     B.keep_power()
+                if (lap % 5 == 0 and not _INV["busy"] and not B.operator_present()
+                        and time.monotonic() - _INV["t"] > INVARIANT_PERIOD_S):
+                    # STRUCTURAL audit, on its own slow clock and its own thread: it is
+                    # READ-ONLY but it is several chunked reads, and it must never delay the
+                    # 3s state loop. Suspended while a human is connected - findings taken
+                    # mid-edit describe his work in progress, not a defect.
+                    _INV["t"] = time.monotonic()
+                    _INV["busy"] = True
+                    threading.Thread(target=_invariant_worker, daemon=True).start()
                 if lap % 7 == 0 and d.get("engines") and not _TRIAGE_BUSY["b"]:
                     # residual-anomaly triage (4B, v2): rules own known signatures; the model
                     # judges the residue WITH trend, routes to a real actuator, and identical
@@ -303,7 +485,13 @@ def controller_loop(stop_flag):
                     threading.Thread(target=lambda: B.learn_from_operator_edits(_w),
                                      daemon=True).start()
                 status.log("operator logged off - running cleanup + deferred layout work")
-                for fn in ("cleanup_orphan_cells", "repair_plate_rows", "coal_to_boiler"):
+                # coal_to_boiler is NO LONGER run here. plant_planner supersedes it (its
+                # splitter tap sat ON the ore patch, its spur descended INTO the engine
+                # footprint, and its inserter's pickup_position was a pipe tile), and the coal
+                # lane is now planned+verified by supply_planner in the phase program, where
+                # BUILDER_ENABLED and the gates apply. Re-running the old builder here would
+                # rebuild that defect from the one loop the builder switch does not gate.
+                for fn in ("cleanup_orphan_cells", "repair_plate_rows"):
                     try:
                         getattr(B, fn)()
                     except Exception as e:

@@ -6,10 +6,37 @@ play() drives a FRESH map with no user assistance: run the current phase's build
 loop with the learning-loop lap hook (triage every lap batch, architect on escalation,
 failures codified into lessons).
 
-Phase programs build through bootstrap.py primitives + builds_v2 (registered into world.py).
-Phase state persists to phase.json (runtime file, gitignored) so a container restart resumes.
+PHASE 0 IS NOW A PLANNER PIPELINE, NOT A LIST OF AD-HOC BUILDERS (2026-08-30). Every stage
+that places anything obeys the same three-step contract:
+
+    build_gates.gate(structure, n)     ADMISSION - is this stage allowed to exist yet?
+    <planner>.plan_*(...)              PLAN THE WHOLE THING, purely, before placing a tile
+    <planner>.build/apply(plan)        buildplan: plan -> apply -> VERIFY -> rollback
+
+so a build that fails its functional check leaves NOTHING behind (BUILD LAW 2 - the rollback
+is buildplan's, in the same pass), and a build that has no business existing yet is never
+started (the operator deleted 2 labs, 1 assembler and 9 chest+inserter pairs that were all
+admissible-looking placements of things nothing consumed).
+
+    stage            planner module        gate structure     supersedes
+    plant            plant_planner         power_capacity     bootstrap.power / power_row
+    spine            power_planner         power_grid         bootstrap.power_row
+    mines            mine_planner_v2       mine_outpost       bootstrap.build_mine_outpost
+    array grid       power_planner         power_grid         build_smelter_array's pole rows
+    ore/coal lanes   supply_planner        ore_lane           bootstrap.connect_mine_to_array
+                                                              + bootstrap.coal_to_boiler
+    electrify        mine_planner_v2       mine_outpost       bootstrap.electrify_mines
+
+The superseded bootstrap functions are LEFT IN PLACE and simply not called from here: they
+are still reachable from operator2's command catalog and the controller's own heals, and
+deleting them is a separate change.
+
+Phase state persists to phase.json (runtime file, gitignored) so a container restart resumes;
+`builds` maps a stage key -> the buildplan id it produced, which is how a stage knows it is
+already done without re-scanning the world.
 """
 import json
+import math
 import os
 import pathlib
 import time
@@ -17,9 +44,15 @@ import traceback
 
 import autopilot as A
 import bootstrap as B
-import builds_v2
+import build_gates
+import buildplan
 import lessons
+import mine_planner_v2
+import plant_planner
+import power_planner
+import principles
 import status
+import supply_planner
 import techdb
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -187,40 +220,691 @@ def scout_oil(p, max_radius=480):
     return None
 
 
-def phase0(p):
-    """Crash site -> automated red+green science + registered mines + oil scouted.
-    Every step is idempotent; failures raise (play() records the lesson and retries next pass)."""
+# ------------------------------------------------------------------ phase 0 build spec
+# The operator's own numbers (snapshots/after.json), not invented ones: 1 boiler : 2 engines
+# exactly, 16 iron furnaces on 6 drills (1.67x) and 12 copper on 4 (1.88x), both under the
+# measured 2.0 pre-build ceiling.
+MINE_DRILLS = (("iron-ore", 8), ("copper-ore", 6), ("coal", 6))
+SMELTERS = (("iron-ore", 16), ("copper-ore", 12))
+ELECTRIC_DRILL = "electric-mining-drill"
+BURNER_DRILL = "burner-mining-drill"
+POLE = "small-electric-pole"
+
+# The operator's own N-S transmission trunk column. Measured off his relay: x=-15 from y=-65
+# to y=26 is 91 tiles / 14 poles / 13 gaps of exactly 7 (power_planner's TRUNK_SPACING).
+SPINE_X = -15
+
+# What the plant is being built FOR. LAW 2 is "capacity LEADS the load it will carry", so the
+# plant is sized to the load the stages BEHIND it will add, not to the load standing today:
+# every drill the mine stage places, plus the two inserters per furnace the arrays need.
+PROJECTED_LOAD_KW = (
+    sum(n for _o, n in MINE_DRILLS) * build_gates.CONSUMER_KW[ELECTRIC_DRILL]
+    + 2 * sum(n for _o, n in SMELTERS) * build_gates.CONSUMER_KW["inserter"])
+
+
+def plant_columns_needed(st):
+    """Boiler columns still missing to lead PROJECTED_LOAD_KW by POWER_HEADROOM_MIN.
+
+    This is the arithmetic the operator did by hand: he ADDED a second boiler column BEFORE
+    electrifying 16 drills, because without it headroom would have gone 3.6/2.246 -> 0.80 and
+    the whole base would have browned out.
+    """
+    have = build_gates.capacity_mw(st)
+    need = (PROJECTED_LOAD_KW / 1000.0) * build_gates.POWER_HEADROOM_MIN
+    return max(0, int(math.ceil((need - have) / build_gates.BOILER_MW)))
+
+
+# ------------------------------------------------------------------ gate + build plumbing
+GATE_TTL_S = 20.0
+_GATE = {"st": None, "t": 0.0}
+
+
+def gate_state(force=False):
+    """ONE build_gates.sense() (a READ-ONLY census) per build pass, shared by every gate in it.
+
+    sense() RAISES when the read fails, deliberately: a gate that silently saw an empty world
+    would ALLOW everything, which is the exact failure build_gates exists to stop.
+    """
+    now = time.time()
+    if not force and _GATE["st"] is not None and now - _GATE["t"] < GATE_TTL_S:
+        return _GATE["st"]
+    _GATE["st"] = build_gates.sense(force=True)
+    _GATE["t"] = now
+    return _GATE["st"]
+
+
+def gate_reset():
+    """Drop the cached census so the next pass gates against a fresh world."""
+    _GATE["st"], _GATE["t"] = None, 0.0
+
+
+def gate(structure, n=1, params=None, state=None):
+    """ADMISSION CONTROL in front of every build (build_gates, LAWS 1-4). True = proceed.
+
+    A refusal is the NORMAL outcome early in a base and is never raised: raising would
+    abandon the rest of the pass, and the stages behind this one that ARE allowed would never
+    run. A gate that cannot EVALUATE - the census read failed, the structure is unknown, the
+    recipe is unknown - REFUSES. It never falls back to allow.
+    """
+    try:
+        st = gate_state() if state is None else state
+    except Exception as e:
+        status.log("gate %s x%d: census failed (%s) - REFUSED (a gate that cannot see the "
+                   "world must never allow)" % (structure, n, e))
+        return False
+    try:
+        ok, why = build_gates.gate(structure, n, st, params)
+    except Exception as e:
+        status.log("gate %s x%d: %s: %s - REFUSED" % (structure, n, type(e).__name__, e))
+        return False
+    status.log(("gate ALLOW: " if ok else "gate BLOCK: ") + why[:240])
+    return ok
+
+
+def gate_bootstrap(structure, n, exempt_while, why, params=None):
+    """gate() with a NAMED crash-site exemption that CLOSES on a measured condition.
+
+    Two steps place entities before any gate they own can possibly pass: the hand-mined spawn
+    furnaces (there is no drill yet to size an overbuild budget against) and the first
+    hand-fed lab (the pack FLOW the lab gate demands is precisely what this lab's research
+    unlocks). Skipping the gate quietly for them would make "every build is gated" a lie, so
+    the exemption is explicit, is logged every single time it fires, and `exempt_while` is the
+    measured predicate that ends it - after which the real gate is binding like everywhere else.
+    """
+    if not exempt_while:
+        return gate(structure, n, params=params)
+    status.log("gate EXEMPT %s x%d (crash-site bootstrap): %s" % (structure, n, why))
+    return True
+
+
+def verified(rec, what):
+    """True only for a buildplan record at status 'verified'.
+
+    Any other status means the build left NOTHING behind, which is the point: buildplan.apply
+    rolls its own placements back out of the ground in the SAME pass when the functional check
+    fails (BUILD LAW 2), and a refusal - truce, staleness, operator-protected route, superseded
+    plan - never placed anything at all. So a non-verified stage is logged and retried next
+    pass; it is never recorded as progress.
+    """
+    st = (rec or {}).get("status")
+    v = (rec or {}).get("verify") or {}
+    if st == "verified":
+        status.log("%s: VERIFIED - %s"
+                   % (what, str((v.get("check") or {}).get("detail", ""))[:180]))
+        return True
+    rb = v.get("rollback") or {}
+    reason = (v.get("refused") or (v.get("check") or {}).get("detail")
+              or ("no record" if rec is None else "status=%s" % st))
+    status.log("%s: NOT BUILT (%s) - %s%s"
+               % (what, st or "none", str(reason)[:220],
+                  (" [rolled back %s placed, %s not found]"
+                   % (rb.get("removed"), rb.get("not_found"))) if rb else ""))
+    return False
+
+
+def build_done(p, key):
+    """A stage is complete when the buildplan record it produced is STILL `verified`.
+
+    Keyed off the record rather than a boolean in phase.json so the answer survives a restart
+    and stays honest: a failed or rolled-back plan never reads done, and a plan the operator
+    superseded reads not-done, which lets the stage plan a fresh route instead of re-applying
+    a retired one (buildplan.apply refuses a superseded plan outright).
+    """
+    pid = (p.get("builds") or {}).get(key)
+    if not pid:
+        return False
+    try:
+        rec = buildplan.load(pid)
+    except (OSError, ValueError, KeyError):
+        return False
+    return (rec or {}).get("status") == "verified"
+
+
+def mark_build(p, key, rec):
+    """Record which buildplan owns a stage, so the next pass can skip it."""
+    p.setdefault("builds", {})[key] = (rec or {}).get("id")
+    save(p)
+
+
+def _pt(v, default=None):
+    return (int(v[0]), int(v[1])) if v else default
+
+
+# ------------------------------------------------------------------ phase 0 stages
+def stage_world(p):
+    """Crash site: world setup, scouting, the first coal, the hand-fed spawn furnaces.
+
+    Nothing here is a PLANNED build - it is the character mining by hand so there is enough
+    iron to craft a boiler at all. The spawn furnaces are burners (LAW 3 passive: 0 kW, 0
+    items locked) and are gated on `smelter_array`, under the one crash-site exemption that
+    closes the moment a real belt-fed array exists.
+    """
     A.purpose("phase 0 bootstrap: world setup + crash-site cleanup")
     B.setup_world()
     A.purpose("phase 0: scouting the richest ore patches + water")
     _scout_guarded(p)
-    A.purpose("phase 0: first coal so smelting can start")
+    A.purpose("phase 0: first coal so the plant can be hand-seeded")
     B.fuel()
+    try:
+        st = gate_state()
+    except Exception as e:
+        status.log("stage_world: census failed (%s) - skipping the spawn furnaces" % e)
+        return
+    drills = int(build_gates._f(st.get("counts", {}), ELECTRIC_DRILL)
+                 + build_gates._f(st.get("counts", {}), BURNER_DRILL))
+    if not gate_bootstrap("smelter_array", 12, exempt_while=(drills == 0),
+                          why="0 drills exist, so the overbuild budget has no denominator; "
+                              "these 12 spawn furnaces are hand-fed burners and the gate "
+                              "binds again as soon as one drill is mining",
+                          params={"ore": "iron-ore"}):
+        return
     A.purpose("phase 0: starter smelting rows at spawn")
     B.smelting_base()
-    A.purpose("phase 0: steam power plant at the lake")
-    if B.power() is None and not B._find("steam-engine", B.STATE["water"][0], B.STATE["water"][1], 30):
-        raise RuntimeError("power(): no working steam engine after build attempt")
+
+
+def stage_plant(p):
+    """POWER FIRST (LAW 2): the operator's SCALABLE steam plant, through plant_planner.
+
+    Supersedes bootstrap.power() / _build_boiler_engine - a single non-scalable column whose
+    west-side surface pipe run occupies the two rows the scalable design needs. plant_planner
+    plans the whole thing (4-tile column pitch, one riser chaining water through every boiler,
+    coal belt row, pole trunk + spurs), buildplan places it, and the acceptance test is a
+    FLUID/ENERGY read - pump 100 / boiler water > 0 / engine energy > 0 - not "create_entity
+    returned ok".
+    """
+    if build_done(p, "plant"):
+        return
+    water = B.STATE.get("water")
+    if not water:
+        raise RuntimeError("stage_plant: water not scouted (scout() found no shore)")
+    try:
+        st = gate_state()
+    except Exception as e:
+        status.log("stage_plant: census failed (%s)" % e)
+        return
+    cols = plant_columns_needed(st)
+    if cols <= 0:
+        status.log("plant: %.2f MW installed already leads the %.2f MW projected load"
+                   % (build_gates.capacity_mw(st), PROJECTED_LOAD_KW / 1000.0))
+        return
+    if not gate("power_capacity", cols, params={"projected_load_kw": PROJECTED_LOAD_KW},
+                state=st):
+        return
+    A.purpose("phase 0: steam plant at the lake (%d column(s), planned whole)" % cols)
+    wx, wy = int(water[0]), int(water[1])
+    terrain = plant_planner.scan_shore(wx, wy, radius=30)            # READ ONLY
+    coal = B.STATE.get("coal")
+    plan = plant_planner.plan_plant(
+        cols * plant_planner.ENGINES_PER_BOILER, terrain=terrain, near=(wx, wy),
+        coal_tap=_pt(coal), pole=POLE)
+    for w in plan.get("warnings", ()):
+        status.log("plant plan: " + str(w)[:200])
+    rec = plant_planner.build(plan)
+    if not verified(rec, "power plant"):
+        return
+    mark_build(p, "plant", rec)
+    intake = plan["intake"]
+    p["plant"] = {
+        "anchor": list(plan["anchor"]), "bbox": list(plan["bbox"]),
+        "n_columns": plan["n_columns"], "power_MW": plan["power_MW"],
+        "coal_intake": [int(intake["tile"][0]), int(intake["tile"][1])],
+        "poles": [[x, y] for (_n, x, y) in plant_planner.plan_poles(plan)],
+    }
+    save(p)
+
+
+def _spine_anchor(p, end):
+    """The plant pole the base spine hangs off: whichever of the plant's own poles is nearest
+    the spine's far end.
+
+    Nearest, not "the north-most": the plant sits wherever the shore is, so which end of its
+    trunk column faces the base is not knowable in advance. Picking by distance keeps the
+    trunk short in every orientation and never leaves it doubling back through the plant.
+    """
+    poles = (p.get("plant") or {}).get("poles") or []
+    if not poles:
+        return None
+    return min((tuple(t) for t in poles),
+               key=lambda t: (abs(t[0] - end[0]) + abs(t[1] - end[1]), t[1], t[0]))
+
+
+def stage_spine(p):
+    """ALL POLE WORK outside a module template goes through power_planner.
+
+    Supersedes bootstrap.power_row: a 5-spaced chain plus a "walk poles toward the nearest
+    base-network pole" heuristic that interpolated diagonal staircases and never arrived. That
+    structure is what produced the split the operator found - net 405 holding all six electric
+    drills and no generator at all, 8.06 tiles from the nearest pole against a 7.5 wire reach.
+
+    Here it is ONE straight, axis-aligned trunk at spacing exactly 7 from the plant's own
+    trunk column to the operator's measured spine column x=-15 beside the smelting zone, and
+    apply() WIRES EVERY PAIR EXPLICITLY and verifies by comparing electric_network_id - never
+    "placement implies connection" (GOTCHAS 2026-08-30).
+    """
+    if build_done(p, "spine"):
+        return
+    _ox, oy = B.SMELT_ZONE["iron-ore"]
+    end = (SPINE_X, int(oy))
+    anchor = _spine_anchor(p, end)
+    if anchor is None:
+        status.log("spine: no plant poles recorded yet - the plant stage runs first")
+        return
+    if not gate("power_grid", 1):
+        return
+    A.purpose("phase 0: power trunk from the plant to the smelting zone")
+    area = (min(anchor[0], end[0]) - 4, min(anchor[1], end[1]) - 4,
+            max(anchor[0], end[0]) + 4, max(anchor[1], end[1]) + 4)
+    obs = power_planner.obstacles_for(area)                          # READ ONLY
+    blocked = power_planner.blocked_tiles(obs)
+    try:
+        trunk = power_planner.plan_trunk(anchor, end, pole=POLE, blocked=blocked, area=area)
+    except power_planner.GridError as e:
+        status.log("spine: no legal trunk (%s) - retrying next pass" % e)
+        return
+    # The anchor is an EXISTING pole: it is a virtual node apply() wires TO, never a tile the
+    # plan re-places (a plan tile that is also the join tile makes wire_pairs pair it with
+    # itself).
+    plan = [t for t in trunk if (t["x"], t["y"]) != anchor]
+    if not plan:
+        status.log("spine: the plant trunk already reaches %s - nothing to lay" % (end,))
+        return
+    for w in power_planner.LAST_WARNINGS:
+        status.log("spine plan: " + str(w)[:200])
+    rec = power_planner.apply(plan, area=area, pole=POLE, anchor=anchor, obstacles=obs)
+    if not verified(rec, "power spine"):
+        return
+    mark_build(p, "spine", rec)
+    p["spine"] = {"anchor": list(anchor), "end": list(end),
+                  "poles": [[t["x"], t["y"]] for t in plan]}
+    save(p)
+
+
+def stage_red_science(p):
+    """The BOOTSTRAP lab: hand-fed, and the one consumer on this map that legitimately
+    precedes its own supply.
+
+    build_gates' `lab` gate demands measured pack FLOW and a live pack producer. Neither can
+    exist before this lab, because automation-2 - the assembler that makes packs - is what
+    this lab is built to research. So the gate is applied and a block is RESPECTED for every
+    lab after the first: the exemption is exactly one hand-fed lab and it closes the instant a
+    lab exists.
+    """
+    try:
+        st = gate_state()
+    except Exception as e:
+        status.log("stage_red_science: census failed (%s)" % e)
+        return
+    labs = int(build_gates._f(st.get("counts", {}), "lab"))
+    if not gate_bootstrap("lab", 1, exempt_while=(labs == 0),
+                          why="0 labs exist; the automation-science-pack flow this gate wants "
+                              "is what this lab's own research unlocks"):
+        return
     A.purpose("phase 0: lab + red science to unlock assemblers")
     B.red_science()
-    A.purpose("phase 0: drill outposts on the richest patches")
-    for ore, n in (("iron-ore", 8), ("copper-ore", 6), ("coal", 6)):
-        r = builds_v2.mine_outpost_v2(ore, n)
-        if r.get("status") == "failed":
-            raise RuntimeError(f"mine_outpost_v2({ore}): {r.get('error')}")
-    A.purpose("phase 0: belt-feeding the mines into the smelter arrays")
-    B.build_belt_supply()
-    B.ensure_lanes()       # source->destination law: verify by BFS, re-lay broken lanes now
+
+
+def _mine_key(ore):
+    return "mine:" + ore
+
+
+def _drill_for(ore):
+    """All-electric WHERE RESEARCHED. The operator converted every burner drill on the map and
+    deleted the coal fuel belts that fed them as dead weight; a burner outpost is something we
+    would have to tear out, so it is only planned while the tech is still missing."""
+    return ELECTRIC_DRILL if B._tech_done(ELECTRIC_DRILL) else BURNER_DRILL
+
+
+def stage_mines(p):
+    """Mine outposts through mine_planner_v2: plan whole -> validate -> build -> verify by
+    lane_lint -> roll back a mine that moves no ore.
+
+    Supersedes bootstrap.build_mine_outpost / builds_v2.mine_outpost_v2, whose outpost ends in
+    the terminal chest + inserter the operator deleted nine of - a chest is a hard stop where
+    throughput becomes a human walking.
+
+    `trunk=None` on purpose: the hookup leg from the last drop tile to the smelter array is
+    NOT laid here. mine_planner_v2's own docstring says that leg is laid blind (it has no
+    model of what is already standing), and routing it is exactly supply_planner's job - so
+    the plan ends at the lane's downstream tile and stage_ore_lanes routes onward from it with
+    belt_router's obstacle-aware A*.
+
+    The gate is `mine_outpost` for BOTH drill tiers. For a burner outpost that is
+    conservative - it charges the electric drill's 90 kW against a drill that draws none - and
+    conservative is the only safe direction for an admission gate to be wrong in.
+    """
+    spine = p.get("spine") or {}
+    anchor = _pt((spine.get("poles") or [None])[-1]) if spine.get("poles") else None
+    for ore, n in MINE_DRILLS:
+        key = _mine_key(ore)
+        if build_done(p, key):
+            continue
+        spot = B.STATE.get(ore)
+        if not spot:
+            status.log("mine %s: patch not scouted - skipping" % ore)
+            continue
+        drill = _drill_for(ore)
+        if drill == ELECTRIC_DRILL and anchor is None:
+            status.log("mine %s: no base spine to join - an electric drill on an islanded "
+                       "grid mines nothing (net 405). Spine first." % ore)
+            continue
+        if not gate("mine_outpost", n, params={"drills": n}):
+            continue
+        A.purpose("phase 0: %s outpost (%d %s)" % (ore, n, drill))
+        try:
+            plan = mine_planner_v2.plan_outpost(
+                ore, n, center=_pt(spot), drill=drill, pole=POLE,
+                trunk=None, power_trunk_x=(SPINE_X if anchor else None),
+                grid_anchor=anchor)
+        except mine_planner_v2.LayoutError as e:
+            status.log("mine %s: plan refused - %s" % (ore, str(e)[:220]))
+            continue
+        for w in plan.get("warnings", ()):
+            status.log("mine %s plan: %s" % (ore, str(w)[:200]))
+        rec = mine_planner_v2.build(plan)
+        if not verified(rec, "%s outpost" % ore):
+            continue
+        mark_build(p, key, rec)
+        p.setdefault("mines", {})[ore] = {
+            "drill": drill, "n": n, "lane_y": plan["lane_y"],
+            "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"]),
+        }
+        save(p)
+
+
+def stage_arrays(p):
+    """Belt-fed smelter arrays. Burner furnaces, so LAW 3 lets them be PRE-built - the
+    operator kept 11 of 28 idle at `no_ingredients` and deleted none of them - but the licence
+    has a budget: `overbuild_within_budget` sizes the row against what the MINE can deliver,
+    not against what it currently produces (his 16 iron on 6 drills is 1.67x, ceiling 2.0).
+
+    KNOWN GAP: this is still bootstrap.build_smelter_array. There is no array planner module
+    yet, so it is the one placing stage in phase 0 that does NOT go through buildplan - it is
+    gated, and it is checked afterwards against the census (did the furnace count actually
+    rise), but there is no registry-scoped rollback behind it the way there is for the plant,
+    the mines, the poles and the lanes.
+    """
+    built = p.setdefault("arrays", {})
+    for ore, n in SMELTERS:
+        if built.get(ore):
+            continue
+        have = _array_furnaces(ore, n)
+        if have < 0:
+            status.log("%s array: furnace census read failed - skipping (never build blind)"
+                       % ore)
+            continue
+        # Ask for the DEFICIT in THIS array's own band, not the target: once the row stands,
+        # asking for the full 16 again reads as "may I double it" and the overbuild budget
+        # blocks it forever; counting furnaces map-wide instead would fold in the 12 hand-fed
+        # spawn furnaces and ask for far too few.
+        want = n - have
+        if want <= 0:
+            status.log("%s array: %d furnaces already standing" % (ore, have))
+            built[ore] = have
+            save(p)
+            continue
+        if not gate("smelter_array", want, params={"ore": ore}):
+            continue
+        A.purpose("phase 0: %s smelter array (%d more furnaces)" % (ore, want))
+        B.build_smelter_array(ore, n)
+        after = _array_furnaces(ore, n)
+        if after <= have:
+            status.log("%s array: furnace count did not move (%d) - not marking it built"
+                       % (ore, after))
+            continue
+        status.log("%s array: %d -> %d furnaces" % (ore, have, after))
+        if after >= n:
+            built[ore] = after
+            save(p)
+
+
+def _array_furnaces(ore, n):
+    """Furnaces standing in THIS array's own furnace band (oy+2..oy+3) - the same box
+    bootstrap.build_smelter_array uses for its own idempotence check, so the two agree on
+    what "already built" means. READ ONLY; -1 when the read fails."""
+    ox, oy = B.SMELT_ZONE[ore]
+    out = (A._print("/sc rcon.print(#game.surfaces[1].find_entities_filtered"
+                    "{area={{%d,%d},{%d,%d}},name={'stone-furnace','steel-furnace'}})"
+                    % (ox, oy + 2, ox + n * 2 + 2, oy + 3)) or "").strip()
+    try:
+        return int(out)
+    except (ValueError, TypeError):
+        return -1
+
+
+def _array_ore_belt(ore):
+    """West end of an array's ORE belt - where a supply lane hands off (build_smelter_array
+    lays that row at oy+5, from ox-1 east)."""
+    ox, oy = B.SMELT_ZONE[ore]
+    return (ox - 1, oy + 5)
+
+
+def stage_array_grid(p):
+    """A REGULAR LATTICE over the smelting block, anchored to the spine.
+
+    build_smelter_array flanks its rows with poles every 3 and then spines them north at 3;
+    that is the opportunistic chain the operator called a hack and relaid. power_planner picks
+    ONE pitch and ONE phase for the whole area - which is what makes the rows wire to each
+    other for free - places them in the INSERTER rows rather than beside the belts, and wires
+    every pair explicitly.
+    """
+    if build_done(p, "array_grid"):
+        return
+    anchor = _pt(((p.get("spine") or {}).get("poles") or [None])[-1])
+    if anchor is None:
+        return
+    ox, oy = B.SMELT_ZONE["iron-ore"]
+    _cx, cy = B.SMELT_ZONE["copper-ore"]
+    area = (SPINE_X, oy - 3, ox + 2 * max(n for _o, n in SMELTERS) + 6, cy + 8)
+    ents = power_planner.scan(area)                                  # READ ONLY
+    consumers = power_planner.from_entities(principles.World(ents).powered)
+    if not consumers:
+        status.log("array grid: no electric consumers in the smelting block yet")
+        return
+    if not gate("power_grid", 1):
+        return
+    A.purpose("phase 0: pole lattice over the smelting block")
+    obs = power_planner.obstacles_for(area)                          # READ ONLY
+    try:
+        plan = power_planner.plan_grid(area, consumers, anchor=anchor, pole=POLE,
+                                       obstacles=obs)
+    except power_planner.GridError as e:
+        status.log("array grid: %s - retrying next pass" % str(e)[:220])
+        return
+    for w in power_planner.LAST_WARNINGS:
+        status.log("array grid plan: " + str(w)[:200])
+    if not plan:
+        return
+    rec = power_planner.apply(plan, consumers=consumers, area=area, pole=POLE, anchor=anchor,
+                              obstacles=obs)
+    if verified(rec, "array pole lattice"):
+        mark_build(p, "array_grid", rec)
+
+
+def _supply(p, key, item, from_xy, to_xy, what, drills=1):
+    """gate -> plan_supply -> build, for ONE lane. Shared by the ore and coal stages.
+
+    plan_supply refuses a SECOND lane into the same destination and hands back the one that
+    already serves it - the creation-side half of the fix for the duplicate lanes that were
+    72.4%% of everything the operator deleted. That refusal is SUCCESS here, not a failure.
+    """
+    if build_done(p, key):
+        return
+    if not gate("ore_lane", 1, params={"producer": "mining-drill", "drills": drills}):
+        return
+    A.purpose("phase 0: %s" % what)
+    res = supply_planner.plan_supply(item, from_xy, to_xy)
+    if not res.get("ok"):
+        lane = res.get("lane") or {}
+        if res.get("code") == supply_planner.DUPLICATE and lane.get("plan_id"):
+            # the (item, destination) pair is already OWNED. FINISH that lane; never lay a
+            # second one beside it - parallel duplicates were 72.4% of what the operator deleted.
+            try:
+                old = buildplan.load(lane["plan_id"])
+            except (OSError, ValueError, KeyError):
+                old = None
+            if (old or {}).get("status") == "verified":
+                status.log("%s: already served by lane %s" % (what, lane["id"]))
+                p.setdefault("builds", {})[key] = lane["plan_id"]
+                save(p)
+                return
+            status.log("%s: owned by lane %s (%s) - finishing THAT lane"
+                       % (what, lane["id"], lane.get("status")))
+            rec = supply_planner.build(lane["plan_id"])
+            if verified(rec, what):
+                mark_build(p, key, rec)
+            return
+        status.log("%s: not planned [%s] - %s"
+                   % (what, res.get("code"), str(res.get("reason"))[:220]))
+        return
+    status.log("%s: %s" % (what, res.get("reason")))
+    rec = supply_planner.build(res)
+    if verified(rec, what):
+        mark_build(p, key, rec)
+
+
+def stage_ore_lanes(p):
+    """One lane per ore, mine -> its array's ore belt, through supply_planner.
+
+    Supersedes bootstrap.connect_mine_to_array (and the ensure_lanes re-lay that called it):
+    every re-lay there laid a FRESH route and left its predecessor standing, which is how
+    three iron rows and two copper rows ended up side by side. supply_planner registers the
+    lane, refuses a duplicate at plan time, routes with belt_router (so crossings are 2-tile
+    undergrounds and nothing is ever laid through a machine, through another lane or onto a
+    tile the operator cleared) and verifies with lane_lint - connected AND moving.
+    """
+    for ore, n in MINE_DRILLS:
+        if ore not in B.SMELT_ZONE:
+            continue                       # coal has no array of its own; it feeds the plant
+        mine = (p.get("mines") or {}).get(ore)
+        if not mine:
+            continue
+        _supply(p, "lane:" + ore, ore, _pt(mine["to_xy"]), _array_ore_belt(ore),
+                "%s lane: mine -> smelter array" % ore, drills=n)
+
+
+def stage_coal_lane(p):
+    """Coal from the coal mine to the PLANT's own coal-belt intake.
+
+    Supersedes bootstrap.coal_to_boiler, which put a splitter tap ON the ore patch, ran the
+    spur descending INTO the engine footprint, and left an inserter whose pickup_position was
+    a pipe tile. plant_planner.coal_intake() names the one tile an external spur may hand off
+    at (the feeder column's last tile, flowing south into the belt row's west corner), and
+    belt_router routes to it.
+
+    Only the boiler is belted. The arrays' furnaces are burners too, but a second lane out of
+    the same mine head would have to merge with this one, and mixed/merged lanes are the
+    defect this whole module set exists to stop - array fuel stays with the controller's
+    item-moving upkeep (fuel_arrays), which is servicing, not construction.
+    """
+    mine = (p.get("mines") or {}).get("coal")
+    intake = (p.get("plant") or {}).get("coal_intake")
+    if not mine or not intake:
+        return
+    _supply(p, "lane:coal", "coal", _pt(mine["to_xy"]), _pt(intake),
+            "coal lane: mine -> boiler intake", drills=dict(MINE_DRILLS)["coal"])
+
+
+def stage_science(p):
+    """Green science: the CONVERTER first, then the cells. Gated on `science_assembler`,
+    whose sink half is not optional - the operator deleted an iron-gear-wheel assembler that
+    was sitting at full_output because nothing consumed gears."""
+    if not gate("science_assembler", 1, params={"recipe": "automation-science-pack"}):
+        return
     A.purpose("phase 0: automating green science assemblers")
     B.automate_green_science()
     A.purpose("phase 0: science I/O cells + powering them")
     B.setup_science_io()
     B.ensure_science_cells()   # delta-build any recipe cells the all-or-nothing pass missed
-    A.purpose("phase 0: coal belt to the boiler (self-sustaining power)")
-    B.coal_to_boiler()
-    B.electrify_mines()        # no-op until electric-mining-drill is researched
+
+
+def stage_electrify(p):
+    """Burner outpost -> all-electric, by RE-PLANNING the outpost, never by swapping tiers in
+    place.
+
+    Supersedes bootstrap.electrify_mines, which swapped 2x2 burner drills for 3x3 electric
+    ones AT THE SAME POSITION: the bigger footprint moved drop_position by half a tile and six
+    copper drills dumped ore onto bare ground while every status read looked plausible.
+    upgrade_to_electric re-plans the column lattice, every drop tile, the lane span and the
+    whole pole lattice from the prototype, supersedes the burner plan (tearing out only what
+    the new layout cannot reuse) and builds through buildplan like everything else.
+    """
+    if not B._tech_done(ELECTRIC_DRILL):
+        return
+    anchor = _pt(((p.get("spine") or {}).get("poles") or [None])[-1])
+    if anchor is None:
+        return
+    for ore, n in MINE_DRILLS:
+        mine = (p.get("mines") or {}).get(ore)
+        if not mine or mine.get("drill") == ELECTRIC_DRILL:
+            continue
+        if not gate("mine_outpost", n, params={"drills": n}):
+            continue
+        A.purpose("phase 0: re-planning the %s outpost as all-electric" % ore)
+        # NB: no pole= here. upgrade_to_electric passes OPERATOR_MINE_SPEC["pole"] itself and
+        # forwards **kw, so a pole= would arrive twice as the same keyword.
+        out = mine_planner_v2.upgrade_to_electric(
+            ore, patch=None, n_drills=n, center=_pt(B.STATE.get(ore)),
+            old_record_id=(p.get("builds") or {}).get(_mine_key(ore)),
+            trunk=None, power_trunk_x=SPINE_X, grid_anchor=anchor)
+        rec = out.get("build")
+        if not verified(rec, "%s outpost (electric)" % ore):
+            continue
+        mark_build(p, _mine_key(ore), rec)
+        plan = out["plan"]
+        p["mines"][ore] = {"drill": ELECTRIC_DRILL, "n": n, "lane_y": plan["lane_y"],
+                           "from_xy": list(plan["from_xy"]), "to_xy": list(plan["to_xy"])}
+        # The lane's head moved with the drills, so the old lane record no longer describes
+        # it. Forget it here and let stage_ore_lanes deal with it: plan_supply still sees the
+        # old lane owning this (item, destination) pair, so it hands that lane back rather
+        # than laying a parallel one, the re-apply fails its lane_lint check (its head is a
+        # tile with no drill behind it any more), and a failed lane is retired - which frees
+        # the pair for a fresh route on the next pass. Never a second belt beside the first.
+        p.get("builds", {}).pop("lane:" + ore, None)
+        save(p)
+
+
+def stage_oil(p):
     A.purpose("phase 0: locating crude oil for phase 1")
     scout_oil(p)
+
+
+PHASE0_STAGES = (
+    ("world", stage_world),                # setup / scout / hand-fed spawn furnaces
+    ("plant", stage_plant),                # plant_planner   | power_capacity
+    ("spine", stage_spine),                # power_planner   | power_grid
+    ("red_science", stage_red_science),    # the one hand-fed lab
+    ("mines", stage_mines),                # mine_planner_v2 | mine_outpost
+    ("arrays", stage_arrays),              # (no planner yet) | smelter_array
+    ("array_grid", stage_array_grid),      # power_planner   | power_grid
+    ("ore_lanes", stage_ore_lanes),        # supply_planner  | ore_lane
+    ("coal_lane", stage_coal_lane),        # supply_planner  | ore_lane
+    ("science", stage_science),            # (no planner yet) | science_assembler
+    ("electrify", stage_electrify),        # mine_planner_v2 | mine_outpost
+    ("oil", stage_oil),                    # scout only
+)
+
+
+def phase0(p):
+    """Crash site -> automated red+green science + all-electric mines + oil scouted.
+
+    Every stage is idempotent and INDEPENDENT: one stage raising does not abandon the pass,
+    because a gate refusal upstream is the normal state of a young base and the stages behind
+    it may well be allowed. The error is logged and codified as a lesson, exactly as play()
+    would have done, and the next stage runs.
+    """
+    gate_reset()                # every pass gates against a freshly sensed world
+    for name, fn in PHASE0_STAGES:
+        if B.operator_present():
+            status.log("operator online mid-pass - stopping phase 0 before stage %s" % name)
+            return
+        try:
+            fn(p)
+        except Exception as e:
+            status.log("phase 0 stage %s: %s: %s" % (name, type(e).__name__, e))
+            lessons.add(condition="phase 0 stage %s" % name, mistake=str(e)[:200],
+                        rule="see traceback in autopilot.log",
+                        evidence=traceback.format_exc()[-1200:],
+                        phase=0, tags=("phase-program", name))
 
 
 def gate0():
