@@ -1347,3 +1347,40 @@ Same law for sizing: `_relief_mine` counts the drills that ACTUALLY STAND (RCON
 `find_entities_filtered` at the patch) rather than trusting `phase.json`. The ledger said
 `have=0` while four electric coal drills were standing on the patch — planning from it would
 have laid a second outpost on top of a working one.
+
+## THE TRUCE MISSED THE ONE PATH THAT WRITES (2026-08-30, third offence)
+
+From the live log, in order:
+
+    06:27:59  operator online - layout heals suspended
+    06:28:11  triage -> actuator fix_lanes
+    06:28:38  triage -> actuator fix_lanes
+
+Belts relaid under his hands while he was repairing them. The truce was checked in exactly two
+places — the invariant audit and the LAYOUT_ISSUES heals — and **both of those are read-only**.
+The LLM triage worker, whose verdict routes straight into `_fix_lanes` / `fix_unpowered` /
+`keep_power`, had no check at all. The guard was on the harmless paths and absent from the
+harmful one.
+
+**RULE: a truce is a property of the WRITE, not of the loop that happens to be fashionable.**
+When adding any new actuator path, the question is not "is this like the other detectors" but
+"can this call `create_entity` or `destroy`". If yes, it consults `operator_present()`. Gate the
+ACTUATOR and not the classifier — reading the world while he works is useful and costs nothing.
+
+## AND IT WAS REPAIRING A LANE THAT WAS NEVER BROKEN
+
+`fix_lanes` ran every 15–20 seconds for hours. The model read "18 furnaces starved, 8 drills
+blocked, iron_pm dropping" and classified it `stall/lane - ore lane broken`. Every one of those
+symptoms was real. The diagnosis was still wrong: all 28 furnaces were jammed at `full_output`
+with 3200 plates in each terminal chest and **nothing consuming plates**.
+
+A blocked OUTPUT presents identically to a starved INPUT one step downstream — drills blocked,
+furnaces idle, plate flow zero — and the two have opposite fixes. Relaying belt cannot drain a
+full chest, so the repair could never clear the condition that triggered it, which is exactly
+why it ran forever. `_backpressured()` now discriminates on `full_output` and `_fix_lanes`
+declines with a reason.
+
+**THE GENERAL LESSON, which cost this project three sessions: when an actuator repeats without
+clearing its own trigger, the diagnosis is wrong. Repetition is the evidence.** `lessons.add`
+already counts repeat verdicts at 5 and 20 — that counter firing is a signal to re-diagnose, not
+to keep actuating.
