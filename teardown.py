@@ -148,6 +148,59 @@ if __name__ == "__main__":
             print("operator is online - not tearing down the base under them")
             sys.exit(1)
         apply(A, protect=prot, log=print)
+        report_power(A, log=print)     # a demolition ends by asking what it left dark
     else:
         survey(A, protect=prot, log=print)
         print("(dry run; pass --apply to do it)")
+
+
+# --------------------------------------------------------------------------- aftercare
+def power_check(A):
+    """Which consumers read no_power after a teardown, grouped by type.
+
+    THIS EXISTS BECAUSE I SKIPPED IT. The blueprint rebuild went fine and the base still sat
+    idle, because all three mines ended up with ZERO poles - 65 of 103 were in the new block,
+    3 at the power plant, none at any drill - and every drill had been reading no_power while
+    I was busy stamping prints.
+
+    The mechanism is the interaction, not either half: teardown removes the belts, inserters
+    and furnaces a pole was covering, and the pole becomes a genuine orphan; pole_cull then
+    correctly removes it, because by then it really is supplying nothing. Each step is right
+    and the pair of them puts the mines in the dark.
+
+    So a demolition has to end by asking what it left unpowered. Reading the world back is
+    the only thing that catches an emergent failure neither component can see on its own.
+    """
+    raw = A._print(
+        "/sc local s=game.surfaces[1] local c={} "
+        "for _,e in pairs(s.find_entities_filtered{type={'mining-drill','assembling-machine',"
+        "'lab','inserter','furnace'}}) do "
+        "  if e.prototype.electric_energy_source_prototype "
+        "     and e.status==defines.entity_status.no_power then "
+        "    c[e.type]=(c[e.type] or 0)+1 end end "
+        "local o={} for k,v in pairs(c) do o[#o+1]=k..'='..v end "
+        "rcon.print(table.concat(o,' '))").strip()
+    out = {}
+    for tok in raw.split():
+        if "=" in tok:
+            k, v = tok.rsplit("=", 1)
+            try:
+                out[k] = int(v)
+            except ValueError:
+                pass
+    return out
+
+
+def report_power(A, log=None):
+    """Log what a teardown left dark. A mine with no poles is not a smaller base, it is a
+    stopped one: no ore moves, so nothing downstream can be diagnosed either."""
+    say = log or (lambda m: None)
+    dark = power_check(A)
+    if not dark:
+        say("teardown aftercare: nothing left unpowered")
+        return dark
+    say("teardown aftercare: UNPOWERED after demolition - "
+        + ", ".join("%d %s" % (v, k) for k, v in sorted(dark.items(), key=lambda i: -i[1]))
+        + "  (poles that served the demolished half became orphans and were culled; the "
+          "mines need their own lines back)")
+    return dark

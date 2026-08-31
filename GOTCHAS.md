@@ -1873,3 +1873,38 @@ an incomplete definition, that it was not being used: this one, `plan_mine_geome
 blacklist clear, and `setup_science_io`'s unconditional teardown. **When code deletes things,
 the burden of proof runs the other way: it must positively establish disuse, and anything it
 cannot classify is in use.**
+
+---
+
+## A demolition ends by asking what it left unpowered
+
+The blueprint rebuild went fine — 80 furnaces, both smelter arrays, 19 ghosts left — and the
+base still sat completely idle. All three mines had **zero power poles**: 65 of 103 were in the
+new block, 3 at the power plant, none at any drill. Every drill had been reading `no_power`
+while I was busy stamping prints, so no ore moved and nothing downstream could even be
+diagnosed.
+
+**Neither component was wrong. The interaction was.**
+
+1. `teardown` removes the belts, inserters and furnaces a pole was covering.
+2. That pole is now a genuine orphan, supplying nothing.
+3. `pole_cull` removes it — correctly, by its own rule, because by then it really is spare.
+
+Each step is right in isolation. The pair of them puts the mines in the dark, and no single
+component can see it, because each one's precondition was true when it ran.
+
+**The general rule: after any destructive pass, read the world back and ask what stopped
+working.** Not "did my step succeed" — every step succeeded here — but "what is the state of
+the base now". `teardown.report_power` does this and the CLI runs it automatically.
+
+This is the same shape as the connected-lane bug and the two-builders bug: a component
+verifying only its own action, on a base where the interesting failures are emergent. Verifying
+your own step is necessary and it is not sufficient.
+
+### And a mine with no poles is not a smaller base, it is a stopped one
+
+Worth stating separately because of how it presents. There is no error, no failed build, no
+gate refusal — the logs look healthy and the map looks built. The only symptom is that
+production is zero and every belt is empty. When a freshly built base does nothing at all,
+check power at the *source* first: an empty belt at the mine means nothing was ever mined, and
+everything downstream of that is noise.

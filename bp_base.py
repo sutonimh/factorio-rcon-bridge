@@ -29,16 +29,32 @@ import status
 
 # Items this base cannot make yet. Anything in a blueprint that is also in here means the
 # print cannot be revived, so it must not be stamped.
-def locked_items(B):
-    """Which entity names are unbuildable right now, asked of the tech tree, not hardcoded."""
+def locked_items(B, A=None, names=()):
+    """Entity names that cannot be built right now - ASKED OF THE GAME, not guessed.
+
+    This was a hardcoded list of the usual suspects, and `small-lamp` was not on it. Its
+    recipe needs optics, which is unresearched, so eight lamp ghosts got stamped that can
+    never be revived - permanent litter inside an otherwise finished blueprint. A hardcoded
+    denylist can only ever exclude the items someone remembered.
+
+    Two questions, both answered by the game: is the recipe ENABLED for this force, and do
+    its ingredients exist at this tech level. `steel-plate` is the other trap - it is a
+    SMELTING recipe, so an item needing it cannot be hand-crafted however much iron you hold.
+    """
     out = set()
-    for name in ("fast-transport-belt", "fast-underground-belt", "fast-splitter",
-                 "fast-inserter", "steel-furnace", "electric-furnace", "medium-electric-pole",
-                 "big-electric-pole", "express-transport-belt", "express-underground-belt",
-                 "express-splitter", "assembling-machine-3", "stack-inserter",
-                 "straight-rail", "curved-rail", "substation", "roboport"):
+    for name in names:
         if not modules.craftable_now(name):
             out.add(name)
+    if A is None or not names:
+        return out
+    q = ("/sc local f=game.forces.player local o={} "
+         + " ".join("local r=f.recipes['%s'] if not r or not r.enabled then o[#o+1]='%s' end "
+                    % (n, n) for n in sorted(names))
+         + "rcon.print(table.concat(o,' '))")
+    try:
+        out.update(t for t in A._print(q).split() if t)
+    except Exception:
+        pass
     return out
 
 
@@ -84,6 +100,12 @@ def feasible(bp_string, locked):
     """(ok, blocked). Stamping a print you cannot revive just litters ghosts over the map."""
     bad = sorted(entity_names(bp_string) & set(locked))
     return (not bad), bad
+
+
+def blocked_in(A, B, bp_string):
+    """The unbuildable entities of ONE print, asked of the game for exactly its contents."""
+    names = entity_names(bp_string)
+    return sorted(locked_items(B, A, names) & names)
 
 
 def size_of(bp_string):

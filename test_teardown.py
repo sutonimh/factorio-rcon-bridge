@@ -65,3 +65,37 @@ def test_no_drills_means_no_teardown():
     out = T._run(FakeA(), (), dry=True, log=said.append)
     assert out == {}
     assert any("REFUSED" in m for m in said)
+
+
+# --------------------------------------------------------------------------- aftercare
+class _FakeA:
+    def __init__(self, reply):
+        self.reply = reply
+    def _print(self, lua):
+        return self.reply
+
+
+def test_power_check_parses_what_is_dark():
+    out = T.power_check(_FakeA("mining-drill=13 inserter=4"))
+    assert out == {"mining-drill": 13, "inserter": 4}
+
+
+def test_power_check_empty_when_all_lit():
+    assert T.power_check(_FakeA("")) == {}
+
+
+def test_report_power_names_the_mines_when_drills_are_dark():
+    """The blueprint rebuild went fine and the base still sat idle: all three mines ended up
+    with zero poles and every drill read no_power. Teardown removes what a pole was covering,
+    the pole becomes a genuine orphan, pole_cull correctly removes it - each step right, the
+    pair of them puts the mines in the dark. Only reading the world back catches that."""
+    said = []
+    T.report_power(_FakeA("mining-drill=13"), log=said.append)
+    joined = " ".join(said)
+    assert "UNPOWERED" in joined and "13 mining-drill" in joined
+
+
+def test_report_power_is_quiet_when_clean():
+    said = []
+    T.report_power(_FakeA(""), log=said.append)
+    assert "nothing left unpowered" in " ".join(said)
