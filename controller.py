@@ -583,7 +583,22 @@ def _slow_upkeep(lap):
             pole_cull.apply(A, log=status.log)
         except Exception as e:
             status.log(f"pole cull error: {e}")
-    if lap % 80 == 23 and os.environ.get("BUILDER_ENABLED", "0") == "1":
+    if lap % 40 == 17:
+        # WHAT IS ON THE BASE, NOT WHAT WE ONCE RECORDED. fix_lanes repaired lanes from
+        # lanes.json, so when the base moved it spent every twenty seconds faithfully
+        # repairing a lane to a demolished smelter row. This censuses the map instead:
+        # mines are wherever drills stand, blocks wherever machines cluster, input and
+        # output rows come from what the block's own inserters do, and starvation is read
+        # off the machines rather than guessed from belt geometry.
+        try:
+            import world_model
+            c = world_model.census(A)
+            if c.get("unfed"):
+                status.log("infrastructure: "
+                           + world_model.summary(c).replace("\n", " | "))
+        except Exception as e:
+            status.log(f"census error: {e}")
+    if lap % 80 == 23 and os.environ.get("BUILDER_ENABLED", "1") == "1":
         # Connecting a stranded product to something that eats it IS construction, so it
         # obeys the safe-mode flag the operator set.
         try:
