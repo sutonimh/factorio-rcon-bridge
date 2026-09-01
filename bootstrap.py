@@ -2252,7 +2252,7 @@ def forget_built(tiles):
 def reconcile_removals():
     """THE RULE (Seth, 2026-08-30, after I rebuilt his deletions twice): if the bot built a
     tile, that tile is now EMPTY, and the bot did not remove it, then a human removed it -
-    protect it forever and never rebuild. Runs continuously, so it does not depend on
+    learn from it as a correction - never protect the ground. Runs continuously, so it does not depend on
     catching a logoff edge or on any in-memory snapshot surviving a restart."""
     built = _built_load()
     if not built:
@@ -2269,10 +2269,20 @@ def reconcile_removals():
     gone = set(tuple(map(int, s.split(","))) for s in out.split(";") if "," in s)
     if not gone:
         return 0
-    _protected_save(_protected_load() | gone)
+    # The THIRD place that minted sacred ground, and the one that survived the first sweep -
+    # neutralising _protected_load() stopped the blacklist being READ, but this kept writing
+    # it and kept logging "protected forever (never rebuild)", which was both untrue and
+    # exactly the behaviour the operator asked to be rid of. A removal is a lesson about a
+    # KIND of build, never a claim on the ground it stood on.
+    try:
+        import corrections
+        corrections.record([{"kind": "transport-belt", "role": "lane",
+                             "connected": False, "where": t} for t in sorted(gone)])
+    except Exception as e:
+        status.log("corrections: could not record reconciled removals (%s)" % str(e)[:80])
     _built_save(built - gone)
-    status.log(f"reconcile: {len(gone)} bot-built tiles were removed by the OPERATOR "
-               f"-> protected forever (never rebuild)")
+    status.log("reconcile: learned from %d bot-built tiles the operator removed "
+               "(no ground protected)" % len(gone))
     return len(gone)
 
 
@@ -3163,7 +3173,7 @@ def load_baseline():
 
 def diff_since_baseline(protect=True):
     """What changed since the stored baseline. Anything here happened while WE were not
-    building, so it is the operator's - his removals are INTENT and get protected forever.
+    building, so it is the operator's - his removals are INTENT and become CORRECTIONS.
 
     Returns a dict, and logs a readable summary. Safe to call at any time; on the first run
     (no baseline yet) it just records one."""
@@ -3200,12 +3210,11 @@ def diff_since_baseline(protect=True):
                                     for (t, k) in _removal_kinds(gone)])
             except Exception as e:
                 status.log("corrections: could not record removals (%s)" % str(e)[:80])
-            prot = set()
-            _protected_save(prot)
-            status.log("protected %d operator-removed tiles (never rebuild); total %d"
-                       % (len(gone), len(prot)))
+            _protected_save(set())      # nothing is sacred; clear any legacy blacklist
+            status.log("learned from %d tiles removed while we were down "
+                       "(no ground protected)" % len(gone))
         except Exception as e:
-            status.log("baseline: could not protect removals (%s)" % e)
+            status.log("baseline: could not learn from removals (%s)" % e)
     save_baseline(now)
     return {"removed": len(removed), "added": len(added),
             "removed_summary": summarise(removed), "added_summary": summarise(added)}

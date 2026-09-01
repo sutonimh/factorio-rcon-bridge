@@ -78,3 +78,16 @@ def test_explain_marks_hard_rules(tmp_path):
 
 def test_explain_on_an_empty_store(tmp_path):
     assert "no corrections recorded" in C.explain(tmp_path / "nope.json")
+
+
+def test_no_code_path_still_mints_sacred_ground():
+    """Neutralising _protected_load() stopped the blacklist being READ, but two further sites
+    kept WRITING it and logging "protected forever (never rebuild)" - untrue, and exactly the
+    behaviour the operator asked to be rid of. This pins that no site claims it any more."""
+    import pathlib
+    import inspect
+    import bootstrap
+    src = pathlib.Path(inspect.getfile(bootstrap)).read_text()
+    body = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
+    assert "never rebuild" not in body, "a code path still claims ground is protected forever"
+    assert bootstrap._protected_load() == set(), "sacred ground is readable again"
