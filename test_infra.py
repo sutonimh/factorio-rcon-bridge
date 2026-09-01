@@ -325,3 +325,18 @@ def test_the_library_can_override_the_hardcoded_ordering(tmp_path, monkeypatch):
         skills.record("pick_mine", {"source": "small"}, {"machines": 40, "ore": "iron-ore"},
                       "good", path=tmp_path / "s.jsonl")
     assert infra.assign(c)[0][0]["drills"] == 3, "the library did not override the rule"
+
+
+def test_the_arriving_belt_points_into_the_block():
+    """Without goal_dir the router picks the cheapest direction and picked EAST, so the lane
+    arrived at the array's east end running away from it and met the array's own westward
+    belt head-on. 111 items sat in the corridor while forty furnaces starved."""
+    assert infra._into_block((80, -31), (40, -31, 78, -21), "east") == 12   # west, inward
+    assert infra._into_block((38, -31), (40, -31, 78, -21), "west") == 4    # east, inward
+    assert infra._into_block((80, -31), (40, -31, 78, -21), None) is None
+
+
+def test_plan_lanes_passes_a_goal_direction():
+    import inspect
+    src = inspect.getsource(infra.plan_lanes)
+    assert "goal_dir=" in src, "the arriving belt's direction is left to the router again"

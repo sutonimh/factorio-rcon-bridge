@@ -113,6 +113,15 @@ def mine_params(mine):
     return {"source": "tiny" if n <= 2 else "small" if n <= 4 else "big"}
 
 
+def _into_block(goal, bbox, side):
+    """Factorio direction that carries items from the feed tile toward the machines."""
+    if side == "east":
+        return 12                        # arriving on the east side, flow west into the block
+    if side == "west":
+        return 4
+    return None
+
+
 def feed_tile(block, row, side):
     """The tile a lane must reach to deliver into `row` - just past the block's feed end."""
     x1, _, x2, _ = block["bbox"]
@@ -144,7 +153,14 @@ def plan_lanes(A, census=None, log=None):
         x2 = max(start[0], goal[0]) + 25
         y2 = max(start[1], goal[1]) + 25
         obs = belt_router.scan_obstacles(x1, y1, x2, y2)
-        route = belt_router.plan_route(_beside(start, obs), goal, obstacles=obs)
+        # THE ARRIVING BELT MUST POINT INTO THE BLOCK. Without goal_dir the router picks
+        # whatever direction is cheapest, and it picked EAST - so the lane arrived at the
+        # array's east end running away from it, met the array's own westward belt head-on,
+        # and 111 items sat in the corridor while forty furnaces starved. The learning store
+        # caught it twice as "bad" before I did, which is the loop working; the bug is that
+        # feed_planner already had this exact fix and I did not carry it across.
+        route = belt_router.plan_route(_beside(start, obs), goal, obstacles=obs,
+                                       goal_dir=_into_block(goal, block["bbox"], side))
         plans.append({"ore": mine["ore"], "from": start, "to": goal, "row": row,
                       "route": route, "block": block["bbox"],
                       "drills": mine.get("drills"), "machines": block.get("count")})
