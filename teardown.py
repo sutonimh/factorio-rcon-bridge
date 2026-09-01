@@ -148,7 +148,8 @@ if __name__ == "__main__":
             print("operator is online - not tearing down the base under them")
             sys.exit(1)
         apply(A, protect=prot, log=print)
-        report_power(A, log=print)     # a demolition ends by asking what it left dark
+        invalidate_world_model(log=print)   # the caches now describe a base that is gone
+        report_power(A, log=print)          # and a demolition ends by asking what it left dark
     else:
         survey(A, protect=prot, log=print)
         print("(dry run; pass --apply to do it)")
@@ -204,3 +205,46 @@ def report_power(A, log=None):
         + "  (poles that served the demolished half became orphans and were culled; the "
           "mines need their own lines back)")
     return dark
+
+# --------------------------------------------------------------------------- world model
+STALE_STATE = (
+    "lanes.json",          # bootstrap's belt-lane model (_lanes_load / _lanes_save)
+    "supply-lanes.json",   # supply_planner's lane registry
+    "built-tiles.json",    # what the builder believes it has placed
+)
+
+
+def invalidate_world_model(root=None, log=None):
+    """Forget where the base USED to be.
+
+    A demolition that moves the base has to tell the world model, or every downstream fixer
+    inherits coordinates that silently mean nothing. After this teardown, lanes.json still
+    recorded
+
+        iron-ore: (31,-40) west to (-4,-40)     the demolished smelter row
+        coal:     (-28,15) east to (-8,9)       now bare ground
+
+    while the new base sat at x=38..108. So `lane_stalled` fired every twenty seconds, triage
+    routed to `fix_lanes`, and fix_lanes diligently repaired a lane pointing at dirt - forever.
+    The self-heals were not failing. They were succeeding, at the wrong target.
+
+    The stage log said the rest of it out loud: "stage coal_lane: SKIPPED - no coal mine
+    recorded" and "array grid: no electric consumers in the smelting block yet".
+
+    Removing these files is right rather than rewriting them: they are CACHES of what the
+    builder believes, and after a teardown the honest value is "I do not know", which lets the
+    mines/lanes stages re-derive from the map instead of trusting a stale record.
+    """
+    import pathlib as _pl
+    say = log or (lambda m: None)
+    base = _pl.Path(root) if root else _pl.Path(__file__).resolve().parent
+    gone = []
+    for name in STALE_STATE:
+        f = base / name
+        if f.exists():
+            f.unlink()
+            gone.append(name)
+    say("world model invalidated: " + (", ".join(gone) if gone else "nothing stale to clear")
+        + " - the lane and tile caches described the base that was just demolished")
+    return gone
+

@@ -99,3 +99,31 @@ def test_report_power_is_quiet_when_clean():
     said = []
     T.report_power(_FakeA(""), log=said.append)
     assert "nothing left unpowered" in " ".join(said)
+
+
+# --------------------------------------------------------------------------- world model
+def test_invalidate_removes_the_stale_caches(tmp_path):
+    """lanes.json still recorded iron-ore running west to (-4,-40) - the demolished smelter
+    row - while the new base sat at x=38..108. So lane_stalled fired every 20s, triage routed
+    to fix_lanes, and fix_lanes repaired a lane pointing at bare dirt, forever. The self-heals
+    were not failing; they were succeeding at the wrong target."""
+    for name in T.STALE_STATE:
+        (tmp_path / name).write_text("{}")
+    said = []
+    gone = T.invalidate_world_model(root=tmp_path, log=said.append)
+    assert sorted(gone) == sorted(T.STALE_STATE)
+    for name in T.STALE_STATE:
+        assert not (tmp_path / name).exists()
+    assert "world model invalidated" in " ".join(said)
+
+
+def test_invalidate_is_safe_when_nothing_is_there(tmp_path):
+    said = []
+    assert T.invalidate_world_model(root=tmp_path, log=said.append) == []
+    assert "nothing stale to clear" in " ".join(said)
+
+
+def test_lane_caches_are_in_the_stale_list():
+    """These are the files that made the bot aim at the old base."""
+    assert "lanes.json" in T.STALE_STATE
+    assert "supply-lanes.json" in T.STALE_STATE
