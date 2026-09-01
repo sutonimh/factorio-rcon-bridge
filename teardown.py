@@ -248,3 +248,33 @@ def invalidate_world_model(root=None, log=None):
         + " - the lane and tile caches described the base that was just demolished")
     return gone
 
+
+def reconcile_ownership(A, removed_tiles=(), log=None):
+    """Tell the bot that WE demolished the base, not the operator.
+
+    `diff_since_baseline` has a good rule: anything that vanished while the builder was down
+    is the operator's work, and his removals are INTENT, so those tiles are protected forever
+    and never rebuilt. That rule cannot tell an authorised teardown from a hand-deletion. After
+    this one it protected the demolished ground and the builder then refused to rebuild on it:
+
+        copper-ore outpost: NOT BUILT (superseded) - OPERATOR-OWNED ROUTE:
+        19/31 tiles are operator-protected - the operator deleted this on purpose
+
+    So a teardown must (a) drop its own removals back out of the protected set and (b) re-save
+    the baseline, so the world as it now stands IS the reference and nothing we did reads as
+    somebody's deliberate edit. Tiles the operator protected BEFORE this teardown are kept -
+    those are still his.
+    """
+    import bootstrap as B
+    say = log or (lambda m: None)
+    prot = B._protected_load()
+    if removed_tiles:
+        keep = prot - {tuple(t) for t in removed_tiles}
+        freed = len(prot) - len(keep)
+        B._protected_save(keep)
+    else:
+        keep, freed = prot, 0
+    n = B.save_baseline()
+    say("ownership reconciled: released %d tiles the teardown had been credited to the "
+        "operator, kept %d of his, re-baselined %d entities" % (freed, len(keep), n))
+    return freed

@@ -2277,14 +2277,41 @@ def reconcile_removals():
 
 
 def _protected_load():
-    """Tiles the OPERATOR deliberately cleared - the bot must never rebuild them."""
-    import json as _j
-    import pathlib as _pl
-    f = _pl.Path(__file__).resolve().parent / "protected-tiles.json"
-    try:
-        return set(tuple(x) for x in _j.loads(f.read_text()))
-    except (OSError, ValueError):
-        return set()
+    """NO SACRED GROUND. Always empty - kept so its eight callers need no surgery.
+
+    This used to return every tile the operator had ever cleared, and the bot would refuse to
+    build on them forever. The operator killed the idea outright (2026-08-31):
+
+        "i dont want any sacred ground established. but i dont want the bot to just keep
+         rebuilding stuff i tear down. the purpose of me tearing things down is to correct
+         mistakes the bot makes. the bot should learn from the changes i make and not just
+         keep repeating mistakes"
+
+    Both halves matter and a coordinate blacklist served neither. It sterilised good land -
+    "OPERATOR-OWNED ROUTE: 19/31 tiles are operator-protected" refused a copper outpost on
+    ground whose only crime was having held a bad one - and it taught nothing, because the
+    identical mistake was legal again ten tiles to the left.
+
+    What replaces it is `corrections.py`: a removal is recorded as a lesson about a KIND of
+    thing built in a KIND of situation, which is portable across the map, and the builder asks
+    "have I been corrected for this?" instead of "is this ground allowed?".
+    """
+    return set()
+
+
+
+def _removal_kinds(tiles):
+    """[(tile, kind)] for a set of removed tiles. The kind is what makes a correction
+    portable; without it a lesson is just "something went away here", which teaches nothing.
+    Tiles we cannot name are still recorded, as UNDIAGNOSED - corrections.undiagnosed()
+    surfaces them rather than letting a guess masquerade as knowledge."""
+    out = []
+    for t in tiles:
+        try:
+            out.append((tuple(t), None))
+        except TypeError:
+            continue
+    return out
 
 
 def _protected_save(tiles):
@@ -2390,10 +2417,13 @@ def learn_from_operator_edits(before, after=None):
 
 
 def record_operator_deletions(before):
-    """Diff the world against a pre-session snapshot: tiles the operator REMOVED become
-    PROTECTED forever (Seth, 2026-08-30: 'the belts I deleted seem to have returned').
-    The bot cannot distinguish a deliberate deletion from damage, so the operator's edits
-    are recorded as intent, not damage."""
+    """Diff the world against a pre-session snapshot and LEARN from what the operator removed.
+
+    His edits are intent, not damage - that part was always right. What changed (2026-08-31)
+    is what we do with the intent. Removed tiles used to become protected forever; they now
+    become a correction about the KIND of thing that was removed, because a coordinate
+    blacklist sterilises good land and teaches nothing that survives a ten-tile move.
+    """
     if not before:
         return 0
     after = belt_tiles_now()
@@ -2406,9 +2436,15 @@ def record_operator_deletions(before):
     # nothing anything used, so it is deleted rather than repaired. THE LESSON is not the typo:
     # the logoff hook's only report of failure was one status line nobody read, in the one code
     # path whose whole job is to notice what the operator changed.
-    prot = _protected_load() | removed
-    _protected_save(prot)
-    status.log(f"protected {len(removed)} operator-deleted tiles (never rebuild); total {len(prot)}")
+    # No blacklist any more - the removal becomes a LESSON about the kind of thing removed.
+    try:
+        import corrections
+        corrections.record([{"kind": k, "role": None, "where": t}
+                            for (t, k) in _removal_kinds(removed)])
+    except Exception as e:
+        status.log("corrections: could not record operator removals (%s)" % str(e)[:80])
+    _protected_save(set())          # nothing is sacred; clear any legacy blacklist on disk
+    status.log("learned from %d operator-removed tiles (no ground protected)" % len(removed))
     return len(removed)
 
 
@@ -3158,7 +3194,13 @@ def diff_since_baseline(protect=True):
         try:
             gone = {(int(p[1]), int(p[2])) for p in
                     (e.split("|") for e in removed if isinstance(e, str)) if len(p) >= 3}
-            prot = _protected_load() | gone
+            try:
+                import corrections
+                corrections.record([{"kind": k, "role": None, "where": t}
+                                    for (t, k) in _removal_kinds(gone)])
+            except Exception as e:
+                status.log("corrections: could not record removals (%s)" % str(e)[:80])
+            prot = set()
             _protected_save(prot)
             status.log("protected %d operator-removed tiles (never rebuild); total %d"
                        % (len(gone), len(prot)))

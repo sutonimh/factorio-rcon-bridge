@@ -286,14 +286,21 @@ def test_record_operator_deletions_has_no_undefined_reference():
     import inspect
     src = inspect.getsource(B.record_operator_deletions)
     assert "laid_tiles" not in src, "the dead line referencing an undefined `tiles` is gone"
-    calls = []
+    # The operator killed sacred ground (2026-08-31): a removal now becomes a LESSON about
+    # the KIND of thing removed, and NO ground is protected. A coordinate blacklist both
+    # sterilised good land and taught nothing that survived a ten-tile move.
+    import corrections
+    calls, learned = [], []
     undos = [_patch(B, "belt_tiles_now", lambda: {(1, 1)}),
-             _patch(B, "_protected_load", lambda: set()),
              _patch(B, "_protected_save", lambda s: calls.append(s)),
+             _patch(corrections, "record", lambda rs, **k: learned.extend(rs)),
              _patch(B.status, "log", lambda m: None)]
     try:
         n = B.record_operator_deletions({(1, 1), (2, 2)})
     finally:
         for u in undos:
             u()
-    assert n == 1 and calls and (2, 2) in calls[0]
+    assert n == 1
+    assert learned, "the removal taught nothing"
+    assert all(not c for c in calls), "ground was protected; there is meant to be none"
+    assert B._protected_load() == set(), "sacred ground is back"

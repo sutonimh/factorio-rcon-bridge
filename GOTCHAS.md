@@ -1908,3 +1908,43 @@ gate refusal — the logs look healthy and the map looks built. The only symptom
 production is zero and every belt is empty. When a freshly built base does nothing at all,
 check power at the *source* first: an empty belt at the mine means nothing was ever mined, and
 everything downstream of that is noise.
+
+---
+
+## No sacred ground: a removal is a lesson, not a forbidden coordinate
+
+`record_operator_deletions` used to protect every tile the operator cleared, forever. The
+operator killed the idea (2026-08-31):
+
+> "i dont want any sacred ground established. but i dont want the bot to just keep rebuilding
+> stuff i tear down. the purpose of me tearing things down is to correct mistakes the bot
+> makes. the bot should learn from the changes i make and not just keep repeating mistakes"
+
+Both halves matter, and a coordinate blacklist served **neither**:
+
+- **It sterilised good land.** The builder printed `OPERATOR-OWNED ROUTE: 19/31 tiles are
+  operator-protected` and refused to build a copper outpost on ground whose only crime was
+  having held a bad one. It also could not tell an authorised teardown from a hand-deletion,
+  so our *own* demolition became protected and blocked its own replacement.
+- **It taught nothing.** Move ten tiles left and the identical mistake is legal again. The
+  bot rebuilds it, the operator tears it down again, and the blacklist grows while the
+  behaviour never changes.
+
+`corrections.py` replaces it. A removal reduces to a **signature** — *what* was removed, in
+*what role*, with *what fault* — and never a position. `check(kind, role, fault)` is what the
+builder consults before building. A lesson earned at one end of the map applies at the other;
+the land stays free.
+
+Two details that keep it honest:
+
+- **A fault is diagnosed from the world or left blank.** `orphan_output`, `unfed_input`,
+  `duplicate`, `disconnected` are each checkable from a census. Anything else records as
+  undiagnosed, and `undiagnosed()` surfaces those rather than hiding them — a fault name
+  invented to fill the field would make a weak correction look authoritative.
+- **One removal is tidying; three is a policy.** A signature only hardens into a rule after
+  `HARD_AFTER` corrections, so a single teardown does not permanently forbid a whole class of
+  build.
+
+`_protected_load()` now returns an empty set always. It is kept, rather than deleted, purely
+so its eight callers need no surgery — the blacklist is gone at the one choke point they all
+read.

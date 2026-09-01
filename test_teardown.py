@@ -127,3 +127,32 @@ def test_lane_caches_are_in_the_stale_list():
     """These are the files that made the bot aim at the old base."""
     assert "lanes.json" in T.STALE_STATE
     assert "supply-lanes.json" in T.STALE_STATE
+
+
+def test_reconcile_releases_our_own_removals_but_keeps_the_operators(monkeypatch):
+    """diff_since_baseline protects anything that vanished while the builder was down, as the
+    operator's INTENT. It cannot tell an authorised teardown from a hand-deletion, so after
+    this one the builder refused to rebuild: "OPERATOR-OWNED ROUTE: 19/31 tiles are
+    operator-protected". Ours must be released; his must be kept."""
+    import bootstrap as B
+    his = {(100, 100), (101, 100)}
+    ours = {(5, 5), (6, 5)}
+    store = {"p": his | ours}
+    monkeypatch.setattr(B, "_protected_load", lambda: set(store["p"]))
+    monkeypatch.setattr(B, "_protected_save", lambda t: store.__setitem__("p", set(t)))
+    monkeypatch.setattr(B, "save_baseline", lambda *a, **k: 42)
+    said = []
+    freed = T.reconcile_ownership(None, removed_tiles=ours, log=said.append)
+    assert freed == 2
+    assert store["p"] == his, "the operator's own protected tiles were dropped"
+    assert "re-baselined 42" in " ".join(said)
+
+
+def test_reconcile_with_no_removals_still_rebaselines(monkeypatch):
+    import bootstrap as B
+    monkeypatch.setattr(B, "_protected_load", lambda: {(1, 1)})
+    monkeypatch.setattr(B, "_protected_save", lambda t: None)
+    monkeypatch.setattr(B, "save_baseline", lambda *a, **k: 7)
+    said = []
+    assert T.reconcile_ownership(None, log=said.append) == 0
+    assert "re-baselined 7" in " ".join(said)
