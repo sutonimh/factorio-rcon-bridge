@@ -119,40 +119,33 @@ def blocks(machines, inserters):
 
 
 # --------------------------------------------------------------------------- the gaps
-def unfed_blocks(blocks_, lane_ends, belt_dirs=None, belt_tiles=()):
-    """Blocks whose input rows nothing delivers to - the work that actually needs doing.
+def unfed_blocks(blocks_, lane_ends=(), belt_dirs=None, belt_tiles=(), starved=None):
+    """Blocks that are actually starving, and which input row a lane should therefore reach.
 
-    THE SIDE MATTERS. An input row that flows west is fed at its EAST end; a lane ending at
-    its west end is that belt running out, not a delivery. The first version of this counted
-    any lane end near the row and so declared both smelting blocks fed, when in truth their
-    only "lane ends" were their own input belts terminating at the far side.
+    STARVATION IS OBSERVED, NOT INFERRED FROM GEOMETRY. Three attempts at deriving "is this
+    row fed?" from belt layout each needed another special case: a connected lane has no
+    terminus, so testing for a lane end marked a working lane as unfed; then a print's input
+    belt overhangs its machine cluster, so testing past the machine bbox let a block's OWN
+    belt count as its supply and hid forty starving furnaces behind a clean census. Belt
+    geometry cannot cheaply tell an arriving lane from the print's own tail.
 
-    `belt_dirs` maps an input row to the directions of the belts on it (from array_io); with
-    it, the feed side is derived. Without it we fall back to "a lane ends anywhere along the
-    row", which is the older, laxer test - stated plainly so a caller knows what it bought.
+    The machines already know. A furnace with no ore reports it, unambiguously, whatever the
+    belts look like. So STATUS answers "is this block fed" and STRUCTURE answers "where would
+    the lane go" - each used for what it can actually settle.
+
+    `starved` maps a machine tile to True when the game reports it short of ingredients.
     """
-    ends = set(map(tuple, lane_ends))
-    feeds = set(map(tuple, belt_tiles))
+    starved = starved or {}
     out = []
     for b in blocks_:
-        x1, _, x2, _ = b["bbox"]
+        x1, y1, x2, y2 = b["bbox"]
+        hungry = sum(1 for (mx, my), v in starved.items()
+                     if v and x1 - 1 <= mx <= x2 + 1 and y1 - 1 <= my <= y2 + 1)
+        if not hungry:
+            continue
         for row in b["io"].get("input", []):
             side = array_io.feed_end((belt_dirs or {}).get(row, [])) if belt_dirs else None
-            # ASK WHETHER SOMETHING ARRIVES, NOT WHETHER A LANE STOPS NEARBY. A connected
-            # lane has no terminus at all - it runs into the block - so testing for a lane
-            # END marked the working iron lane (58 plates/min at the time) as unfed, which
-            # would have sent a fixer to rebuild a belt that was already delivering.
-            # A row is fed when a belt sits on the tile just past its feed end.
-            if side == "east":
-                ok = (x2 + 1, row) in feeds or any(
-                    abs(ey - row) <= 1 and ex > x2 for (ex, ey) in ends)
-            elif side == "west":
-                ok = (x1 - 1, row) in feeds or any(
-                    abs(ey - row) <= 1 and ex < x1 for (ex, ey) in ends)
-            else:
-                ok = any(abs(ey - row) <= 1 and x1 - 4 <= ex <= x2 + 4 for (ex, ey) in ends)
-            if not ok:
-                out.append({"block": b, "input_row": row, "feed_side": side})
+            out.append({"block": b, "input_row": row, "feed_side": side, "starved": hungry})
     return out
 
 
@@ -171,8 +164,10 @@ def summary(census):
         parts.append("%s block: %d machines at %s in=%s out=%s"
                      % (b["kind"], b["count"], b["bbox"], io.get("input"), io.get("output")))
     for u in census.get("unfed", []):
-        parts.append("UNFED: %s block input row y=%d has no lane delivering to its %s end"
-                     % (u["block"]["kind"], u["input_row"], u.get("feed_side") or "feed"))
+        parts.append("STARVED: %s block (%d machines short) wants a lane to the %s end of "
+                     "input row y=%d"
+                     % (u["block"]["kind"], u.get("starved", 0),
+                        u.get("feed_side") or "feed", u["input_row"]))
     return "\n".join(parts) or "nothing on the base yet"
 
 
@@ -205,8 +200,28 @@ def census(A):
     ends = lane_ends(A)
     bl = blocks(machines, inserters)
     dirs, tiles = belt_rows(A)
-    return {"mines": mines(drills), "blocks": bl, "lane_ends": ends,
-            "belt_dirs": dirs, "unfed": unfed_blocks(bl, ends, dirs, tiles)}
+    hungry = starved_machines(A)
+    return {"mines": mines(drills), "blocks": bl, "lane_ends": ends, "belt_dirs": dirs,
+            "starved": hungry, "unfed": unfed_blocks(bl, ends, dirs, tiles, hungry)}
+
+
+def starved_machines(A):
+    """{(x,y): True} for machines the GAME reports short of ingredients. The unambiguous
+    answer to "is this block fed", which no amount of belt geometry gives cheaply."""
+    raw = A._print(
+        "/sc local s=game.surfaces[1] local o={} "
+        "local S={[defines.entity_status.no_ingredients]=true,"
+        "[defines.entity_status.item_ingredient_shortage]=true} "
+        "for _,m in pairs(s.find_entities_filtered{type={'furnace','assembling-machine'}}) do "
+        "  if S[m.status] then "
+        "    o[#o+1]=math.floor(m.position.x)..'|'..math.floor(m.position.y) end end "
+        "rcon.print(table.concat(o,';'))").strip()
+    out = {}
+    for tok in raw.split(";"):
+        f = tok.split("|")
+        if len(f) == 2:
+            out[(int(f[0]), int(f[1]))] = True
+    return out
 
 
 def belt_rows(A):

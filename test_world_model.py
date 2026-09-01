@@ -86,65 +86,47 @@ def test_a_block_with_no_inserters_reports_no_io():
 
 
 # --------------------------------------------------------------------------- the gaps
-def test_an_input_row_with_no_lane_reaching_it_is_unfed():
-    """Derivable, rather than something a stalled-flow detector infers minutes later."""
-    blocks = [{"kind": "furnace", "count": 20, "bbox": (38, -31, 81, -21),
-               "io": {"input": [-31], "output": [-26]}}]
-    assert W.unfed_blocks(blocks, lane_ends=[]) != []
-    assert W.unfed_blocks(blocks, lane_ends=[(82, -31)]) == []
 
-
-def test_a_lane_ending_far_away_does_not_count_as_feeding():
-    blocks = [{"kind": "furnace", "count": 20, "bbox": (38, -31, 81, -21),
-               "io": {"input": [-31], "output": []}}]
-    assert W.unfed_blocks(blocks, lane_ends=[(200, -31)]) != []
-
-
-def test_summary_names_what_is_starved():
-    census = {"mines": [{"ore": "iron-ore", "drills": 5, "bbox": (14, -42, 24, -42)}],
-              "blocks": [], "unfed": [{"block": {"kind": "furnace"}, "input_row": -31}]}
-    out = W.summary(census)
-    assert "iron-ore mine: 5 drills" in out
-    assert "UNFED" in out and "y=-31" in out
 
 
 def test_summary_of_an_empty_base():
     assert "nothing on the base yet" in W.summary({})
 
 
-def test_a_lane_ending_on_the_WRONG_side_does_not_feed_the_block():
-    """An input row flowing west is fed at its EAST end. A lane ending at the west end is
-    that belt running out, not a delivery. The first version counted any end near the row and
-    declared both smelting blocks fed, when their only lane ends were their own input belts
-    terminating at the far side."""
-    blocks = [{"kind": "furnace", "count": 40, "bbox": (40, -31, 78, -21),
-               "io": {"input": [-31], "output": [-26]}}]
-    dirs = {-31: [12] * 41}                     # flows west -> must be fed from the east
-    assert W.unfed_blocks(blocks, [(40, -31)], dirs) != [], "west-end terminus counted as a feed"
-    assert W.unfed_blocks(blocks, [(82, -31)], dirs) == [], "east-end delivery not recognised"
 
 
-def test_the_feed_side_is_reported():
-    blocks = [{"kind": "furnace", "count": 40, "bbox": (40, -31, 78, -21),
-               "io": {"input": [-31], "output": []}}]
-    got = W.unfed_blocks(blocks, [], {-31: [12] * 41})
+
+
+
+# --------------------------------------------------------------------------- starvation
+def _blk(inputs):
+    return {"kind": "furnace", "count": 40, "bbox": (40, -28, 78, -23),
+            "io": {"input": inputs, "output": [-26]}}
+
+
+def test_starvation_is_observed_not_inferred_from_belts():
+    """Three attempts at deriving "is this row fed?" from belt layout each needed another
+    special case - a connected lane has no terminus; a print's input belt overhangs its
+    machines so the block's OWN belt counted as its supply, hiding 40 starving furnaces.
+    The machines already know."""
+    b = _blk([-31])
+    hungry = {(50, -28): True, (52, -28): True}
+    got = W.unfed_blocks([b], starved=hungry, belt_dirs={-31: [12] * 41})
+    assert len(got) == 1 and got[0]["starved"] == 2
     assert got[0]["feed_side"] == "east"
-    assert "east end" in W.summary({"unfed": got})
 
 
-def test_without_directions_it_falls_back_to_the_laxer_test():
-    """Stated plainly so a caller knows what it bought."""
-    blocks = [{"kind": "furnace", "count": 40, "bbox": (40, -31, 78, -21),
-               "io": {"input": [-31], "output": []}}]
-    assert W.unfed_blocks(blocks, [(40, -31)]) == []
+def test_a_fed_block_is_not_reported_however_its_belts_look():
+    b = _blk([-31])
+    assert W.unfed_blocks([b], starved={}) == []
 
 
-def test_a_belt_arriving_at_the_feed_end_counts_as_fed():
-    """A CONNECTED lane has no terminus - it runs into the block - so testing for a lane END
-    marked the working iron lane (58 plates/min) as unfed, which would have sent a fixer to
-    rebuild a belt that was already delivering. Ask whether something ARRIVES."""
-    blocks = [{"kind": "furnace", "count": 40, "bbox": (40, -31, 78, -21),
-               "io": {"input": [-31], "output": []}}]
-    dirs = {-31: [12] * 41}
-    assert W.unfed_blocks(blocks, [], dirs, belt_tiles=[(79, -31)]) == []
-    assert W.unfed_blocks(blocks, [], dirs, belt_tiles=[(20, -31)]) != []
+def test_starving_machines_elsewhere_do_not_implicate_this_block():
+    b = _blk([-31])
+    assert W.unfed_blocks([b], starved={(500, 500): True}) == []
+
+
+def test_summary_says_which_end_the_lane_should_reach():
+    got = [{"block": {"kind": "furnace"}, "input_row": -31, "feed_side": "east", "starved": 40}]
+    out = W.summary({"unfed": got})
+    assert "STARVED" in out and "east end" in out and "y=-31" in out
