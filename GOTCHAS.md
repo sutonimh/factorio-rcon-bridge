@@ -1948,3 +1948,30 @@ Two details that keep it honest:
 `_protected_load()` now returns an empty set always. It is kept, rather than deleted, purely
 so its eight callers need no surgery — the blacklist is gone at the one choke point they all
 read.
+
+---
+
+## `%d` and `math.floor` disagree by one on negative coordinates
+
+```lua
+string.format('%d', -30.5)  -->  -30     (truncates toward zero)
+math.floor(-30.5)           -->  -31     (the actual tile)
+```
+
+A belt entity centred at y = −30.5 occupies **tile row −31**. Print it with `%d` and you get
+"−30". Both appear throughout this codebase, and mixing them cost most of a session:
+
+- I measured the smelter array's belt rows as −31/−26/−21 with `math.floor`, then re-probed
+  with `%d` and got −30/−25/−20, and spent an hour reasoning about "two parallel belts one row
+  apart" that were **the same belt**.
+- I concluded the array's input row "runs east while its inserters expect west" and wrote it
+  into a commit message. Wrong: an `area={{x,-32},{x+0.99,-30.01}}` query spans **two** tile
+  rows, so I was reading the row above.
+- The mine's output belts sit at centre −40.5 = tile −41, and a lane planned from tile −40 was
+  one row south of the drills the whole time. It built perfectly and connected to nothing.
+
+**Rules.** Use `math.floor` for anything that is a tile, everywhere, and never `%d` on a
+position you intend to compare. When an `area=` filter is meant to cover one tile row, write
+it as `{{x, y}, {x+0.99, y+0.99}}` — `-30.01` as an upper bound silently includes the row
+above. And the authoritative question is never "what row is this belt on" but **"what tile
+does the inserter pick from"** — `pickup_position` is exact and needs no convention.
