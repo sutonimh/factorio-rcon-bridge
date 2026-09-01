@@ -16,6 +16,10 @@ it was told about. A fixer that works from a census maintains the base that is t
 import belt_router
 import world_model
 
+# Below this many drills a patch cannot keep a smelting block fed, so it is not a candidate
+# while a bigger one exists. A one-drill outpost delivered four ore to forty furnaces.
+MIN_FEED_DRILLS = 3
+
 
 def ore_for_block(block, census):
     """Which ore a smelting block is FOR, derived rather than declared.
@@ -41,6 +45,10 @@ def assign(census, carrying=None):
     resumed next pass rather than replaced by a different plan.
     """
     carrying = carrying or {}
+    # A mine too small to feed a block is not a candidate while a viable one exists.
+    viable = [m for m in census.get("mines", [])
+              if int(m.get("drills") or 0) >= MIN_FEED_DRILLS]
+    pool = viable if viable else list(census.get("mines", []))
     by_block = {}
     for u in census.get("unfed", []):
         key = tuple(u["block"]["bbox"])
@@ -53,17 +61,27 @@ def assign(census, carrying=None):
         b = entry["block"]
         bx = (b["bbox"][0] + b["bbox"][2]) // 2
         by = (b["bbox"][1] + b["bbox"][3]) // 2
+        want = b.get("ore")          # what this block actually smelts, if it has ever run
         best = None
-        for m in census.get("mines", []):
+        for m in pool:
             if m["ore"] in ("coal", "unknown") or not m.get("drops"):
                 continue
             if m["ore"] in taken:
                 continue
+            if want and m["ore"] != want:
+                continue                 # a block that smelts iron does not want a copper lane
             mx = (m["bbox"][0] + m["bbox"][2]) // 2
             my = (m["bbox"][1] + m["bbox"][3]) // 2
             d = abs(mx - bx) + abs(my - by)
-            if best is None or d < best[0] or (d == best[0] and m["ore"] < best[1]["ore"]):
-                best = (d, m)
+            # A CAPACITY FLOOR, THEN NEAREST - which is what both failures actually wanted.
+            # Nearest-only sent a ONE-DRILL outpost to feed forty furnaces (the lane built
+            # fine and delivered four ore). Capacity-only then sent copper 148 belts past a
+            # five-drill iron patch sixty belts away, because copper had one more drill.
+            # Neither number is the goal: a source has to be able to fill the block, and past
+            # that, belt is just cost.
+            key = (d, -int(m.get("drills") or 0), m["ore"])
+            if best is None or key < best[0]:
+                best = (key, m)
         if not best:
             continue
         taken.add(best[1]["ore"])
@@ -92,7 +110,12 @@ def plan_lanes(A, census=None, log=None):
         if goal is None:
             say("skip %s block row %d: feed side is ambiguous, not guessing" % (block["kind"], row))
             continue
-        start = mine["drops"][0]
+        # START FROM WHERE THE ORE ALREADY GETS TO. The mine's drop tile usually has a belt
+        # on it already, so routing from there finds no route at all - and even when it does,
+        # it builds a second lane beside the one that exists. If a belt run from this mine
+        # already terminates somewhere, extend THAT: it is shorter, it reuses what is built,
+        # and it is what "maintaining the infrastructure" means rather than duplicating it.
+        start = _lane_start(mine, c)
         x1 = min(start[0], goal[0]) - 25
         y1 = min(start[1], goal[1]) - 25
         x2 = max(start[0], goal[0]) + 25
@@ -104,6 +127,17 @@ def plan_lanes(A, census=None, log=None):
         say("%s: %s -> %s  %s" % (mine["ore"], start, goal,
                                   ("%d belts" % len(route)) if route else "NO ROUTE"))
     return plans
+
+
+def _lane_start(mine, census, radius=40):
+    """The end of the mine's existing lane if it has one, else its drop tile."""
+    drop = mine["drops"][0]
+    best = None
+    for e in census.get("lane_ends", []):
+        d = abs(e[0] - drop[0]) + abs(e[1] - drop[1])
+        if d <= radius and (best is None or d < best[0]):
+            best = (d, tuple(e))
+    return best[1] if best else drop
 
 
 def _beside(tile, obs):

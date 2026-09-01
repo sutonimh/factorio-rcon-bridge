@@ -145,3 +145,90 @@ def test_one_lane_per_pass(monkeypatch):
          "block": (0, 0, 1, 1)}])
     fake = _FakeA({"transport-belt": 999})
     assert len(infra.build_lanes(fake, {}, log=lambda m: None)) == 1
+
+
+def test_capacity_beats_distance_when_choosing_a_mine():
+    """Picking the nearest sent a ONE-DRILL outpost to feed a forty-furnace block, because it
+    sat closer than the five-drill patch. The lane built fine and delivered four ore. Belt
+    length is cheap and one-off; a source that cannot fill the block starves it forever."""
+    b = block(40, -28, 78, -23, [-31])
+    near_tiny = dict(mine("iron-ore", 35, -44), drills=1)
+    far_big = dict(mine("iron-ore", 14, -43), drills=5)
+    c = {"mines": [near_tiny, far_big],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    chosen = infra.assign(c)[0][0]
+    assert chosen["drills"] == 5, "picked the nearest mine over the one that can feed the block"
+
+
+def test_distance_still_breaks_ties_between_equal_mines():
+    b = block(40, -28, 78, -23, [-31])
+    near = dict(mine("iron-ore", 30, -40), drills=5)
+    far = dict(mine("copper-ore", -80, -80), drills=5)
+    c = {"mines": [far, near],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c)[0][0]["ore"] == "iron-ore"
+
+
+def test_a_blocks_known_ore_overrides_capacity():
+    """Capacity-first sent COPPER to the iron block, because copper had six drills to iron's
+    five and nothing recorded what the block smelts. If the block has ever run, it knows."""
+    b = dict(block(40, -28, 78, -23, [-31]), ore="iron-ore")
+    c = {"mines": [dict(mine("copper-ore", -32, -66), drills=6),
+                   dict(mine("iron-ore", 14, -43), drills=5)],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c)[0][0]["ore"] == "iron-ore"
+
+
+def test_an_unknown_block_still_falls_back_to_capacity():
+    """A cold block that has never run says None, and inventing an affinity from where it
+    sits would be a guess dressed as knowledge."""
+    b = block(40, -28, 78, -23, [-31])
+    c = {"mines": [dict(mine("copper-ore", -32, -66), drills=6),
+                   dict(mine("iron-ore", 35, -44), drills=1)],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c)[0][0]["drills"] == 6
+
+
+def test_a_tiny_outpost_is_not_a_candidate_while_a_real_mine_exists():
+    """Nearest-only sent a one-drill outpost to feed forty furnaces; the lane built fine and
+    delivered four ore."""
+    b = block(40, -28, 78, -23, [-31])
+    c = {"mines": [dict(mine("iron-ore", 35, -44), drills=1),
+                   dict(mine("iron-ore", 14, -43), drills=5)],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c)[0][0]["drills"] == 5
+
+
+def test_among_viable_mines_the_nearest_wins():
+    """Capacity-only sent copper 148 belts past a five-drill iron patch sixty belts away,
+    because copper had one more drill. Past the floor, belt is just cost."""
+    b = block(40, -28, 78, -23, [-31])
+    c = {"mines": [dict(mine("copper-ore", -32, -66), drills=6),
+                   dict(mine("iron-ore", 14, -43), drills=5)],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c)[0][0]["ore"] == "iron-ore"
+
+
+def test_a_tiny_mine_is_used_when_it_is_all_there_is():
+    b = block(40, -28, 78, -23, [-31])
+    c = {"mines": [dict(mine("iron-ore", 35, -44), drills=1)],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c) != []
+
+
+def test_a_lane_is_extended_from_where_the_ore_already_reaches():
+    """The mine's drop tile usually already has a belt on it, so routing from there finds no
+    route at all - and when it does, it builds a second lane beside the one that exists."""
+    m = mine("iron-ore", 14, -43)
+    census = {"lane_ends": [(26, -41), (999, 999)]}
+    assert infra._lane_start(m, census) == (26, -41)
+
+
+def test_with_no_existing_lane_it_starts_at_the_drop():
+    m = mine("iron-ore", 14, -43)
+    assert infra._lane_start(m, {"lane_ends": []}) == m["drops"][0]
+
+
+def test_a_far_away_lane_end_is_not_treated_as_this_mines():
+    m = mine("iron-ore", 14, -43)
+    assert infra._lane_start(m, {"lane_ends": [(900, 900)]}) == m["drops"][0]

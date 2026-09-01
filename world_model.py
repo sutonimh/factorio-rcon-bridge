@@ -114,7 +114,7 @@ def blocks(machines, inserters):
                     if bx[0] - 3 <= i["pick"][0] <= bx[2] + 3
                     and bx[1] - 3 <= i["pick"][1] <= bx[3] + 3]
             out.append({"kind": kind, "count": len(group), "bbox": bx,
-                        "io": array_io.classify(near, rows)})
+                        "io": array_io.classify(near, rows), "ore": None})
     return out
 
 
@@ -201,6 +201,8 @@ def census(A):
     bl = blocks(machines, inserters)
     dirs, tiles = belt_rows(A)
     hungry = starved_machines(A)
+    for b in bl:
+        b["ore"] = block_ore(A, b)
     return {"mines": mines(drills), "blocks": bl, "lane_ends": ends, "belt_dirs": dirs,
             "starved": hungry, "unfed": unfed_blocks(bl, ends, dirs, tiles, hungry)}
 
@@ -261,3 +263,55 @@ def lane_ends(A):
         if len(f) == 2:
             out.append((int(f[0]), int(f[1])))
     return out
+
+
+def block_ore(A, block):
+    """Which ore a smelting block is FOR - read off the block, never assumed from position.
+
+    Capacity-first mine selection sent COPPER to the iron block, because copper happened to
+    have six drills against iron's five and nothing recorded what the block smelts. The block
+    itself knows, in three places, in descending order of how directly:
+
+      1. ore sitting in its furnaces' input slots
+      2. ore on its own input belts
+      3. the plate its furnaces have produced, which names the ore that made it
+
+    When none of the three says anything - a cold block that has never run - the honest answer
+    is None, and the caller falls back to capacity and distance rather than inventing an
+    affinity from where the block happens to sit.
+    """
+    x1, y1, x2, y2 = block["bbox"]
+    raw = A._print(
+        "/sc local s=game.surfaces[1] local c={} "
+        "for _,m in pairs(s.find_entities_filtered{type='furnace',"
+        "  area={{%d,%d},{%d,%d}}}) do "
+        "  local inv=m.get_inventory(defines.inventory.furnace_source) "
+        "  if inv then for _,it in pairs(inv.get_contents()) do "
+        "    c[it.name]=(c[it.name] or 0)+it.count end end "
+        "  local o=m.get_output_inventory() "
+        "  if o then for _,it in pairs(o.get_contents()) do "
+        "    c[it.name]=(c[it.name] or 0)+it.count end end end "
+        "for _,b in pairs(s.find_entities_filtered{type='transport-belt',"
+        "  area={{%d,%d},{%d,%d}}}) do "
+        "  for li=1,b.get_max_transport_line_index() do "
+        "    for _,it in pairs(b.get_transport_line(li).get_contents()) do "
+        "      c[it.name]=(c[it.name] or 0)+it.count end end end "
+        "local o={} for k,v in pairs(c) do o[#o+1]=k..'='..v end "
+        "rcon.print(table.concat(o,' '))"
+        % (x1 - 2, y1 - 2, x2 + 2, y2 + 2, x1 - 3, y1 - 4, x2 + 3, y2 + 4)).strip()
+    counts = {}
+    for tok in raw.split():
+        if "=" in tok:
+            k, v = tok.rsplit("=", 1)
+            try:
+                counts[k] = int(v)
+            except ValueError:
+                pass
+    for name in sorted(counts, key=lambda n: -counts[n]):
+        if name.endswith("-ore"):
+            return name
+        if name == "iron-plate":
+            return "iron-ore"
+        if name == "copper-plate":
+            return "copper-ore"
+    return None
