@@ -277,3 +277,25 @@ def test_lane_context_carries_shape_not_coordinates():
     assert c == {"kind": "ore_lane", "ore": "iron-ore", "drills": 5,
                  "machines": 40, "length": 3}
     assert "14" not in str(c) and "-31" not in str(c)
+
+
+def test_verify_settles_in_proportion_to_the_run(monkeypatch):
+    """A 50-belt lane needs over a minute to carry its first ore. Measuring on completion
+    recorded "starved 80 -> 80" for a working lane - and that false negative goes into the
+    memory the bot now consults, teaching it to avoid the correct action."""
+    import inspect
+    src = inspect.getsource(infra.verify)
+    assert "time.sleep" in src, "verify no longer settles before judging"
+    assert "len(plan.get(\"route\")" in src, "the settle does not scale with the lane length"
+
+
+def test_a_short_lane_still_gets_a_floor_of_settle_time(monkeypatch, tmp_path):
+    import memory, world_model
+    monkeypatch.setattr(memory, "PATH", tmp_path / "m.jsonl")
+    slept = []
+    monkeypatch.setattr(infra.__dict__.setdefault("time", __import__("time")), "sleep",
+                        lambda s: slept.append(s))
+    monkeypatch.setattr(world_model, "census", lambda A: {"unfed": []})
+    plan = {"ore": "iron-ore", "route": [1], "block": (0, 0, 1, 1), "drills": 5, "machines": 40}
+    infra.verify(None, plan, before=5, log=lambda m: None)
+    assert slept and slept[0] >= 20.0

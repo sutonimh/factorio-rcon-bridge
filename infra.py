@@ -223,15 +223,21 @@ def lane_context(plan):
             "length": len(plan.get("route") or ())}
 
 
-def verify(A, plan, before, log=None):
+def verify(A, plan, before, settle=None, log=None):
     """Did the lane change anything? Records the outcome either way.
 
-    A build that is never checked teaches nothing, and this repo has a standing rule that a
-    build which changes nothing gets removed. `before` is the starved-machine count for the
-    block; if it has not moved, the lane is not delivering whatever the belts look like.
+    SETTLE FIRST, AND SCALE IT TO THE RUN. A fifty-belt lane needs well over a minute to carry
+    its first ore, so measuring on completion records "starved 80 -> 80" for a lane that is
+    working perfectly - and that false negative goes straight into the memory the bot now
+    consults, teaching it to avoid the correct action. feed_planner.verify already had this
+    exact bug and this exact fix; poisoning a learning store with it is worse than logging a
+    wrong line, because the wrong line does not persist and compound.
     """
+    import time
     import world_model
     say = log or (lambda m: None)
+    n = len(plan.get("route") or ())
+    time.sleep(settle if settle is not None else min(180.0, 20.0 + n * 1.5))
     after = _starved_in(world_model.census(A), plan.get("block"))
     good = after < before
     memory.remember("build_lane", plan.get("context") or lane_context(plan),
