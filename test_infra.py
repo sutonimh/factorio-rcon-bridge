@@ -299,3 +299,29 @@ def test_a_short_lane_still_gets_a_floor_of_settle_time(monkeypatch, tmp_path):
     plan = {"ore": "iron-ore", "route": [1], "block": (0, 0, 1, 1), "drills": 5, "machines": 40}
     infra.verify(None, plan, before=5, log=lambda m: None)
     assert slept and slept[0] >= 20.0
+
+
+def test_mine_params_generalise_rather_than_naming_a_patch():
+    """A drill COUNT would make every patch its own skill and nothing would match twice."""
+    assert infra.mine_params({"drills": 1}) == {"source": "tiny"}
+    assert infra.mine_params({"drills": 3}) == {"source": "small"}
+    assert infra.mine_params({"drills": 6}) == {"source": "big"}
+
+
+def test_the_library_can_override_the_hardcoded_ordering(tmp_path, monkeypatch):
+    """MIN_FEED_DRILLS and capacity-then-distance exist because I watched those failures. The
+    bot saw the same evidence; where it has reached its own conclusion, it should win."""
+    import skills
+    monkeypatch.setattr(skills, "PATH", tmp_path / "s.jsonl")
+    b = block(40, -28, 78, -23, [-31])
+    near_big = dict(mine("iron-ore", 30, -30), drills=6)
+    far_small = dict(mine("iron-ore", -60, -60), drills=3)
+    c = {"mines": [near_big, far_small],
+         "unfed": [{"block": b, "input_row": -31, "feed_side": "east"}]}
+    assert infra.assign(c)[0][0]["drills"] == 6      # rules alone prefer the near big one
+    for _ in range(4):                               # experience says "big" keeps failing here
+        skills.record("pick_mine", {"source": "big"}, {"machines": 40, "ore": "iron-ore"},
+                      "bad", path=tmp_path / "s.jsonl")
+        skills.record("pick_mine", {"source": "small"}, {"machines": 40, "ore": "iron-ore"},
+                      "good", path=tmp_path / "s.jsonl")
+    assert infra.assign(c)[0][0]["drills"] == 3, "the library did not override the rule"

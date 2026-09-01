@@ -15,6 +15,7 @@ it was told about. A fixer that works from a census maintains the base that is t
 """
 import belt_router
 import memory
+import skills
 import world_model
 
 # Below this many drills a patch cannot keep a smelting block fed, so it is not a candidate
@@ -64,6 +65,7 @@ def assign(census, carrying=None):
         by = (b["bbox"][1] + b["bbox"][3]) // 2
         want = b.get("ore")          # what this block actually smelts, if it has ever run
         best = None
+        viable_here = []
         for m in pool:
             if m["ore"] in ("coal", "unknown") or not m.get("drops"):
                 continue
@@ -81,14 +83,34 @@ def assign(census, carrying=None):
             # Neither number is the goal: a source has to be able to fill the block, and past
             # that, belt is just cost.
             key = (d, -int(m.get("drills") or 0), m["ore"])
+            viable_here.append((key, m))
             if best is None or key < best[0]:
                 best = (key, m)
-        if not best:
+        if not viable_here:
             continue
-        taken.add(best[1]["ore"])
+        # LET THE LIBRARY REORDER WHAT THE RULES PROPOSED. MIN_FEED_DRILLS and
+        # capacity-floor-then-nearest exist because I watched a one-drill mine fail to feed
+        # forty furnaces and then watched copper get sent 148 belts past a nearer iron patch.
+        # The bot saw the same evidence. Where it has drawn its own conclusion, that
+        # conclusion wins; where it has none, my ordering stands unchanged.
+        viable_here = [m for _, m in sorted(viable_here, key=lambda t: t[0])]
+        chosen = skills.prefer("pick_mine", {"machines": int(b.get("count") or 0),
+                                             "ore": b.get("ore") or "unknown"},
+                               viable_here, param_of=mine_params)[0]
+        taken.add(chosen["ore"])
         for row, side in sorted(entry["rows"]):
-            out.append((best[1], b, row, side))
+            out.append((chosen, b, row, side))
     return out
+
+
+def mine_params(mine):
+    """The parameter choice a mine represents, in terms general enough to transfer.
+
+    A drill COUNT would make every patch its own skill and nothing would ever match twice;
+    the decision that actually generalises is "did I pick a big source or a small one".
+    """
+    n = int(mine.get("drills") or 0)
+    return {"source": "tiny" if n <= 2 else "small" if n <= 4 else "big"}
 
 
 def feed_tile(block, row, side):
@@ -245,6 +267,14 @@ def verify(A, plan, before, settle=None, log=None):
                     importance=1.5 if not good else 1.0,
                     detail=("starved %d -> %d after a %d-belt %s lane"
                             % (before, after, len(plan.get("route") or ()), plan.get("ore"))))
+    # BOTH STORES LEARN FROM ONE OUTCOME. memory records that this attempt went badly; the
+    # skill library records WHICH CHOICE went badly, so the next ranking is different. Feeding
+    # only the failure half is what left the bot able to regret a decision without ever
+    # making a better one.
+    n = int(plan.get("drills") or 0)
+    skills.record("pick_mine", {"source": "tiny" if n <= 2 else "small" if n <= 4 else "big"},
+                  {"machines": int(plan.get("machines") or 0), "ore": plan.get("ore")},
+                  "good" if good else "bad")
     say("infra: %s lane %s - starved %d -> %d"
         % (plan.get("ore"), "WORKED" if good else "did not help", before, after))
     return good

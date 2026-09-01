@@ -609,6 +609,10 @@ def _slow_upkeep(lap):
                             tags=("experience", r["action"]),
                             key="reflect:%s" % r["action"])
             status.log("memory: " + memory.summary())
+            import skills
+            learned = skills.explain()
+            if "no skills learned" not in learned:
+                status.log("skills:\n" + learned)
         except Exception as e:
             status.log(f"reflection error: {e}")
     if lap % 80 == 23 and os.environ.get("BUILDER_ENABLED", "1") == "1":

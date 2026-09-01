@@ -1,0 +1,1 @@
+{"action": "pick_mine", "contexts": [{"machines": 40, "ore": "iron-ore"}, {"machines": 40, "ore": "iron-ore"}], "key": "pick_mine|{\"source\": \"big\"}", "last": 1788227730.492956, "losses": 0, "params": {"source": "big"}, "wins": 2}
