@@ -50,8 +50,10 @@ def test_the_feed_tile_is_past_the_correct_end():
     """A west-flowing input row is fed from the EAST. Delivering to the wrong end puts ore on
     a belt that carries it away from the furnaces."""
     b = block(40, -31, 78, -21, [-31])
-    assert infra.feed_tile(b, -31, "east") == (80, -31)
-    assert infra.feed_tile(b, -31, "west") == (38, -31)
+    # With no belt information the best we can do is one tile past the machines; with it,
+    # the target moves past the row's actual belt end - see the test below.
+    assert infra.feed_tile(b, -31, "east") == (79, -31)
+    assert infra.feed_tile(b, -31, "west") == (39, -31)
 
 
 def test_an_ambiguous_feed_side_is_refused_not_guessed():
@@ -340,3 +342,91 @@ def test_plan_lanes_passes_a_goal_direction():
     import inspect
     src = inspect.getsource(infra.plan_lanes)
     assert "goal_dir=" in src, "the arriving belt's direction is left to the router again"
+
+
+def test_the_feed_tile_is_past_the_BELT_not_the_machines():
+    """A print's input belt overhangs its furnace cluster: machines end at x=78, the belt runs
+    to x=81. Aiming at x=80 lands the lane ON the existing belt, where plan_to_lua correctly
+    refuses to overwrite - so every bot-built lane stopped short and delivered nothing."""
+    b = block(40, -28, 78, -23, [-31])
+    belts = {(x, -31): 12 for x in range(38, 82)}
+    assert infra.feed_tile(b, -31, "east", belts) == (82, -31)
+    assert infra.feed_tile(b, -31, "east") == (79, -31)      # no belt info: machine edge
+
+
+def test_a_west_fed_row_reaches_past_the_belts_west_end():
+    b = block(40, -28, 78, -23, [-31])
+    belts = {(x, -31): 4 for x in range(30, 79)}
+    assert infra.feed_tile(b, -31, "west", belts) == (29, -31)
+
+
+class _OwnA:
+    """Fake game: `have` is the set of tiles holding belt; building fills `placed`."""
+    def __init__(self, have=()):
+        self.have = set(have)
+        self.destroyed = []
+    def _print(self, lua):
+        if "type={'transport-belt','underground-belt'}}[1] then" in lua:      # occupancy read
+            hits = []
+            for tok in lua.split("[==[")[1].split("]==]")[0].split(";"):
+                f = tok.split(",")
+                if len(f) == 2 and (int(f[0]), int(f[1])) in self.have:
+                    hits.append(tok)
+            return ";".join(hits)
+        if "e.destroy() n=n+1" in lua:                                        # rollback
+            n = 0
+            for tok in lua.split("[==[")[1].split("]==]")[0].split(";"):
+                f = tok.split(",")
+                if len(f) == 2 and (int(f[0]), int(f[1])) in self.have:
+                    self.have.discard((int(f[0]), int(f[1])))
+                    self.destroyed.append((int(f[0]), int(f[1])))
+                    n += 1
+            return str(n)
+        return ""
+
+
+def test_ownership_is_what_was_empty_before_and_full_after():
+    """The route crosses tiles that already held belt - the mine's own output, a print's
+    overhang - and deleting those to undo our own mistake would tear up the base."""
+    a = _OwnA(have={(5, 0)})
+    assert infra.occupied_tiles(a, [(4, 0), (5, 0), (6, 0)]) == {(5, 0)}
+
+
+def test_rollback_removes_only_what_the_plan_placed():
+    a = _OwnA(have={(4, 0), (5, 0), (6, 0)})
+    plan = {"ore": "iron-ore", "owned": [(4, 0), (6, 0)]}       # (5,0) was pre-existing
+    assert infra.rollback(a, plan, log=lambda m: None) == 2
+    assert (5, 0) in a.have, "it removed a belt it did not place"
+    assert sorted(a.destroyed) == [(4, 0), (6, 0)]
+
+
+def test_rollback_of_a_plan_that_placed_nothing_is_a_noop():
+    a = _OwnA(have={(4, 0)})
+    said = []
+    assert infra.rollback(a, {"owned": []}, log=said.append) == 0
+    assert a.have == {(4, 0)}
+    assert any("nothing to roll back" in m for m in said)
+
+
+def test_occupancy_reads_are_chunked():
+    """A long route is more tiles than one /sc line carries, and a truncated read would
+    UNDERSTATE what we own - leaving our own failed belts on the map forever."""
+    import inspect
+    src = inspect.getsource(infra.occupied_tiles)
+    assert "60" in src and "for grp in batch" in src
+
+
+def test_a_failed_lane_is_rolled_back(monkeypatch, tmp_path):
+    """Until now the standing rule 'a build that changes nothing gets removed' applied to me
+    and not to the bot: it laid three lanes that delivered nothing, left all three, and they
+    cluttered the corridor until the next route came back NO ROUTE."""
+    import memory, world_model
+    monkeypatch.setattr(memory, "PATH", tmp_path / "m.jsonl")
+    monkeypatch.setattr(world_model, "census", lambda A: {"unfed": [
+        {"block": {"bbox": (0, 0, 1, 1), "kind": "furnace"}, "starved": 40, "input_row": 0}]})
+    monkeypatch.setattr(infra.time, "sleep", lambda s: None)
+    a = _OwnA(have={(9, 9)})
+    plan = {"ore": "iron-ore", "route": [1], "block": (0, 0, 1, 1), "owned": [(9, 9)],
+            "drills": 5, "machines": 40}
+    assert infra.verify(a, plan, before=40, log=lambda m: None) is False
+    assert a.destroyed == [(9, 9)], "the failed lane was left on the map"

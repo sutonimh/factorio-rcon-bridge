@@ -122,13 +122,27 @@ def _into_block(goal, bbox, side):
     return None
 
 
-def feed_tile(block, row, side):
-    """The tile a lane must reach to deliver into `row` - just past the block's feed end."""
+def feed_tile(block, row, side, belt_tiles=None):
+    """The tile a lane must reach to deliver into `row` - just past the end of THAT ROW'S BELT.
+
+    Measuring past the MACHINE bbox is wrong and was the reason every bot-built lane delivered
+    nothing. A smelting print's input belt overhangs its furnace cluster: machines end at
+    x=78, the belt runs to x=81. Aiming at x=80 lands the lane ON the existing belt, where
+    plan_to_lua correctly refuses to overwrite - so the run stopped short, touched nothing,
+    and 111 items queued in the corridor while forty furnaces starved.
+
+    This is the same "measure past the belt, not the machines" correction already made in
+    world_model.unfed_blocks. I applied it there and did not carry it here.
+    """
     x1, _, x2, _ = block["bbox"]
+    if belt_tiles:
+        on_row = [bx for (bx, by) in belt_tiles if by == row and x1 - 12 <= bx <= x2 + 12]
+        if on_row:
+            x1, x2 = min(x1, min(on_row)), max(x2, max(on_row))
     if side == "east":
-        return (x2 + 2, row)
+        return (x2 + 1, row)
     if side == "west":
-        return (x1 - 2, row)
+        return (x1 - 1, row)
     return None
 
 
@@ -138,7 +152,7 @@ def plan_lanes(A, census=None, log=None):
     c = census or world_model.census(A)
     plans = []
     for mine, block, row, side in assign(c):
-        goal = feed_tile(block, row, side)
+        goal = feed_tile(block, row, side, c.get("belt_dirs_tiles") or c.get("belt_tiles"))
         if goal is None:
             say("skip %s block row %d: feed side is ambiguous, not guessing" % (block["kind"], row))
             continue
@@ -167,6 +181,75 @@ def plan_lanes(A, census=None, log=None):
         say("%s: %s -> %s  %s" % (mine["ore"], start, goal,
                                   ("%d belts" % len(route)) if route else "NO ROUTE"))
     return plans
+
+
+def occupied_tiles(A, tiles):
+    """Which of `tiles` currently hold a belt. Chunked - a long route is more tiles than one
+    /sc line can carry, and a truncated read would understate what we own."""
+    out = set()
+    batch, chunk = [], []
+    for t in tiles:
+        chunk.append(t)
+        if len(chunk) >= 60:
+            batch.append(chunk); chunk = []
+    if chunk:
+        batch.append(chunk)
+    for grp in batch:
+        spec = ";".join("%d,%d" % t for t in grp)
+        raw = A._print(
+            "/sc local s=game.surfaces[1] local o={} "
+            "for a,b in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+)') do "
+            "  local x,y=tonumber(a),tonumber(b) "
+            "  if s.find_entities_filtered{area={{x,y},{x+0.99,y+0.99}},"
+            "     type={'transport-belt','underground-belt'}}[1] then "
+            "    o[#o+1]=x..','..y end end "
+            "rcon.print(table.concat(o,';'))").strip()
+        for tok in raw.split(";"):
+            f = tok.split(",")
+            if len(f) == 2:
+                try:
+                    out.add((int(f[0]), int(f[1])))
+                except ValueError:
+                    pass
+    return out
+
+
+def rollback(A, plan, log=None):
+    """Remove the belts THIS plan placed, refunding them. Returns how many went.
+
+    The operator's standing rule is that a build which changes nothing gets removed, and until
+    now that applied to me and not to the bot: it laid three lanes that delivered nothing and
+    left all three in place, where they cluttered the corridor until the next route came back
+    NO ROUTE. A builder that cannot undo its own failures eventually blocks itself.
+
+    Only `plan["owned"]` is touched - tiles that were empty before this plan and hold belt
+    after it. Anything the route merely crossed is left alone.
+    """
+    say = log or (lambda m: None)
+    owned = plan.get("owned") or []
+    if not owned:
+        say("infra: nothing to roll back (the lane placed no new belt)")
+        return 0
+    n = 0
+    for i in range(0, len(owned), 60):
+        spec = ";".join("%d,%d" % tuple(t) for t in owned[i:i + 60])
+        raw = A._print(
+            "/sc local s=game.surfaces[1] local p=storage.derpface "
+            "local inv=p and p.valid and p.get_main_inventory() local n=0 "
+            "for a,b in ([==[" + spec + "]==]):gmatch('(-?%d+),(-?%d+)') do "
+            "  local x,y=tonumber(a),tonumber(b) "
+            "  for _,e in pairs(s.find_entities_filtered{area={{x,y},{x+0.99,y+0.99}},"
+            "     type={'transport-belt','underground-belt'}}) do "
+            "    if inv then local gp=e.prototype.items_to_place_this "
+            "      if gp and gp[1] then inv.insert{name=gp[1].name,count=1} end end "
+            "    e.destroy() n=n+1 end end "
+            "rcon.print(n)").strip()
+        try:
+            n += int(raw)
+        except ValueError:
+            pass
+    say("infra: rolled back %d belts of a %s lane that changed nothing" % (n, plan.get("ore")))
+    return n
 
 
 def _lane_start(mine, census, radius=40):
@@ -239,8 +322,17 @@ def build_lanes(A, census=None, log=None, max_lanes=1):
         say("infra: laying %s %s -> %s (%d belts)%s"
             % (p["ore"], p["from"], p["to"], len(route),
                "" if adv["verdict"] == "unknown" else "  [experience: %s]" % adv["verdict"]))
+        # OWNERSHIP. Record which of the route's tiles were EMPTY before we built, so a
+        # rollback can remove exactly what we placed and nothing else. Without this the only
+        # honest rollback is none: the route crosses tiles that already held belt (the mine's
+        # own output, a print's overhang) and deleting those would tear up the base to undo
+        # our own mistake.
+        want = [(s_["x"], s_["y"]) for s_ in route if not s_.get("adopt")]
+        before_tiles = occupied_tiles(A, want)
         for cmd in belt_router.plan_to_lua(route):
             A._print(cmd)
+        after_tiles = occupied_tiles(A, want)
+        p["owned"] = sorted(after_tiles - before_tiles)
         p["context"] = ctx
         built.append(p)
     return built
@@ -293,6 +385,8 @@ def verify(A, plan, before, settle=None, log=None):
                   "good" if good else "bad")
     say("infra: %s lane %s - starved %d -> %d"
         % (plan.get("ore"), "WORKED" if good else "did not help", before, after))
+    if not good:
+        rollback(A, plan, log=say)
     return good
 
 

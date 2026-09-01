@@ -144,9 +144,28 @@ def unfed_blocks(blocks_, lane_ends=(), belt_dirs=None, belt_tiles=(), starved=N
         if not hungry:
             continue
         for row in b["io"].get("input", []):
-            side = array_io.feed_end((belt_dirs or {}).get(row, [])) if belt_dirs else None
+            # SCOPE THE DIRECTION VOTE TO THIS BLOCK. belt_dirs is keyed by row alone, so
+            # every belt anywhere on that y - including a lane ninety tiles away serving
+            # something else - voted on which end of THIS block to feed. Live, the array's own
+            # input row ran east while distant belts on the same y ran west, so the census
+            # said "feed the east end" and every lane was aimed at the wrong side.
+            side = array_io.feed_end(_dirs_on_row(belt_tiles, belt_dirs, row, x1, x2))
             out.append({"block": b, "input_row": row, "feed_side": side, "starved": hungry})
     return out
+
+
+def _dirs_on_row(belt_tiles, belt_dirs, row, x1, x2, pad=6):
+    """The belt directions on `row` that belong to THIS block, not to the whole map.
+
+    `belt_tiles` maps (x, y) -> direction; when it is available we take only belts inside the
+    block's x-span (plus a small pad for the print's overhang) and the vote is about this
+    block. Falling back to `belt_dirs`, which is keyed by row alone, is the old behaviour and
+    is kept only so an older caller still works.
+    """
+    if isinstance(belt_tiles, dict) and belt_tiles:
+        return [d for (bx, by), d in belt_tiles.items()
+                if by == row and x1 - pad <= bx <= x2 + pad]
+    return (belt_dirs or {}).get(row, [])
 
 
 def orphan_producers(blocks_):
@@ -204,7 +223,8 @@ def census(A):
     for b in bl:
         b["ore"] = block_ore(A, b)
     return {"mines": mines(drills), "blocks": bl, "lane_ends": ends, "belt_dirs": dirs,
-            "starved": hungry, "unfed": unfed_blocks(bl, ends, dirs, tiles, hungry)}
+            "belt_tiles": tiles, "starved": hungry,
+            "unfed": unfed_blocks(bl, ends, dirs, tiles, hungry)}
 
 
 def starved_machines(A):
@@ -233,12 +253,12 @@ def belt_rows(A):
         "for _,b in pairs(s.find_entities_filtered{type='transport-belt'}) do "
         "  o[#o+1]=math.floor(b.position.x)..'|'..math.floor(b.position.y)..'|'..b.direction end "
         "rcon.print(table.concat(o,';'))").strip()
-    out, tiles = {}, set()
+    out, tiles = {}, {}
     for tok in raw.split(";"):
         f = tok.split("|")
         if len(f) == 3:
             out.setdefault(int(f[1]), []).append(int(f[2]))
-            tiles.add((int(f[0]), int(f[1])))
+            tiles[(int(f[0]), int(f[1]))] = int(f[2])
     return out, tiles
 
 

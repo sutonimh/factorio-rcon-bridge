@@ -130,3 +130,19 @@ def test_summary_says_which_end_the_lane_should_reach():
     got = [{"block": {"kind": "furnace"}, "input_row": -31, "feed_side": "east", "starved": 40}]
     out = W.summary({"unfed": got})
     assert "STARVED" in out and "east end" in out and "y=-31" in out
+
+
+def test_the_feed_side_vote_is_scoped_to_the_block():
+    """belt_dirs is keyed by row alone, so every belt anywhere on that y - including a lane
+    ninety tiles away serving something else - voted on which end of THIS block to feed. Live,
+    the array's own input row ran EAST while distant belts on the same y ran west, so the
+    census said "feed the east end" and every lane was aimed at the wrong side."""
+    b = {"kind": "furnace", "count": 40, "bbox": (40, -28, 78, -23),
+         "io": {"input": [-31], "output": []}}
+    near = {(x, -31): 4 for x in range(40, 79)}      # the block's own row: flows EAST
+    far = {(x, -31): 12 for x in range(-200, -150)}  # something else entirely, flows west
+    tiles = dict(near); tiles.update(far)
+    got = W.unfed_blocks([b], [], {-31: [12] * 50 + [4] * 39}, belt_tiles=tiles,
+                         starved={(50, -28): True})
+    assert got and got[0]["feed_side"] == "west", \
+        "distant belts on the same row decided this block's feed side"
