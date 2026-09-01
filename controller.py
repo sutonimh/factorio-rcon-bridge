@@ -595,6 +595,22 @@ def _slow_upkeep(lap):
             infra.maintain(A, log=status.log)
         except Exception as e:
             status.log(f"infra error: {e}")
+    if lap % 200 == 41:
+        # REFLECTION (Generative Agents): an action that keeps going badly is no longer an
+        # incident, it is a pattern, and belongs where the architect's prompt will see it.
+        # Without this the memory only ever accumulates and nothing is ever concluded.
+        try:
+            import memory
+            for r in memory.reflect():
+                lessons.add(condition="%s keeps failing" % r["action"],
+                            mistake="%d of %d attempts went badly: %s"
+                                    % (r["bad"], r["of"], r["detail"]),
+                            rule="experience says stop choosing this shape of plan",
+                            tags=("experience", r["action"]),
+                            key="reflect:%s" % r["action"])
+            status.log("memory: " + memory.summary())
+        except Exception as e:
+            status.log(f"reflection error: {e}")
     if lap % 80 == 23 and os.environ.get("BUILDER_ENABLED", "1") == "1":
         # Connecting a stranded product to something that eats it IS construction, so it
         # obeys the safe-mode flag the operator set.

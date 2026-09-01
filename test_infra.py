@@ -232,3 +232,48 @@ def test_with_no_existing_lane_it_starts_at_the_drop():
 def test_a_far_away_lane_end_is_not_treated_as_this_mines():
     m = mine("iron-ore", 14, -43)
     assert infra._lane_start(m, {"lane_ends": [(900, 900)]}) == m["drops"][0]
+
+
+def test_experience_can_veto_a_lane(monkeypatch, tmp_path):
+    """The loop that was missing: the bot produced the evidence for every correction made
+    today and consulted none of it."""
+    import bootstrap as B, memory
+    monkeypatch.setattr(B, "operator_present", lambda: False)
+    monkeypatch.setattr(memory, "PATH", tmp_path / "m.jsonl")
+    route = [{"x": i, "y": 0, "dir": 4, "entity": "transport-belt"} for i in range(60)]
+    plan = {"ore": "iron-ore", "from": (0, 0), "to": (60, 0), "route": route, "row": 0,
+            "block": (0, 0, 1, 1), "drills": 1, "machines": 40}
+    for _ in range(4):
+        memory.remember("build_lane", infra.lane_context(plan), "bad",
+                        path=tmp_path / "m.jsonl", detail="delivered 4 ore")
+    monkeypatch.setattr(infra, "plan_lanes", lambda *a, **k: [plan])
+    fake = _FakeA({"transport-belt": 999})
+    said = []
+    assert infra.build_lanes(fake, {}, log=said.append) == []
+    assert any("experience advises against" in m for m in said)
+    assert fake.sent == [], "it built despite the advice"
+
+
+def test_an_unknown_verdict_is_not_a_veto(monkeypatch, tmp_path):
+    """unknown means no information, never permission withheld - the bot has never done most
+    things, and a store that blocks the unfamiliar would freeze the base."""
+    import bootstrap as B, memory
+    monkeypatch.setattr(B, "operator_present", lambda: False)
+    monkeypatch.setattr(memory, "PATH", tmp_path / "empty.jsonl")
+    route = [{"x": 0, "y": 0, "dir": 4, "entity": "transport-belt"}]
+    monkeypatch.setattr(infra, "plan_lanes", lambda *a, **k: [
+        {"ore": "iron-ore", "from": (0, 0), "to": (1, 0), "route": route, "row": 0,
+         "block": (0, 0, 1, 1), "drills": 5, "machines": 40}])
+    fake = _FakeA({"transport-belt": 999})
+    assert len(infra.build_lanes(fake, {}, log=lambda m: None)) == 1
+
+
+def test_lane_context_carries_shape_not_coordinates():
+    """Positions would make every context unique and every lookup a miss - exactly how
+    corrections.check() ended up never matching anything."""
+    c = infra.lane_context({"ore": "iron-ore", "drills": 5, "machines": 40,
+                            "route": [1, 2, 3], "block": (40, -28, 78, -23),
+                            "from": (14, -41), "to": (80, -31)})
+    assert c == {"kind": "ore_lane", "ore": "iron-ore", "drills": 5,
+                 "machines": 40, "length": 3}
+    assert "14" not in str(c) and "-31" not in str(c)

@@ -14,6 +14,7 @@ lane to a demolished smelter row. A fixer that works from a record can only main
 it was told about. A fixer that works from a census maintains the base that is there.
 """
 import belt_router
+import memory
 import world_model
 
 # Below this many drills a patch cannot keep a smelting block fed, so it is not a candidate
@@ -123,7 +124,8 @@ def plan_lanes(A, census=None, log=None):
         obs = belt_router.scan_obstacles(x1, y1, x2, y2)
         route = belt_router.plan_route(_beside(start, obs), goal, obstacles=obs)
         plans.append({"ore": mine["ore"], "from": start, "to": goal, "row": row,
-                      "route": route, "block": block["bbox"]})
+                      "route": route, "block": block["bbox"],
+                      "drills": mine.get("drills"), "machines": block.get("count")})
         say("%s: %s -> %s  %s" % (mine["ore"], start, goal,
                                   ("%d belts" % len(route)) if route else "NO ROUTE"))
     return plans
@@ -186,11 +188,67 @@ def build_lanes(A, census=None, log=None, max_lanes=1):
             say("infra: %s lane needs %s - not laying a partial run"
                 % (p["ore"], ", ".join("%d %s" % (c, n) for n, c in sorted(short.items()))))
             continue
-        say("infra: laying %s %s -> %s (%d belts)" % (p["ore"], p["from"], p["to"], len(route)))
+        # ASK EXPERIENCE FIRST. This is the loop that was missing: the bot produced the
+        # evidence for every correction made today - a one-drill mine feeding forty furnaces,
+        # a lane laid beside an existing one - and consulted none of it, because I was the
+        # feedback loop. `unknown` is the common answer and means no information, never
+        # permission.
+        ctx = lane_context(p)
+        adv = memory.advise("build_lane", ctx)
+        if adv["verdict"] == "bad" and adv["confidence"] >= 0.6:
+            say("infra: experience advises against this lane (%s) - skipping" % adv["why"])
+            continue
+        say("infra: laying %s %s -> %s (%d belts)%s"
+            % (p["ore"], p["from"], p["to"], len(route),
+               "" if adv["verdict"] == "unknown" else "  [experience: %s]" % adv["verdict"]))
         for cmd in belt_router.plan_to_lua(route):
             A._print(cmd)
+        p["context"] = ctx
         built.append(p)
     return built
+
+
+def lane_context(plan):
+    """The facts about a lane that make one attempt comparable to another.
+
+    Deliberately NOT the coordinates. What generalises is the shape of the decision - how big
+    the source was, how big the sink, how far the run - so a lesson learned at one end of the
+    map informs the other. Positions would make every context unique and every lookup a miss,
+    which is exactly how corrections.check() ended up never matching anything.
+    """
+    b = plan.get("block") or (0, 0, 0, 0)
+    return {"kind": "ore_lane", "ore": plan.get("ore"),
+            "drills": int(plan.get("drills") or 0),
+            "machines": int(plan.get("machines") or 0),
+            "length": len(plan.get("route") or ())}
+
+
+def verify(A, plan, before, log=None):
+    """Did the lane change anything? Records the outcome either way.
+
+    A build that is never checked teaches nothing, and this repo has a standing rule that a
+    build which changes nothing gets removed. `before` is the starved-machine count for the
+    block; if it has not moved, the lane is not delivering whatever the belts look like.
+    """
+    import world_model
+    say = log or (lambda m: None)
+    after = _starved_in(world_model.census(A), plan.get("block"))
+    good = after < before
+    memory.remember("build_lane", plan.get("context") or lane_context(plan),
+                    "good" if good else "bad",
+                    importance=1.5 if not good else 1.0,
+                    detail=("starved %d -> %d after a %d-belt %s lane"
+                            % (before, after, len(plan.get("route") or ()), plan.get("ore"))))
+    say("infra: %s lane %s - starved %d -> %d"
+        % (plan.get("ore"), "WORKED" if good else "did not help", before, after))
+    return good
+
+
+def _starved_in(census, bbox):
+    if not bbox:
+        return 0
+    return sum(u.get("starved", 0) for u in census.get("unfed", [])
+               if tuple(u["block"]["bbox"]) == tuple(bbox))
 
 
 def _inventory(A, names):
@@ -219,4 +277,13 @@ def maintain(A, log=None):
     if not c.get("unfed"):
         return []
     say("infrastructure: " + world_model.summary(c).replace("\n", " | "))
-    return build_lanes(A, c, log=say)
+    built = build_lanes(A, c, log=say)
+    # VERIFY AND REMEMBER. Without this the store only ever fills with things I typed; the
+    # bot has to be the one generating its own evidence, or nothing has changed.
+    for p in built:
+        before = _starved_in(c, p.get("block"))
+        try:
+            verify(A, p, before, log=say)
+        except Exception as e:
+            say("infra: could not verify the %s lane (%s)" % (p.get("ore"), str(e)[:80]))
+    return built
