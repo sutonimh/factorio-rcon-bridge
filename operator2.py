@@ -116,16 +116,37 @@ def _validate(c):
     raise ValueError(f"unknown command {cmd!r}")
 
 
+QUEUE_CAP = 40           # a work queue, not a transcript of everything ever suggested
+
+
 def validate_commands(cmds):
     """Shared actuator pipeline (audit item 2): validate a command list, queue the valid ones
     on bootstrap.BUILD_QUEUE. Returns (accepted_descs, rejected_strs). Used by operator
-    prompts AND architect prioritized_actions - one catalog, one gate."""
+    prompts AND architect prioritized_actions - one catalog, one gate.
+
+    DEDUPED AND CAPPED. This used to append unconditionally, and the architect re-escalates
+    every time the base looks stalled - so it re-issued the same handful of commands on every
+    pass. With the builder parked nothing drained, and the queue reached 256 entries that were
+    mostly `connect_mine iron-ore`, `repair power` and notes, over and over.
+
+    Two things follow from that. A command already queued does not need queueing twice: the
+    thunk is identical, so the second one can only do the same work again. And a queue that
+    can grow without bound is not a queue, it is a log - past a cap the right answer is to
+    stop accepting, because a backlog that long means the things at the front are not running.
+    """
     import bootstrap as B
     accepted, rejected = [], []
     for c in cmds or []:
         try:
             desc, thunk = _validate(c)
-            thunk.__name__ = f"cmd:{desc}"
+            name = f"cmd:{desc}"
+            if any(getattr(t, "__name__", "") == name for t in B.BUILD_QUEUE):
+                rejected.append(f"{desc}: already queued")
+                continue
+            if len(B.BUILD_QUEUE) >= QUEUE_CAP:
+                rejected.append(f"{desc}: queue is full ({QUEUE_CAP}) - the builder is not draining it")
+                continue
+            thunk.__name__ = name
             B.BUILD_QUEUE.append(thunk)
             accepted.append(desc)
         except Exception as e:
