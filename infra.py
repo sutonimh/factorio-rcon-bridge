@@ -116,3 +116,73 @@ def _beside(tile, obs):
         if c not in blocked:
             return c
     return tile
+
+
+# --------------------------------------------------------------------------- building
+def build_lanes(A, census=None, log=None, max_lanes=1):
+    """Close the starved inputs by actually laying the belt. Returns what it built.
+
+    One lane per pass on purpose: a lane is dozens of belts and hundreds of ticks, and the
+    controller's other duties should not wait behind it. The next pass re-censuses, sees the
+    lane it just built, and moves to the next gap - which is also what makes a half-finished
+    lane resume rather than restart.
+
+    Guards, and only the ones that earn their place:
+      - the truce: nothing is built while the operator is connected
+      - materials: a partial lane is not half a feed, it is a broken belt that reads as one
+      - verification: the lane must actually change what the machines report, or it is noise
+    """
+    say = log or (lambda m: None)
+    import bootstrap as B
+    if B.operator_present():
+        return []
+    built = []
+    for p in plan_lanes(A, census, log=lambda m: None)[:max_lanes]:
+        route = p.get("route")
+        if not route:
+            say("infra: %s lane %s -> %s has NO ROUTE" % (p["ore"], p["from"], p["to"]))
+            continue
+        need = {}
+        for s in route:
+            if not s.get("adopt"):
+                need[s["entity"]] = need.get(s["entity"], 0) + 1
+        have = _inventory(A, list(need))
+        short = {n: c - have.get(n, 0) for n, c in need.items() if c > have.get(n, 0)}
+        if short:
+            say("infra: %s lane needs %s - not laying a partial run"
+                % (p["ore"], ", ".join("%d %s" % (c, n) for n, c in sorted(short.items()))))
+            continue
+        say("infra: laying %s %s -> %s (%d belts)" % (p["ore"], p["from"], p["to"], len(route)))
+        for cmd in belt_router.plan_to_lua(route):
+            A._print(cmd)
+        built.append(p)
+    return built
+
+
+def _inventory(A, names):
+    if not names:
+        return {}
+    raw = A._print("/sc local p=storage.derpface if not (p and p.valid) then return end "
+                   "local inv=p.get_main_inventory() local o={} "
+                   + " ".join("o[#o+1]='%s='..inv.get_item_count('%s')" % (n, n) for n in names)
+                   + " rcon.print(table.concat(o,' '))")
+    out = {}
+    for tok in (raw or "").split():
+        if "=" in tok:
+            k, v = tok.rsplit("=", 1)
+            try:
+                out[k] = int(v)
+            except ValueError:
+                pass
+    return out
+
+
+def maintain(A, log=None):
+    """One upkeep pass: census the base, then close the most pressing gap in it."""
+    import world_model
+    say = log or (lambda m: None)
+    c = world_model.census(A)
+    if not c.get("unfed"):
+        return []
+    say("infrastructure: " + world_model.summary(c).replace("\n", " | "))
+    return build_lanes(A, c, log=say)

@@ -591,13 +591,10 @@ def _slow_upkeep(lap):
         # output rows come from what the block's own inserters do, and starvation is read
         # off the machines rather than guessed from belt geometry.
         try:
-            import world_model
-            c = world_model.census(A)
-            if c.get("unfed"):
-                status.log("infrastructure: "
-                           + world_model.summary(c).replace("\n", " | "))
+            import infra
+            infra.maintain(A, log=status.log)
         except Exception as e:
-            status.log(f"census error: {e}")
+            status.log(f"infra error: {e}")
     if lap % 80 == 23 and os.environ.get("BUILDER_ENABLED", "1") == "1":
         # Connecting a stranded product to something that eats it IS construction, so it
         # obeys the safe-mode flag the operator set.

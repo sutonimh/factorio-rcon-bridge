@@ -84,3 +84,64 @@ def test_two_blocks_still_get_different_ores():
                    {"block": b2, "input_row": -15, "feed_side": "east"}]}
     got = infra.assign(c)
     assert len({m["ore"] for m, _, _, _ in got}) == 2
+
+
+class _FakeA:
+    def __init__(self, inv):
+        self.inv = inv
+        self.sent = []
+    def _print(self, lua):
+        if "get_item_count" in lua and "rcon.print(table.concat" in lua:
+            return " ".join("%s=%d" % kv for kv in self.inv.items())
+        self.sent.append(lua)
+        return ""
+
+
+def test_a_partial_lane_is_refused(monkeypatch):
+    """Half a lane is not half a feed, it is a broken belt that reads as one."""
+    import bootstrap as B
+    monkeypatch.setattr(B, "operator_present", lambda: False)
+    route = [{"x": i, "y": 0, "dir": 4, "entity": "transport-belt"} for i in range(60)]
+    monkeypatch.setattr(infra, "plan_lanes",
+                        lambda *a, **k: [{"ore": "iron-ore", "from": (0, 0), "to": (60, 0),
+                                          "route": route, "row": 0, "block": (0, 0, 1, 1)}])
+    fake = _FakeA({"transport-belt": 59})
+    said = []
+    assert infra.build_lanes(fake, {}, log=said.append) == []
+    assert any("not laying a partial run" in m for m in said)
+    assert fake.sent == [], "it built anyway"
+
+
+def test_a_full_lane_is_laid(monkeypatch):
+    import bootstrap as B
+    monkeypatch.setattr(B, "operator_present", lambda: False)
+    route = [{"x": i, "y": 0, "dir": 4, "entity": "transport-belt"} for i in range(60)]
+    monkeypatch.setattr(infra, "plan_lanes",
+                        lambda *a, **k: [{"ore": "iron-ore", "from": (0, 0), "to": (60, 0),
+                                          "route": route, "row": 0, "block": (0, 0, 1, 1)}])
+    fake = _FakeA({"transport-belt": 200})
+    got = infra.build_lanes(fake, {}, log=lambda m: None)
+    assert len(got) == 1 and fake.sent, "nothing was sent to the game"
+
+
+def test_the_truce_stops_it(monkeypatch):
+    import bootstrap as B
+    monkeypatch.setattr(B, "operator_present", lambda: True)
+    fake = _FakeA({"transport-belt": 999})
+    assert infra.build_lanes(fake, {}, log=lambda m: None) == []
+    assert fake.sent == []
+
+
+def test_one_lane_per_pass(monkeypatch):
+    """A lane is dozens of belts; the controller's other duties should not wait behind it.
+    The next pass re-censuses and moves to the next gap."""
+    import bootstrap as B
+    monkeypatch.setattr(B, "operator_present", lambda: False)
+    route = [{"x": 0, "y": 0, "dir": 4, "entity": "transport-belt"}]
+    monkeypatch.setattr(infra, "plan_lanes", lambda *a, **k: [
+        {"ore": "iron-ore", "from": (0, 0), "to": (1, 0), "route": route, "row": 0,
+         "block": (0, 0, 1, 1)},
+        {"ore": "copper-ore", "from": (0, 0), "to": (2, 0), "route": route, "row": 0,
+         "block": (0, 0, 1, 1)}])
+    fake = _FakeA({"transport-belt": 999})
+    assert len(infra.build_lanes(fake, {}, log=lambda m: None)) == 1
